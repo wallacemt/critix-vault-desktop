@@ -5,16 +5,18 @@
   "identifier": "com.walla.critix-vault",
   "build": {
     "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "bun run build",
-    "frontendDist": "../dist"
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../out"
   },
   "app": {
     "windows": [
       {
-        "title": "critix-vault",
-        "width": 800,
-        "height": 600
+        "title": "Critix Vault",
+        "width": 1400,
+        "height": 900,
+        "fullscreen": false,
+        "maximized": true
       }
     ],
     "security": {
@@ -30,6 +32,16 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   }
 }

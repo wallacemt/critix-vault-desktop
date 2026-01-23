@@ -17,6 +17,8 @@
     "@types/nprogress": "^0.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.28.1",
+    "gsap": "^3.14.2",
     "lucide-react": "^0.562.0",
     "next": "16.1.4",
     "nprogress": "^0.2.0",

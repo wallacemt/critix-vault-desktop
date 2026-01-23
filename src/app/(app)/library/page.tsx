@@ -2,17 +2,16 @@
 
 import { LibraryLayout } from "@/components/features/library/LibraryLayout";
 import { useActions } from "@/hooks/useActions";
-import { useFolders } from "@/hooks/useFolders";
+import { useFoldersContext } from "@/context/foldersContext";
 import { Movie } from "@/types";
 
 export default function LibraryPage() {
-  const { folders } = useFolders();
-  const { handleAddFolder, removeFolder, handleMediaClick, handlePlayMovie } = useActions();
-  return folders ? (
+  const { folders } = useFoldersContext();
+  const { handleAddFolder, handleMediaClick, handlePlayMovie } = useActions();
+
+  return folders && folders.length > 0 ? (
     <LibraryLayout
-      folders={folders}
       onAddFolder={handleAddFolder}
-      onRemoveFolder={removeFolder}
       onMediaClick={handleMediaClick}
       onMediaPlay={(media) => {
         if (media.type === "MOVIE") {
@@ -22,7 +21,7 @@ export default function LibraryPage() {
     />
   ) : (
     <div className="flex items-center justify-center flex-1">
-      <p>Nenhuma pasta encontrada para carregar midias</p>
+      <p>Nenhuma pasta encontrada para carregar mídias</p>
     </div>
   );
 }

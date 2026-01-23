@@ -14,6 +14,22 @@ struct Folder {
     last_scanned: Option<String>,
 }
 
+// Open folder selection dialog
+#[tauri::command]
+async fn select_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::{DialogExt};
+    
+    let folder_path = app.dialog()
+        .file()
+        .set_title("Selecione uma pasta para adicionar para Blibioteca")
+        .blocking_pick_folder();
+    print!("S");
+    match folder_path {
+        Some(path) => Ok(Some(path.to_string())),
+        None => Ok(None),
+    }
+}
+
 // Add a folder to the monitored list
 #[tauri::command]
 fn add_folder(path: String) -> Result<Folder, String> {
@@ -61,16 +77,48 @@ fn get_folders() -> Result<Vec<Folder>, String> {
     Ok(Vec::new())
 }
 
-// Scan a folder for media files
+// Scan a folder for media files recursively
 #[tauri::command]
-fn scan_folder(folder_id: String) -> Result<Vec<String>, String> {
-    println!("Scanning folder: {}", folder_id);
+fn scan_folder(folder_path: String) -> Result<Vec<String>, String> {
+    use std::fs;
+    use std::path::Path;
     
-    // In a real implementation, this would:
-    // 1. Find all media files (.mkv, .mp4, .avi, etc.)
-    // 2. Return their paths
+    let media_extensions = vec![".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"];
+    let mut media_files = Vec::new();
     
-    Ok(Vec::new())
+    fn scan_dir_recursive(dir: &Path, extensions: &[&str], files: &mut Vec<String>) -> Result<(), String> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        
+        let entries = fs::read_dir(dir)
+            .map_err(|e| format!("Failed to read directory: {}", e))?;
+        
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path();
+            
+            if path.is_dir() {
+                scan_dir_recursive(&path, extensions, files)?;
+            } else if path.is_file() {
+                if let Some(ext) = path.extension() {
+                    let ext_str = format!(".{}", ext.to_string_lossy().to_lowercase());
+                    if extensions.contains(&ext_str.as_str()) {
+                        if let Some(path_str) = path.to_str() {
+                            files.push(path_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    let path = Path::new(&folder_path);
+    scan_dir_recursive(path, &media_extensions, &mut media_files)?;
+    
+    Ok(media_files)
 }
 
 // Open a media file with the default or specified player
@@ -164,12 +212,15 @@ fn get_file_metadata(file_path: String) -> Result<serde_json::Value, String> {
     }))
 }
 
+
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            select_folder_dialog,
             add_folder,
             remove_folder,
             get_folders,

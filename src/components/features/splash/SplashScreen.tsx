@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { useApiStatus } from "@/hooks/useApiStatus";
+import { useFoldersContext } from "@/context/foldersContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
@@ -17,9 +18,13 @@ interface SplashScreenProps {
 
 export function SplashScreen({ onReady }: SplashScreenProps) {
   const { data: status, loading, error, retry } = useApiStatus();
+  const { folders, isLoading: foldersLoading } = useFoldersContext();
   const [autoRetryCount, setAutoRetryCount] = useState(0);
 
   useEffect(() => {
+    // Wait for folders to load
+    if (foldersLoading) return;
+
     // Auto-retry up to 3 times if API is offline
     if (status && !status.online && autoRetryCount < 3) {
       const timer = setTimeout(() => {
@@ -29,14 +34,14 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
       return () => clearTimeout(timer);
     }
 
-    // If API is online, proceed after a brief delay
-    if (status?.online) {
+    // If API is online and folders loaded, proceed after a brief delay
+    if (status?.online && !foldersLoading) {
       const timer = setTimeout(() => {
         onReady();
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [status, autoRetryCount, retry, onReady]);
+  }, [status, autoRetryCount, retry, onReady, foldersLoading]);
 
   const handleManualRetry = () => {
     setAutoRetryCount(0);

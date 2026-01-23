@@ -7,7 +7,7 @@ import { ApiStatus, ScanResult } from "@/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_CRITIX_API_URL || "http://localhost:8080/";
 
- class ApiService {
+class ApiService {
   async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -46,16 +46,6 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_CRITIX_API_URL || "http://localhost
   }
 
   /**
-   * Scan a folder for media files
-   */
-  async scanFolder(folderId: string, folderPath: string): Promise<ScanResult> {
-    return this.request<ScanResult>("/media/scan", {
-      method: "POST",
-      body: JSON.stringify({ folderId, folderPath }),
-    });
-  }
-
-  /**
    * Get media details by ID
    */
   async getMediaDetails(mediaId: string, type: "movie" | "series") {
@@ -69,6 +59,22 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_CRITIX_API_URL || "http://localhost
     const params = new URLSearchParams({ query });
     if (type) params.append("type", type);
     return this.request(`/media/search?${params.toString()}`);
+  }
+
+  /**
+   * Search media by title using the correct API endpoint
+   * Returns generic response with media_type to identify movie or series
+   */
+  async searchMediaByTitle(query: string) {
+    const params = new URLSearchParams({ query });
+    return this.request(`media/v1/search/title/?${params.toString()}`);
+  }
+
+  /**
+   * Get detailed media information by ID and type
+   */
+  async getMediaDetailsById(mediaId: string, mediaType: "movie" | "tv") {
+    return this.request(`media/v1/${mediaType}/${mediaId}`);
   }
 }
 

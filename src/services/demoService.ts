@@ -6,7 +6,7 @@
 import { getTrendingMedia } from "./mediaService";
 import { Media, Movie, Series } from "@/types";
 
-const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
+const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original";
 
 /**
  * Convert TMDB media to app Movie format

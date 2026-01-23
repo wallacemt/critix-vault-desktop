@@ -46,8 +46,8 @@ class TauriService {
   /**
    * Scan a specific folder for media files
    */
-  async scanFolder(folderId: string): Promise<string[]> {
-    return invoke<string[]>("scan_folder", { folderId });
+  async scanFolder(folderPath: string): Promise<string[]> {
+    return invoke<string[]>("scan_folder", { folderPath });
   }
 
   /**

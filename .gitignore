@@ -25,4 +25,7 @@ dist-ssr
 *.sln
 *.sw?
 
+# typescript
+*.tsbuildinfo
+next-env.d.ts
 .env

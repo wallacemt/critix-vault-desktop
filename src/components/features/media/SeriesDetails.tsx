@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { Series, Season, Episode } from "@/types";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 
 interface SeriesDetailsProps {
   series: Series;
@@ -53,11 +52,10 @@ export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsPr
       <div className="relative h-[60vh] overflow-hidden">
         {/* Backdrop Image */}
         {series.backdrop && !backdropError ? (
-          <Image
+          <img
             src={series.backdrop}
             alt={series.title}
-            fill
-            priority
+     
             className="w-full h-full object-cover"
             onError={() => setBackdropError(true)}
           />

@@ -4,68 +4,109 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { apiService } from "@/services/api";
-import { tauriService } from "@/services/tauri";
-import { ApiStatus, Folder, AsyncState, Movie, Series } from "@/types";
-
-
-
+import { useState, useEffect } from "react";
+import { storageService } from "@/services/storageService";
+import { folderScanService } from "@/services/folderScanService";
+import { Movie, Series } from "@/types";
 
 /**
  * Hook to manage media library for a specific folder
+ * Reads from localStorage and filters by folderId
  */
 export function useMediaLibrary(folderId: string | null) {
-  const [state, setState] = useState<
-    AsyncState<{
-      movies: Movie[];
-      series: Series[];
-    }>
-  >({
-    data: null,
-    loading: false,
-    error: null,
-  });
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [series, setSeries] = useState<Series[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
-  const scanFolder = useCallback(
-    async (folderPath: string) => {
-      if (!folderId) return;
+  const loadMediaFromStorage = () => {
+    if (!folderId) {
+      setMovies([]);
+      setSeries([]);
+      return;
+    }
 
-      setState({ data: null, loading: true, error: null });
-      try {
-        // First, scan folder with Tauri to get file paths
-        await tauriService.scanFolder(folderId);
+    setLoading(true);
+    try {
+      // Load media from localStorage and filter by folderId
+      const allMovies = storageService.getMovies();
+      const allSeries = storageService.getSeries();
 
-        // Then, call API to identify media
-        const result = await apiService.scanFolder(folderId, folderPath);
+      const filteredMovies = allMovies.filter((movie) => movie.folderId === folderId);
+      const filteredSeries = allSeries.filter((s) => s.folderId === folderId);
 
-        setState({
-          data: {
-            movies: result.movies,
-            series: result.series,
-          },
-          loading: false,
-          error: null,
-        });
+      console.log("🎬 Loaded movies for folder:", filteredMovies);
+      console.log("📺 Loaded series for folder:", filteredSeries);
 
-        return result;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to scan folder";
-        setState({ data: null, loading: false, error: errorMessage });
-        throw error;
-      }
-    },
-    [folderId],
-  );
+      setMovies(filteredMovies);
+      setSeries(filteredSeries);
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load media";
+      setError(errorMessage);
+      setMovies([]);
+      setSeries([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scanFolder = async (folderPath: string) => {
+    if (!folderId) return;
+
+    try {
+      setScanning(true);
+      setScanProgress(0);
+      setError(null);
+
+      console.log("🔍 Starting folder scan:", folderPath);
+
+      // Scan the folder using Rust + API
+      const result = await folderScanService.scanAndMatchFolder(folderId, folderPath, (progress) => {
+        const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
+        setScanProgress(percent);
+      });
+
+      console.log("✅ Scan complete:", result);
+
+      // Save to localStorage (replacing existing media for this folder)
+      const allMovies = storageService.getMovies();
+      const allSeries = storageService.getSeries();
+
+      // Remove old media for this folder
+      const otherMovies = allMovies.filter((m) => m.folderId !== folderId);
+      const otherSeries = allSeries.filter((s) => s.folderId !== folderId);
+
+      // Add new scanned media
+      storageService.saveMovies([...otherMovies, ...result.movies]);
+      storageService.saveSeries([...otherSeries, ...result.series]);
+
+      // Reload from storage
+      loadMediaFromStorage();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to scan folder";
+      console.error("❌ Scan error:", errorMessage);
+      setError(errorMessage);
+    } finally {
+      setScanning(false);
+      setScanProgress(0);
+    }
+  };
+
+  useEffect(() => {
+    console.log("🔄 useMediaLibrary - folderId changed:", folderId);
+    loadMediaFromStorage();
+  }, [folderId]);
 
   return {
-    movies: state.data?.movies || [],
-    series: state.data?.series || [],
-    loading: state.loading,
-    error: state.error,
+    movies,
+    series,
+    loading,
+    scanning,
+    scanProgress,
+    error,
     scanFolder,
   };
 }
-
-
-

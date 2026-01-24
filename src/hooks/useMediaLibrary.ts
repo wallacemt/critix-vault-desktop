@@ -5,9 +5,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { storageService } from "@/services/storageService";
+import { STORAGE_KEYS, storageService } from "@/services/storageService";
 import { folderScanService } from "@/services/folderScanService";
 import { Movie, Series } from "@/types";
+import { useFoldersContext } from "@/context/foldersContext";
 
 /**
  * Hook to manage media library for a specific folder
@@ -20,9 +21,10 @@ export function useMediaLibrary(folderId: string | null) {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
+  const { folders } = useFoldersContext();
   const loadMediaFromStorage = () => {
     if (!folderId) {
+      console.log("⚠️ No folderId, clearing media");
       setMovies([]);
       setSeries([]);
       return;
@@ -34,11 +36,23 @@ export function useMediaLibrary(folderId: string | null) {
       const allMovies = storageService.getMovies();
       const allSeries = storageService.getSeries();
 
-      const filteredMovies = allMovies.filter((movie) => movie.folderId === folderId);
-      const filteredSeries = allSeries.filter((s) => s.folderId === folderId);
+      console.log("📦 All movies in storage:", allMovies.length);
+      console.log("📦 All series in storage:", allSeries.length);
+      console.log("🔍 Filtering for folderId:", folderId);
 
-      console.log("🎬 Loaded movies for folder:", filteredMovies);
-      console.log("📺 Loaded series for folder:", filteredSeries);
+      const filteredMovies = allMovies.filter((movie) => {
+        const match = movie.folderId === folderId;
+        if (match) console.log("✅ Movie matched:", movie.title);
+        return match;
+      });
+      const filteredSeries = allSeries.filter((s) => {
+        const match = s.folderId === folderId;
+        if (match) console.log("✅ Series matched:", s.title);
+        return match;
+      });
+
+      console.log("🎬 Loaded movies for folder:", filteredMovies.length);
+      console.log("📺 Loaded series for folder:", filteredSeries.length);
 
       setMovies(filteredMovies);
       setSeries(filteredSeries);
@@ -56,6 +70,9 @@ export function useMediaLibrary(folderId: string | null) {
   const scanFolder = async (folderPath: string) => {
     if (!folderId) return;
 
+    if (folders.some((f) => f.path === folderPath)) {
+      storageService.clearAll();
+    }
     try {
       setScanning(true);
       setScanProgress(0);

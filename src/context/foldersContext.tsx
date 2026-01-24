@@ -9,6 +9,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { Folder } from "@/types";
 import { storageService } from "@/services/storageService";
 import { tauriService } from "@/services/tauri";
+import { redirect, useRouter } from "next/navigation";
 
 interface FoldersContextType {
   folders: Folder[];
@@ -18,6 +19,7 @@ interface FoldersContextType {
   removeFolder: (folderId: string) => Promise<void>;
   selectFolder: (folder: Folder | null) => void;
   refreshFolders: () => void;
+  setOnNeedRedirect: (callback: () => void) => void;
 }
 
 const FoldersContext = createContext<FoldersContextType | undefined>(undefined);
@@ -26,6 +28,7 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [onNeedRedirect, setOnNeedRedirect] = useState<(() => void) | null>(null);
 
   // Load folders from localStorage on mount
   useEffect(() => {
@@ -72,16 +75,6 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
       const newFolder = await tauriService.addFolder(path);
       console.log("📂 New folder created:", newFolder);
 
-      // Check if folder already exists
-      const exists = folders.some((f) => f.path === newFolder.path);
-      console.log("🔎 Checking if folder exists. Current folders:", folders);
-      console.log("🔎 Path to check:", newFolder.path);
-      console.log("🔎 Exists:", exists);
-
-      if (exists) {
-        throw new Error("Esta pasta já foi adicionada");
-      }
-
       // Add to state
       const updatedFolders = [...folders, newFolder];
       setFolders(updatedFolders);
@@ -114,9 +107,21 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
       // Persist to localStorage
       storageService.saveFolders(updatedFolders);
 
+      // Remove media from this folder
+      const allMovies = storageService.getMovies().filter((m) => m.folderId !== folderId);
+      const allSeries = storageService.getSeries().filter((s) => s.folderId !== folderId);
+      storageService.saveMovies(allMovies);
+      storageService.saveSeries(allSeries);
+
       // Clear selection if removed folder was selected
       if (selectedFolder?.id === folderId) {
         setSelectedFolder(updatedFolders[0] || null);
+      }
+
+      // Redirect to landing if no folders left
+      if (updatedFolders.length === 0 && onNeedRedirect) {
+        console.log("🔄 No folders left, calling redirect callback");
+        onNeedRedirect();
       }
     } catch (error) {
       console.error("Failed to remove folder:", error);
@@ -142,6 +147,7 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
         removeFolder,
         selectFolder,
         refreshFolders,
+        setOnNeedRedirect: (callback) => setOnNeedRedirect(() => callback),
       }}
     >
       {children}

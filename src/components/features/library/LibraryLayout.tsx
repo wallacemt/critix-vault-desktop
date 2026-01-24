@@ -11,13 +11,15 @@ import { Folder, FolderPlus, X, Film, Tv, AlertCircle, Scan, Grid3x3, List, Sear
 import { Media } from "@/types";
 import { useMediaLibrary } from "@/hooks/useMediaLibrary";
 import { useFoldersContext } from "@/context/foldersContext";
-import { StreamingGrid } from "./_components/streaming-grid-premium";
+import { StreamingGrid } from "./_components/streaming-grid";
 import { MediaGridSkeleton } from "@/components/ui/media-skeleton";
 import { InlineError } from "@/components/ui/error-state";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import gsap from "gsap";
 import { Input } from "@/components/ui/input";
+import { FolderList } from "./_components/folder-list";
+import { FolderMediaHeader } from "./_components/folder-media-header";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -109,70 +111,12 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
         </div>
 
         {/* Folders List */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="p-4 space-y-2">
-            {folders.length === 0 ? (
-              <motion.div className="p-6 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Folder className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3" />
-                <p className="text-sm text-[var(--text-muted)] font-sans">Nenhuma pasta adicionada</p>
-              </motion.div>
-            ) : (
-              folders.map((folder, index) => (
-                <motion.div
-                  key={folder.id}
-                  className="folder-item"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ scale: 1.02 }}
-                >
-                  <div
-                    className={cn(
-                      "group flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300 relative overflow-hidden",
-                      selectedFolder?.id === folder.id
-                        ? "bg-gradient-to-r from-[var(--color-primary)]/20 to-amber-500/20 border border-[var(--color-primary)]/30"
-                        : "hover:bg-[var(--bg-surface-light)] border border-transparent",
-                    )}
-                    onClick={() => handleFolderSelect(folder)}
-                  >
-                    {selectedFolder?.id === folder.id && (
-                      <motion.div
-                        className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[var(--color-primary)] to-amber-500"
-                        layoutId="selected-folder"
-                        transition={{ type: "spring", damping: 20 }}
-                      />
-                    )}
-
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600/20 to-purple-600/20 flex items-center justify-center flex-shrink-0">
-                      <Folder className="w-5 h-5 text-[var(--color-primary)]" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[var(--text-primary)] truncate font-display">
-                        {folder.name}
-                      </p>
-                      <p className="text-xs text-[var(--text-secondary)] truncate font-sans">
-                        {folder.mediaCount} itens
-                      </p>
-                    </div>
-
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFolder(folder.id);
-                      }}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </div>
+        <FolderList
+          folders={folders}
+          handleFolderSelect={handleFolderSelect}
+          selectedFolder={selectedFolder!}
+          removeFolder={removeFolder}
+        />
 
         {/* Footer Stats */}
         {movies.length + series.length > 0 && (
@@ -197,7 +141,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
         {selectedFolder ? (
           <motion.div
             className="flex-1 flex flex-col"
@@ -205,133 +149,25 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
           >
-            {/* Header with Gradient */}
-            <div className="relative bg-gradient-to-b from-[var(--bg-surface)] to-transparent border-b border-[var(--border-color)] p-6">
-              <div className="absolute inset-0 overflow-hidden opacity-30">
-                <motion.div
-                  className="absolute w-full h-full bg-gradient-to-r from-blue-600/10 to-purple-600/10"
-                  animate={{
-                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-                  }}
-                  transition={{
-                    duration: 10,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                />
-              </div>
-
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <motion.h1
-                      className="text-3xl font-bold text-[var(--text-primary)] mb-2 font-display"
-                      initial={{ opacity: 0, y: -20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      {selectedFolder.name}
-                    </motion.h1>
-                    <motion.p
-                      className="text-sm text-[var(--text-secondary)] font-sans"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      {selectedFolder.path}
-                    </motion.p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    {/* View Mode Toggle */}
-                    <div className="flex gap-1 bg-[var(--bg-surface-light)] rounded-lg p-1">
-                      <Button
-                        size="icon"
-                        variant={viewMode === "grid" ? "default" : "ghost"}
-                        onClick={() => setViewMode("grid")}
-                        className={cn(
-                          viewMode === "grid" && "bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]",
-                        )}
-                      >
-                        <Grid3x3 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant={viewMode === "list" ? "default" : "ghost"}
-                        onClick={() => setViewMode("list")}
-                        className={cn(
-                          viewMode === "list" && "bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]",
-                        )}
-                      >
-                        <List className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    {/* Rescan Button */}
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Button
-                        onClick={() => scanFolder(selectedFolder.path)}
-                        variant="outline"
-                        disabled={scanning}
-                        className="bg-[var(--bg-surface-light)] border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-[var(--color-primary)]"
-                      >
-                        <Scan className={cn("w-4 h-4 mr-2", scanning && "animate-spin")} />
-                        {scanning ? `Escaneando... ${Math.round(scanProgress)}%` : "Reescanear"}
-                      </Button>
-                    </motion.div>
-                  </div>
-                </div>
-
-                {/* Search Bar */}
-                <div className="mb-4">
-                  <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                    <Input
-                      type="text"
-                      placeholder="Buscar na biblioteca..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 bg-[var(--bg-surface-light)] border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
-                    />
-                  </div>
-                </div>
-
-                {/* Animated Tabs */}
-                <div className="flex gap-3">
-                  {[
-                    { key: "all", label: "Tudo", icon: null, count: totalCount },
-                    { key: "movies", label: "Filmes", icon: Film, count: movies.length },
-                    { key: "series", label: "Séries", icon: Tv, count: series.length },
-                  ].map((tab) => (
-                    <motion.div key={tab.key} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Button
-                        variant={activeTab === tab.key ? "default" : "ghost"}
-                        size="lg"
-                        onClick={() => setActiveTab(tab.key as any)}
-                        className={cn(
-                          "relative",
-                          activeTab === tab.key
-                            ? "bg-gradient-to-r from-[var(--color-primary)] to-amber-500 text-[var(--color-on-primary)] shadow-lg"
-                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]",
-                        )}
-                      >
-                        {tab.icon && <tab.icon className="w-4 h-4 mr-2" />}
-                        {tab.label} ({tab.count})
-                        {activeTab === tab.key && (
-                          <motion.div
-                            className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"
-                            layoutId="activeTab"
-                            transition={{ type: "spring", damping: 20 }}
-                          />
-                        )}
-                      </Button>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
+            <FolderMediaHeader
+              {...{
+                selectedFolder,
+                activeTab,
+                viewMode,
+                setActiveTab,
+                setViewMode,
+                scanFolder,
+                scanning,
+                scanProgress,
+                searchQuery,
+                setSearchQuery,
+                totalCount,
+                movies,
+                series,
+              }}
+            />
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 mt-62 overflow-y-auto custom-scrollbar">
               <div className="p-6">
                 <AnimatePresence mode="wait">
                   {scanning ? (

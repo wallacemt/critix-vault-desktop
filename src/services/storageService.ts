@@ -5,7 +5,7 @@
 
 import { Folder, Movie, Series } from "@/types";
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   FOLDERS: "critix_vault_folders",
   MOVIES: "critix_vault_movies",
   SERIES: "critix_vault_series",

@@ -23,7 +23,7 @@ async fn select_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, S
         .file()
         .set_title("Selecione uma pasta para adicionar para Blibioteca")
         .blocking_pick_folder();
-    print!("S");
+  
     match folder_path {
         Some(path) => Ok(Some(path.to_string())),
         None => Ok(None),
@@ -104,6 +104,7 @@ fn scan_folder(folder_path: String) -> Result<Vec<String>, String> {
                 if let Some(ext) = path.extension() {
                     let ext_str = format!(".{}", ext.to_string_lossy().to_lowercase());
                     if extensions.contains(&ext_str.as_str()) {
+                      
                         if let Some(path_str) = path.to_str() {
                             files.push(path_str.to_string());
                         }

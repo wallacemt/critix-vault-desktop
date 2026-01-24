@@ -61,7 +61,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
         {/* Title */}
         <div className="text-center">
           <h1 className="text-4xl font-display font-bold text-white mb-2">Critix Vault</h1>
-          <p className="text-slate-400">Your Local Media Library</p>
+          <p className="text-slate-400">Sua Bliblioteca Local Aprimorada</p>
         </div>
 
         {/* Status */}
@@ -78,7 +78,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
           {!loading && status?.online && (
             <div className="flex flex-col items-center gap-3">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
-              <p className="text-sm text-green-400">Connected successfully</p>
+              <p className="text-sm text-green-400">Conectado Com Sucesso</p>
             </div>
           )}
 
@@ -86,7 +86,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
             <div className="flex flex-col items-center gap-4 max-w-md">
               <AlertCircle className="w-8 h-8 text-red-500" />
               <div className="text-center">
-                <p className="text-sm text-red-400 mb-2">Unable to connect to Critix API</p>
+                <p className="text-sm text-red-400 mb-2">Falha ao estabelecer conexão com Critix API</p>
                 <p className="text-xs text-slate-500">{status.message}</p>
               </div>
               <Button
@@ -94,7 +94,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
                 variant="outline"
                 className="bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600"
               >
-                Try Again
+                Tentar Novamente
               </Button>
             </div>
           )}
@@ -103,7 +103,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
             <div className="flex flex-col items-center gap-4 max-w-md">
               <AlertCircle className="w-8 h-8 text-red-500" />
               <div className="text-center">
-                <p className="text-sm text-red-400 mb-2">Connection Error</p>
+                <p className="text-sm text-red-400 mb-2">Erro de Conexão</p>
                 <p className="text-xs text-slate-500">{error}</p>
               </div>
               <Button
@@ -111,7 +111,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
                 variant="outline"
                 className="bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600"
               >
-                Try Again
+               Tentar Novamente
               </Button>
             </div>
           )}

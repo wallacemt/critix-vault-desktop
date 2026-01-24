@@ -73,22 +73,24 @@ class FolderScanService {
           matchedMedia: result.movies.length + result.series.length,
           currentFile: fileName,
         });
+        const notInclude = ["promo", "Trailer"];
+        if (!fileName.includes(notInclude[0]) && !fileName.includes(notInclude[1])) {
+          try {
+            const mediaInfo = await this.matchWithApi(fileName, file, folderId);
 
-        try {
-          const mediaInfo = await this.matchWithApi(fileName, file, folderId);
-
-          if (mediaInfo) {
-            if (mediaInfo.type === "MOVIE") {
-              result.movies.push(mediaInfo as Movie);
-            } else if (mediaInfo.type === "SERIES") {
-              result.series.push(mediaInfo as Series);
+            if (mediaInfo) {
+              if (mediaInfo.type === "MOVIE") {
+                result.movies.push(mediaInfo as Movie);
+              } else if (mediaInfo.type === "SERIES") {
+                result.series.push(mediaInfo as Series);
+              }
+            } else {
+              result.unmatchedFiles.push(file);
             }
-          } else {
+          } catch (error) {
+            console.error(`Failed to match file: ${fileName}`, error);
             result.unmatchedFiles.push(file);
           }
-        } catch (error) {
-          console.error(`Failed to match file: ${fileName}`, error);
-          result.unmatchedFiles.push(file);
         }
 
         result.totalProcessed++;
@@ -171,34 +173,18 @@ class FolderScanService {
       // Search for the media using the correct endpoint
       const searchResults: any = await apiService.searchMediaByTitle(cleanQuery);
 
-      if (
-        !searchResults ||
-        !searchResults.results ||
-        !Array.isArray(searchResults.results) ||
-        searchResults.results.length === 0
-      ) {
+      if (!searchResults) {
         console.log(`No results found for: ${cleanQuery}`);
         return null;
       }
 
-      // Get the best match (first result)
-      const bestMatch = searchResults.results[0];
-      console.log(`Found match: ${bestMatch.title || bestMatch.name}, type: ${bestMatch.media_type}`);
-
       // Determine type from media_type field (movie or tv)
-      const mediaType = bestMatch.media_type === "movie" ? "movie" : "tv";
-      const appType = bestMatch.media_type === "movie" ? "MOVIE" : "SERIES";
+      const appType = searchResults.mediaType === "movie" ? "MOVIE" : "SERIES";
 
-      // Get full details using the correct endpoint
-      const details: any = await apiService.getMediaDetailsById(bestMatch.id.toString(), mediaType);
-
-      if (!details || typeof details !== "object") {
-        console.log(`Failed to get details for: ${bestMatch.id}`);
-        return null;
-      }
+      console.log(`✅ Dados Encontrados para ${fileName}, ${searchResults.mediaType}`);
 
       // Transform API response to our internal format
-      const mediaInfo = this.transformApiResponse(details, appType, filePath, folderId);
+      const mediaInfo = this.transformApiResponse(searchResults.details, appType, filePath, folderId);
 
       return mediaInfo;
     } catch (error) {

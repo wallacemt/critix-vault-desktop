@@ -65,8 +65,11 @@ class ApiService {
    * Search media by title using the correct API endpoint
    * Returns generic response with media_type to identify movie or series
    */
-  async searchMediaByTitle(query: string) {
+  async searchMediaByTitle(query: string, returnMulti: boolean = false) {
     const params = new URLSearchParams({ query });
+    if (returnMulti) {
+      params.append("return", "multi");
+    }
     return this.request(`media/v1/search/title/?${params.toString()}`);
   }
 
@@ -74,7 +77,7 @@ class ApiService {
    * Get detailed media information by ID and type
    */
   async getMediaDetailsById(mediaId: string, mediaType: "movie" | "tv") {
-    return this.request(`media/v1/${mediaType}/${mediaId}`);
+    return this.request(`/media/v1/${mediaType}/${mediaId}`);
   }
 }
 

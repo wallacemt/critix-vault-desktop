@@ -68,9 +68,9 @@ class ApiService {
   async searchMediaByTitle(query: string, returnMulti: boolean = false) {
     const params = new URLSearchParams({ query });
     if (returnMulti) {
-      params.append("return", "multi");
+      params.append("returnMode", "multi");
     }
-    return this.request(`media/v1/search/title/?${params.toString()}`);
+    return this.request(`/media/v1/search/title?${params.toString()}`);
   }
 
   /**

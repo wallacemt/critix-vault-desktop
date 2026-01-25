@@ -5,9 +5,25 @@
 
 import { tauriService } from "./tauri";
 import { apiService } from "./api";
-import { Movie, Series, MediaType } from "@/types";
+import { Movie, Series, MediaType, Episode, Season } from "@/types";
 
 const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"];
+
+// Regex patterns for detecting series episodes
+const EPISODE_PATTERNS = [
+  /[Ss](\d{1,2})[Ee](\d{1,2})/, // S01E01, s01e01
+  /[Ss](\d{1,2})[\.\-_ ]?[Ee](\d{1,2})/, // S01.E01, S01-E01, S01 E01
+  /(\d{1,2})x(\d{1,2})/, // 1x01
+  /[Ss]eason[\.\-_ ]?(\d{1,2})[\.\-_ ]+[Ee]pisode[\.\-_ ]?(\d{1,2})/i, // Season 1 Episode 1
+];
+
+interface EpisodeFile {
+  filePath: string;
+  fileName: string;
+  seriesName: string;
+  seasonNumber: number;
+  episodeNumber: number;
+}
 
 export interface ScanProgress {
   status: "scanning" | "matching" | "complete" | "error";
@@ -54,27 +70,68 @@ class FolderScanService {
       const files = await this.scanFolderRecursive(folderPath);
       const mediaFiles = files.filter((file) => this.isMediaFile(file));
 
+      // Step 2: Separate episode files from standalone movies
+      const { episodeFiles, standaloneFiles } = this.categorizeFiles(mediaFiles);
+
+      // Step 3: Group episode files by series
+      const seriesGroups = this.groupEpisodesBySeries(episodeFiles);
+
+      const totalToProcess = standaloneFiles.length + seriesGroups.size;
+
       onProgress?.({
         status: "matching",
-        totalFiles: mediaFiles.length,
+        totalFiles: totalToProcess,
         processedFiles: 0,
         matchedMedia: 0,
       });
 
-      // Step 2: Match each file with Critix API
-      for (let i = 0; i < mediaFiles.length; i++) {
-        const file = mediaFiles[i];
+      let processed = 0;
+
+      // Step 4: Process grouped series (one API call per series)
+      for (const [seriesName, episodes] of seriesGroups) {
+        onProgress?.({
+          status: "matching",
+          totalFiles: totalToProcess,
+          processedFiles: processed,
+          matchedMedia: result.movies.length + result.series.length,
+          currentFile: seriesName,
+        });
+
+        try {
+          const seriesInfo = await this.matchSeriesWithApi(seriesName, episodes, folderId);
+
+          if (seriesInfo) {
+            result.series.push(seriesInfo);
+          } else {
+            // Add all episode files as unmatched
+            episodes.forEach((ep) => result.unmatchedFiles.push(ep.filePath));
+          }
+        } catch (error) {
+          console.error(`Failed to match series: ${seriesName}`, error);
+          episodes.forEach((ep) => result.unmatchedFiles.push(ep.filePath));
+        }
+
+        processed++;
+        result.totalProcessed++;
+      }
+
+      // Step 5: Process standalone files (likely movies)
+      for (const file of standaloneFiles) {
         const fileName = this.extractFileName(file);
 
         onProgress?.({
           status: "matching",
-          totalFiles: mediaFiles.length,
-          processedFiles: i,
+          totalFiles: totalToProcess,
+          processedFiles: processed,
           matchedMedia: result.movies.length + result.series.length,
           currentFile: fileName,
         });
+
         const notInclude = ["promo", "Trailer"];
-        if (!fileName.includes(notInclude[0]) && !fileName.includes(notInclude[1])) {
+        if (
+          !fileName.toLowerCase().includes(notInclude[0].toLowerCase()) &&
+          !fileName.toLowerCase().includes(notInclude[1].toLowerCase())
+        ) {
           try {
             const mediaInfo = await this.matchWithApi(fileName, file, folderId);
 
@@ -93,13 +150,14 @@ class FolderScanService {
           }
         }
 
+        processed++;
         result.totalProcessed++;
       }
 
       onProgress?.({
         status: "complete",
-        totalFiles: mediaFiles.length,
-        processedFiles: mediaFiles.length,
+        totalFiles: totalToProcess,
+        processedFiles: totalToProcess,
         matchedMedia: result.movies.length + result.series.length,
       });
 
@@ -115,6 +173,196 @@ class FolderScanService {
 
       throw error;
     }
+  }
+
+  /**
+   * Categorize files into episode files and standalone files
+   */
+  private categorizeFiles(files: string[]): { episodeFiles: EpisodeFile[]; standaloneFiles: string[] } {
+    const episodeFiles: EpisodeFile[] = [];
+    const standaloneFiles: string[] = [];
+
+    for (const file of files) {
+      const fileName = this.extractFileName(file);
+      const episodeInfo = this.parseEpisodeInfo(fileName, file);
+
+      if (episodeInfo) {
+        episodeFiles.push(episodeInfo);
+      } else {
+        standaloneFiles.push(file);
+      }
+    }
+
+    return { episodeFiles, standaloneFiles };
+  }
+
+  /**
+   * Parse episode information from filename
+   */
+  private parseEpisodeInfo(fileName: string, filePath: string): EpisodeFile | null {
+    for (const pattern of EPISODE_PATTERNS) {
+      const match = fileName.match(pattern);
+
+      if (match) {
+        const seasonNumber = parseInt(match[1], 10);
+        const episodeNumber = parseInt(match[2], 10);
+
+        // Extract series name (everything before the episode pattern)
+        const seriesName = fileName
+          .substring(0, match.index)
+          .replace(/[\.\-_]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        if (seriesName) {
+          return {
+            filePath,
+            fileName,
+            seriesName,
+            seasonNumber,
+            episodeNumber,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Group episode files by series name
+   */
+  private groupEpisodesBySeries(episodeFiles: EpisodeFile[]): Map<string, EpisodeFile[]> {
+    const groups = new Map<string, EpisodeFile[]>();
+
+    for (const episode of episodeFiles) {
+      const normalizedName = episode.seriesName.toLowerCase();
+
+      if (!groups.has(normalizedName)) {
+        groups.set(normalizedName, []);
+      }
+
+      groups.get(normalizedName)!.push(episode);
+    }
+
+    return groups;
+  }
+
+  /**
+   * Match series with API and create Series object with local episodes
+   */
+  private async matchSeriesWithApi(
+    seriesName: string,
+    episodes: EpisodeFile[],
+    folderId: string,
+  ): Promise<Series | null> {
+    try {
+      const cleanQuery = this.cleanMediaName(seriesName);
+      console.log(`🎬 Searching series: "${cleanQuery}" with ${episodes.length} local episodes`);
+
+      const searchResults: any = await apiService.searchMediaByTitle(cleanQuery);
+
+      if (!searchResults) {
+        console.log(`No results found for series: ${cleanQuery}`);
+        return null;
+      }
+
+      // Prefer TV results for series
+      const appType = searchResults.mediaType === "movie" ? "MOVIE" : "SERIES";
+
+      if (appType === "MOVIE") {
+        console.log(`⚠️ API returned movie for "${seriesName}", treating as series anyway`);
+      }
+
+      console.log(`✅ Series matched: ${seriesName} -> ${searchResults.details?.name || searchResults.details?.title}`);
+
+      // Transform to Series with local episode info
+      const series = this.transformToSeriesWithEpisodes(searchResults.details, episodes, folderId);
+
+      return series;
+    } catch (error) {
+      console.error(`Failed to match series with API: ${seriesName}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Transform API response to Series with local episodes mapped
+   */
+  private transformToSeriesWithEpisodes(apiData: any, localEpisodes: EpisodeFile[], folderId: string): Series {
+    // Group local episodes by season
+    const episodesBySeason = new Map<number, EpisodeFile[]>();
+
+    for (const ep of localEpisodes) {
+      if (!episodesBySeason.has(ep.seasonNumber)) {
+        episodesBySeason.set(ep.seasonNumber, []);
+      }
+      episodesBySeason.get(ep.seasonNumber)!.push(ep);
+    }
+
+    // Build seasons array with available episodes
+    const seasons: Season[] = (apiData.seasons || []).map((apiSeason: any) => {
+      const localSeasonEpisodes = episodesBySeason.get(apiSeason.season_number) || [];
+      const localEpisodeNumbers = new Set(localSeasonEpisodes.map((e) => e.episodeNumber));
+
+      const episodes: Episode[] = localSeasonEpisodes.map((localEp) => ({
+        id: `${apiData.id}-s${localEp.seasonNumber}e${localEp.episodeNumber}`,
+        episodeNumber: localEp.episodeNumber,
+        seasonNumber: localEp.seasonNumber,
+        title: `Episódio ${localEp.episodeNumber}`,
+        filePath: localEp.filePath,
+        available: true,
+      }));
+
+      return {
+        id: `${apiData.id}-s${apiSeason.season_number}`,
+        seasonNumber: apiSeason.season_number,
+        name: apiSeason.name || `Temporada ${apiSeason.season_number}`,
+        overview: apiSeason.overview,
+        poster: apiSeason.poster_path ? `https://image.tmdb.org/t/p/w500${apiSeason.poster_path}` : undefined,
+        episodeCount: apiSeason.episode_count || 0,
+        episodes: episodes.sort((a, b) => a.episodeNumber - b.episodeNumber),
+        available: localSeasonEpisodes.length > 0,
+        downloadedEpisodes: localSeasonEpisodes.length,
+      };
+    });
+
+    // Calculate total available episodes
+    const totalLocalEpisodes = localEpisodes.length;
+
+    // Get the first episode file path as the series folder path
+    const folderPath =
+      localEpisodes.length > 0
+        ? localEpisodes[0].filePath.substring(
+            0,
+            localEpisodes[0].filePath.lastIndexOf("/") !== -1
+              ? localEpisodes[0].filePath.lastIndexOf("/")
+              : localEpisodes[0].filePath.lastIndexOf("\\"),
+          )
+        : "";
+
+    return {
+      id: apiData.id?.toString() || "",
+      title: apiData.name || apiData.title || "Unknown",
+      originalTitle: apiData.original_name || apiData.original_title,
+      overview: apiData.overview,
+      poster: apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : undefined,
+      backdrop: apiData.backdrop_path ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}` : undefined,
+      rating: apiData.vote_average,
+      year: parseInt(apiData.first_air_date?.split("-")[0] || "0"),
+      firstAirDate: apiData.first_air_date,
+      lastAirDate: apiData.last_air_date,
+      status: "MATCHED",
+      type: "SERIES",
+      folderId,
+      filePath: folderPath,
+      numberOfSeasons: apiData.number_of_seasons || seasons.length,
+      numberOfEpisodes: apiData.number_of_episodes || 0,
+      seasons: seasons.filter((s) => s.seasonNumber > 0), // Exclude specials (season 0)
+      trailer: apiData.videos?.results?.[0]?.key
+        ? `https://www.youtube.com/watch?v=${apiData.videos.results[0].key}`
+        : undefined,
+    } as Series;
   }
 
   /**

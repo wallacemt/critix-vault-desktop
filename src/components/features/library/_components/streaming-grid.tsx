@@ -14,6 +14,7 @@ interface StreamingGridProps {
   media: Media[];
   onMediaClick?: (media: Media) => void;
   onMediaPlay?: (media: Media) => void;
+  onMediaEdit?: (media: Media) => void;
   viewMode?: "grid" | "list";
   emptyMessage?: string;
 }
@@ -22,6 +23,7 @@ export function StreamingGrid({
   media,
   onMediaClick,
   onMediaPlay,
+  onMediaEdit,
   viewMode = "grid",
   emptyMessage = "No media found",
 }: StreamingGridProps) {
@@ -59,7 +61,13 @@ export function StreamingGrid({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.05, duration: 0.3 }}
         >
-          <StreamingCard media={item} onClick={onMediaClick} onPlay={onMediaPlay} viewMode={viewMode} />
+          <StreamingCard
+            media={item}
+            onClick={onMediaClick}
+            onPlay={onMediaPlay}
+            onEdit={onMediaEdit}
+            viewMode={viewMode}
+          />
         </motion.div>
       ))}
     </div>

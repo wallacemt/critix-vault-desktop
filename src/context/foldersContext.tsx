@@ -1,15 +1,16 @@
 /**
  * Folders Context
  * Global state management for monitored folders
+ *
+ * Now uses Rust backend for persistent storage that survives app restarts.
+ * Data is stored in the app's data directory, not localStorage.
  */
 
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { Folder } from "@/types";
-import { storageService } from "@/services/storageService";
 import { tauriService } from "@/services/tauri";
-import { redirect, useRouter } from "next/navigation";
 
 interface FoldersContextType {
   folders: Folder[];
@@ -18,8 +19,7 @@ interface FoldersContextType {
   addFolder: (path: string) => Promise<Folder>;
   removeFolder: (folderId: string) => Promise<void>;
   selectFolder: (folder: Folder | null) => void;
-  refreshFolders: () => void;
-  setOnNeedRedirect: (callback: () => void) => void;
+  refreshFolders: () => Promise<void>;
 }
 
 const FoldersContext = createContext<FoldersContextType | undefined>(undefined);
@@ -30,27 +30,30 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [onNeedRedirect, setOnNeedRedirect] = useState<(() => void) | null>(null);
 
-  // Load folders from localStorage on mount
+  // Load folders from Rust backend on mount
   useEffect(() => {
     loadFolders();
   }, []);
 
-  // Save last selected folder when it changes
+  // Save last selected folder when it changes (to Rust backend)
   useEffect(() => {
     if (selectedFolder) {
-      storageService.saveLastSelectedFolder(selectedFolder.id);
+      tauriService.saveLastSelectedFolder(selectedFolder.id).catch(console.error);
     }
   }, [selectedFolder]);
 
-  const loadFolders = () => {
+  const loadFolders = useCallback(async () => {
     try {
-      const savedFolders = storageService.getFolders();
-      console.log("📁 Folders loaded from localStorage:", savedFolders);
+      setIsLoading(true);
+
+      // Load folders from Rust backend (persistent storage)
+      const savedFolders = await tauriService.getFolders();
+      console.log("📁 Folders loaded from Rust backend:", savedFolders);
       setFolders(savedFolders);
 
-      // Load last selected folder
+      // Load last selected folder from Rust backend
       if (savedFolders.length > 0) {
-        const lastFolderId = storageService.getLastSelectedFolderId();
+        const lastFolderId = await tauriService.getLastSelectedFolder();
         console.log("🔍 Last selected folder ID:", lastFolderId);
         const lastFolder = lastFolderId ? savedFolders.find((f) => f.id === lastFolderId) : null;
 
@@ -59,29 +62,25 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
         console.log("✅ Selecting folder:", folderToSelect);
         setSelectedFolder(folderToSelect);
       } else {
-        console.log("⚠️ No folders found in localStorage");
+        console.log("⚠️ No folders found in storage");
+        setSelectedFolder(null);
       }
-
-      setIsLoading(false);
     } catch (error) {
       console.error("❌ Failed to load folders:", error);
+    } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const addFolder = async (path: string): Promise<Folder> => {
     try {
-      // Use Tauri to create folder object
+      // Use Tauri to create folder object (automatically persisted to disk)
       const newFolder = await tauriService.addFolder(path);
-      console.log("📂 New folder created:", newFolder);
+      console.log("📂 New folder created and persisted:", newFolder);
 
-      // Add to state
+      // Update state
       const updatedFolders = [...folders, newFolder];
       setFolders(updatedFolders);
-
-      // Persist to localStorage
-      storageService.saveFolders(updatedFolders);
-      console.log("💾 Folders saved to localStorage:", updatedFolders);
 
       // Auto-select if first folder
       if (updatedFolders.length === 1) {
@@ -97,21 +96,12 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
 
   const removeFolder = async (folderId: string): Promise<void> => {
     try {
-      // Remove from Rust backend
+      // Remove from Rust backend (also removes associated media automatically)
       await tauriService.removeFolder(folderId);
 
-      // Remove from state
+      // Update state
       const updatedFolders = folders.filter((f) => f.id !== folderId);
       setFolders(updatedFolders);
-
-      // Persist to localStorage
-      storageService.saveFolders(updatedFolders);
-
-      // Remove media from this folder
-      const allMovies = storageService.getMovies().filter((m) => m.folderId !== folderId);
-      const allSeries = storageService.getSeries().filter((s) => s.folderId !== folderId);
-      storageService.saveMovies(allMovies);
-      storageService.saveSeries(allSeries);
 
       // Clear selection if removed folder was selected
       if (selectedFolder?.id === folderId) {
@@ -133,8 +123,8 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
     setSelectedFolder(folder);
   };
 
-  const refreshFolders = () => {
-    loadFolders();
+  const refreshFolders = async () => {
+    await loadFolders();
   };
 
   return (
@@ -147,7 +137,6 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
         removeFolder,
         selectFolder,
         refreshFolders,
-        setOnNeedRedirect: (callback) => setOnNeedRedirect(() => callback),
       }}
     >
       {children}

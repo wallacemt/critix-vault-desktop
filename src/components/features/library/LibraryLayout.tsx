@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Folder, FolderPlus, X, Film, Tv, AlertCircle, Scan, Grid3x3, List, Search } from "lucide-react";
+import { Folder, FolderPlus, X, Film, Tv, AlertCircle, Scan, Grid3x3, List, Search, Settings } from "lucide-react";
 import { Media } from "@/types";
 import { useMediaLibrary } from "@/hooks/useMediaLibrary";
 import { useFoldersContext } from "@/context/foldersContext";
@@ -20,6 +20,8 @@ import gsap from "gsap";
 import { Input } from "@/components/ui/input";
 import { FolderList } from "./_components/folder-list";
 import { FolderMediaHeader } from "./_components/folder-media-header";
+import { EditMediaModal } from "@/components/ui/edit-media-modal";
+import Link from "next/link";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -32,8 +34,9 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
   const [activeTab, setActiveTab] = useState<"all" | "movies" | "series">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [editingMedia, setEditingMedia] = useState<Media | null>(null);
 
-  const { movies, series, loading, error, scanning, scanProgress, scanFolder } = useMediaLibrary(
+  const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia } = useMediaLibrary(
     selectedFolder?.id || null,
   );
 
@@ -57,6 +60,17 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     selectFolder(folder);
     setActiveTab("all");
     setSearchQuery("");
+  };
+
+  const handleEditMedia = (media: Media) => {
+    setEditingMedia(media);
+  };
+
+  const handleUpdateMedia = async (mediaId: string, mediaType: "movie" | "tv") => {
+    if (!editingMedia) return;
+
+    await updateMedia(editingMedia, mediaId, mediaType);
+    setEditingMedia(null);
   };
 
   const filteredMedia = () => {
@@ -138,6 +152,19 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             </div>
           </motion.div>
         )}
+
+        {/* Settings Link */}
+        <div className="p-4 border-t border-[var(--border-color)] mt-auto">
+          <Link href="/settings">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Configurações
+            </Button>
+          </Link>
+        </div>
       </motion.aside>
 
       {/* Main Content */}
@@ -216,6 +243,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                         media={filteredMedia()}
                         onMediaClick={onMediaClick}
                         onMediaPlay={onMediaPlay}
+                        onMediaEdit={handleEditMedia}
                         viewMode={viewMode}
                         emptyMessage={
                           searchQuery
@@ -259,6 +287,19 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
           </motion.div>
         )}
       </main>
+
+      {/* Edit Media Modal */}
+      {editingMedia && (
+        <EditMediaModal
+          isOpen={!!editingMedia}
+          onClose={() => setEditingMedia(null)}
+          currentMedia={{
+            title: editingMedia.title,
+            type: editingMedia.type === "MOVIE" ? "MOVIE" : "SERIES",
+          }}
+          onSelectMedia={handleUpdateMedia}
+        />
+      )}
 
       {/* Custom scrollbar styles */}
       <style jsx global>{`

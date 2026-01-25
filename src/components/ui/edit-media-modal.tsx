@@ -53,7 +53,7 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
 
     setLoading(true);
     try {
-      const response = await apiService.searchMediaByTitle(query, true);
+      const response = (await apiService.searchMediaByTitle(query, true)) as { results?: MediaSearchResult[] };
 
       if (response && response.results) {
         setResults(response.results);

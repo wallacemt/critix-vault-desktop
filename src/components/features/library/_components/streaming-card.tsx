@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, Info, Film, Tv, Star, Clock, Calendar } from "lucide-react";
+import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil } from "lucide-react";
 import { Media, MediaType } from "@/types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,10 +18,11 @@ interface StreamingCardProps {
   media: Media;
   onClick?: (media: Media) => void;
   onPlay?: (media: Media) => void;
+  onEdit?: (media: Media) => void;
   viewMode?: "grid" | "list";
 }
 
-export function StreamingCard({ media, onClick, onPlay, viewMode = "grid" }: StreamingCardProps) {
+export function StreamingCard({ media, onClick, onPlay, onEdit, viewMode = "grid" }: StreamingCardProps) {
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -135,6 +136,20 @@ export function StreamingCard({ media, onClick, onPlay, viewMode = "grid" }: Str
                   <Info className="w-4 h-4 mr-1" />
                   Detalhes
                 </Button>
+                {onEdit && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(media);
+                    }}
+                    className="bg-[var(--bg-surface-light)] border-[var(--border-color)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                  >
+                    <Pencil className="w-4 h-4 mr-1" />
+                    Editar
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -242,6 +257,21 @@ export function StreamingCard({ media, onClick, onPlay, viewMode = "grid" }: Str
                     <Info className="w-5 h-5" />
                   </Button>
                 </motion.div>
+                {onEdit && (
+                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="w-10 h-10 rounded-full bg-[var(--bg-surface)]/90 hover:bg-[var(--color-primary)] hover:text-[var(--color-on-primary)] border-[var(--border-color)] backdrop-blur-sm transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(media);
+                      }}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  </motion.div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

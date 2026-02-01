@@ -52,9 +52,10 @@ pub fn run() {
             commands::data::export_data,
             commands::data::import_data,
             // File operations
-             commands::files::scan_folder,
-             commands::files::open_media,
-             commands::files::get_file_metadata
+            commands::files::scan_folder,
+            commands::files::open_media,
+            commands::files::get_file_metadata,
+            commands::files::open_file_location
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

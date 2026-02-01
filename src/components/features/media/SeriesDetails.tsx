@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -19,20 +19,100 @@ import {
   ChevronUp,
   CheckCircle2,
   XCircle,
+  Edit,
+  Loader2,
+  FolderOpen,
+  Trash2,
 } from "lucide-react";
 import { Series, Season, Episode } from "@/types";
 import { cn } from "@/lib/utils";
+import { rematchSeriesEpisodes, fetchSeasonDetails } from "@/services/mediaService";
+import { EditMediaModal } from "@/components/ui/edit-media-modal";
+import { tauriService } from "@/services/tauri";
+import { SeriesEditDialog, SeriesEditState } from "./SeriesEditDialog";
+import { storageService } from "@/services/storageService";
+import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 
 interface SeriesDetailsProps {
   series: Series;
   onBack: () => void;
   onPlayEpisode: (episode: Episode) => void;
+  onSeriesUpdate?: (updatedSeries: Series) => void;
+  onDelete?: () => void;
 }
 
-export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsProps) {
+export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, onDelete }: SeriesDetailsProps) {
   const [backdropError, setBackdropError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAdvancedEditOpen, setIsAdvancedEditOpen] = useState(false);
+  const [isRematching, setIsRematching] = useState(false);
+  const [rematchStatus, setRematchStatus] = useState<string>("");
+  const [isLoadingSeasons, setIsLoadingSeasons] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Task 4: Auto-fetch and save season details when series page opens
+  useEffect(() => {
+    const loadSeasonDetails = async () => {
+      // Check if seasons are already populated with episode details
+      const hasEpisodeDetails = series.seasons.some((season) => season.episodes && season.episodes.length > 0);
+
+      if (hasEpisodeDetails) {
+        console.log("✅ Series already has season details");
+        return;
+      }
+
+      setIsLoadingSeasons(true);
+      console.log(`🔄 Loading season details for: ${series.title}`);
+
+      try {
+        const updatedSeasons: Season[] = [];
+
+        for (const season of series.seasons) {
+          try {
+            const seasonDetails = await fetchSeasonDetails(series.id, season.seasonNumber);
+
+            if (seasonDetails) {
+              updatedSeasons.push({
+                ...season,
+                episodes: seasonDetails.episodes,
+                overview: seasonDetails.overview || season.overview,
+                poster: seasonDetails.poster || season.poster,
+              });
+              console.log(`✅ Loaded Season ${season.seasonNumber}: ${seasonDetails.episodes.length} episodes`);
+            } else {
+              updatedSeasons.push(season);
+            }
+          } catch (error) {
+            console.error(`Failed to load Season ${season.seasonNumber}:`, error);
+            updatedSeasons.push(season);
+          }
+        }
+
+        const updatedSeries = {
+          ...series,
+          seasons: updatedSeasons,
+        };
+
+        // Save updated series to database
+        await tauriService.saveSeries([updatedSeries]);
+        console.log(`✅ Saved updated series with season details: ${series.title}`);
+
+        // Notify parent component
+        if (onSeriesUpdate) {
+          onSeriesUpdate(updatedSeries);
+        }
+      } catch (error) {
+        console.error("Failed to load season details:", error);
+      } finally {
+        setIsLoadingSeasons(false);
+      }
+    };
+
+    loadSeasonDetails();
+  }, [series.id]); // Only run when series ID changes
 
   const toggleSeason = (seasonId: string) => {
     setExpandedSeasons((prev) => {
@@ -46,6 +126,117 @@ export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsPr
     });
   };
 
+  const handleSeriesChange = async (newSeriesId: string, mediaType: "movie" | "tv") => {
+    if (mediaType !== "tv") return;
+
+    setIsRematching(true);
+    setRematchStatus("Coletando arquivos locais...");
+
+    try {
+      // Collect all local episode files from current series
+      const localFiles: string[] = [];
+      series.seasons.forEach((season) => {
+        season.episodes.forEach((episode) => {
+          if (episode.filePath) {
+            localFiles.push(episode.filePath);
+          }
+        });
+      });
+
+      setRematchStatus(`Re-mapeando ${localFiles.length} episódios...`);
+
+      // Perform re-matching
+      const result = await rematchSeriesEpisodes(series.id, newSeriesId, localFiles);
+
+      if (result.success) {
+        setRematchStatus(`✓ ${result.matched} episódios mapeados, ${result.unmatched} não mapeados`);
+
+        // Notify parent component to update series
+        if (onSeriesUpdate) {
+          // Here you would fetch the full updated series details and update
+          // For now, we'll just show success message
+          setTimeout(() => {
+            setRematchStatus("");
+            setIsRematching(false);
+            setIsEditModalOpen(false);
+          }, 2000);
+        }
+      } else {
+        setRematchStatus(`✗ Erro: ${result.errors?.join(", ")}`);
+        setTimeout(() => {
+          setRematchStatus("");
+          setIsRematching(false);
+        }, 3000);
+      }
+    } catch (error) {
+      console.error("Error during re-matching:", error);
+      setRematchStatus(`✗ Erro ao re-mapear episódios`);
+      setTimeout(() => {
+        setRematchStatus("");
+        setIsRematching(false);
+      }, 3000);
+    }
+  };
+
+  const handleOpenFolder = async () => {
+    // Get first available episode file path as reference
+    let filePath: string | undefined;
+
+    for (const season of series.seasons) {
+      for (const episode of season.episodes) {
+        if (episode.filePath && !episode.filePath.includes("/demo/")) {
+          filePath = episode.filePath;
+          break;
+        }
+      }
+      if (filePath) break;
+    }
+
+    if (!filePath) {
+      alert("Nenhum arquivo local encontrado para esta série");
+      return;
+    }
+
+    try {
+      await tauriService.openFileLocation(filePath);
+    } catch (error) {
+      console.error("Error opening folder:", error);
+      alert(`Erro ao abrir pasta: ${error}`);
+    }
+  };
+
+  const handleSaveSeriesEdits = async (edits: SeriesEditState) => {
+    try {
+      storageService.saveSeriesEdits(series.id, edits);
+      alert("Alterações salvas com sucesso!");
+    } catch (error) {
+      console.error("Error saving edits:", error);
+      alert("Erro ao salvar alterações");
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await tauriService.removeSeries(series.id, series.folderId);
+      console.log(`✅ Series deleted: ${series.title}`);
+      setShowDeleteDialog(false);
+
+      // Call parent callback if provided
+      if (onDelete) {
+        onDelete();
+      } else {
+        // Fallback to going back
+        onBack();
+      }
+    } catch (error) {
+      console.error("Error deleting series:", error);
+      alert(`Erro ao excluir série: ${error}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-on-primary-crx  z-50 overflow-auto">
       {/* Backdrop Section */}
@@ -55,7 +246,6 @@ export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsPr
           <img
             src={series.backdrop}
             alt={series.title}
-     
             className="w-full h-full object-cover"
             onError={() => setBackdropError(true)}
           />
@@ -144,7 +334,7 @@ export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsPr
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 {series.trailer && (
                   <Button
                     size="lg"
@@ -157,6 +347,48 @@ export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsPr
                       Trailer
                     </a>
                   </Button>
+                )}
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => setIsEditModalOpen(true)}
+                  disabled={isRematching}
+                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                >
+                  {isRematching ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Edit className="w-5 h-5 mr-2" />}
+                  Editar Série
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={handleOpenFolder}
+                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                >
+                  <FolderOpen className="w-5 h-5 mr-2" />
+                  Abrir Pasta
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => setIsAdvancedEditOpen(true)}
+                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                >
+                  <Edit className="w-5 h-5 mr-2" />
+                  Edição Avançada
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
+                >
+                  <Trash2 className="w-5 h-5 mr-2" />
+                  Excluir
+                </Button>
+                {rematchStatus && (
+                  <div className="flex items-center px-4 py-2 bg-slate-800/80 border border-slate-700 rounded-lg backdrop-blur-sm">
+                    <span className="text-sm text-white">{rematchStatus}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -194,6 +426,25 @@ export function SeriesDetails({ series, onBack, onPlayEpisode }: SeriesDetailsPr
           </div>
         </div>
       </div>
+
+      {/* Edit Media Modal */}
+      <EditMediaModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        currentMedia={{
+          title: series.title,
+          type: "SERIES",
+        }}
+        onSelectMedia={handleSeriesChange}
+      />
+
+      {/* Advanced Edit Dialog */}
+      <SeriesEditDialog
+        series={series}
+        isOpen={isAdvancedEditOpen}
+        onClose={() => setIsAdvancedEditOpen(false)}
+        onSave={handleSaveSeriesEdits}
+      />
     </div>
   );
 }
@@ -331,3 +582,14 @@ function EpisodeCard({ episode, onPlay }: EpisodeCardProps) {
     </button>
   );
 }
+
+{
+  /* Delete Confirmation Dialog */
+}
+<DeleteMediaDialog
+  isOpen={showDeleteDialog}
+  onClose={() => setShowDeleteDialog(false)}
+  onConfirm={handleDelete}
+  media={series}
+  isDeleting={isDeleting}
+/>;

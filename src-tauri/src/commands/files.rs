@@ -4,7 +4,9 @@ use std::process::Command;
 
 #[tauri::command]
 pub fn scan_folder(folder_path: String) -> Result<Vec<String>, String> {
-    let extensions = [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"];
+    let extensions = [
+        ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v",
+    ];
     let mut files = vec![];
 
     fn scan(dir: &Path, exts: &[&str], out: &mut Vec<String>) -> Result<(), String> {
@@ -26,6 +28,67 @@ pub fn scan_folder(folder_path: String) -> Result<Vec<String>, String> {
 
     scan(Path::new(&folder_path), &extensions, &mut files)?;
     Ok(files)
+}
+
+#[tauri::command]
+pub fn open_file_location(file_path: String) -> Result<(), String> {
+    let path = Path::new(&file_path);
+
+    // Check if file exists
+    if !path.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Open Explorer and select the file
+        Command::new("explorer")
+            .args(["/select,", &file_path])
+            .spawn()
+            .map_err(|e| format!("Failed to open file location: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Open Finder and select the file
+        Command::new("open")
+            .args(["-R", &file_path])
+            .spawn()
+            .map_err(|e| format!("Failed to open file location: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Try to use different file managers
+        // First try to get the parent directory
+        if let Some(parent) = path.parent() {
+            let parent_str = parent.to_string_lossy().to_string();
+
+            // Try xdg-open with the parent directory
+            let result = Command::new("xdg-open").arg(&parent_str).spawn();
+
+            if result.is_err() {
+                // Fallback to common file managers
+                let managers = ["nautilus", "dolphin", "thunar", "nemo", "caja"];
+                let mut opened = false;
+
+                for manager in &managers {
+                    if let Ok(_) = Command::new(manager).arg(&parent_str).spawn() {
+                        opened = true;
+                        break;
+                    }
+                }
+
+                if !opened {
+                    return Err("No file manager found. Please install xdg-utils or a supported file manager.".to_string());
+                }
+            }
+        } else {
+            return Err("Could not determine parent directory".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -89,7 +152,6 @@ pub fn open_media(file_path: String, player: Option<String>) -> Result<(), Strin
 
     Ok(())
 }
-
 
 #[tauri::command]
 pub fn get_file_metadata(file_path: String) -> Result<serde_json::Value, String> {

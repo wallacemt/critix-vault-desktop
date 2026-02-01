@@ -5,14 +5,15 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil } from "lucide-react";
+import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check } from "lucide-react";
 import { Media, MediaType } from "@/types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { watchHistoryService } from "@/services/watchHistoryService";
 
 interface StreamingCardProps {
   media: Media;
@@ -25,6 +26,13 @@ interface StreamingCardProps {
 export function StreamingCard({ media, onClick, onPlay, onEdit, viewMode = "grid" }: StreamingCardProps) {
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isWatched, setIsWatched] = useState(false);
+
+  useEffect(() => {
+    if (media.type === "MOVIE") {
+      setIsWatched(watchHistoryService.isMovieWatched(media.id));
+    }
+  }, [media.id, media.type]);
 
   const getMediaIcon = (type: MediaType) => {
     switch (type) {
@@ -219,6 +227,20 @@ export function StreamingCard({ media, onClick, onPlay, onEdit, viewMode = "grid
               {media.type === "ANIME" ? "Anime" : media.type === "SERIES" ? "Series" : "Movie"}
             </Badge>
           </motion.div>
+
+          {/* Watched Badge */}
+          {isWatched && (
+            <motion.div
+              className="absolute bottom-3 right-3"
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <Badge className="text-xs backdrop-blur-sm bg-green-600/90 text-white border-green-400">
+                <Check className="w-3 h-3 mr-1" />
+                Assistido
+              </Badge>
+            </motion.div>
+          )}
 
           {/* Hover Actions */}
           <AnimatePresence>

@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { Folder, Movie, Series } from "@/types";
 import { motion } from "framer-motion";
-import { Film, Grid3x3, List, Scan, Search, Tv } from "lucide-react";
+import { Film, Grid3x3, List, Scan, Search, Tv, Plus } from "lucide-react";
 import { Dispatch, SetStateAction } from "react";
+
 interface FolderMediaHeaderProps {
   selectedFolder: Folder;
   activeTab: "all" | "movies" | "series";
@@ -19,6 +21,8 @@ interface FolderMediaHeaderProps {
   setActiveTab: Dispatch<SetStateAction<"all" | "movies" | "series">>;
   setViewMode: Dispatch<SetStateAction<"grid" | "list">>;
   scanFolder: (folderPath: string) => Promise<void>;
+  onScanWithPreview?: () => void;
+  onManualEntry?: () => void;
 }
 export function FolderMediaHeader({
   selectedFolder,
@@ -34,6 +38,8 @@ export function FolderMediaHeader({
   totalCount,
   movies,
   series,
+  onScanWithPreview,
+  onManualEntry,
 }: FolderMediaHeaderProps) {
   return (
     <div className="fixed backdrop-blur-lg z-5  w-full bg-gradient-to-b from-[var(--bg-surface)] to-transparent border-b border-[var(--border-color)] p-6">
@@ -74,6 +80,7 @@ export function FolderMediaHeader({
 
       {/* Search Bar */}
       <div className="mb-4  flex  items-center gap-4">
+        <SidebarTrigger className="z-20" />
         <div className="relative max-w-md flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
           <Input
@@ -120,6 +127,20 @@ export function FolderMediaHeader({
               {scanning ? `Escaneando... ${Math.round(scanProgress)}%` : "Reescanear"}
             </Button>
           </motion.div>
+
+          {/* Manual Entry Button */}
+          {onManualEntry && (
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={onManualEntry}
+                variant="outline"
+                className="bg-[var(--bg-surface-light)] border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-[var(--color-primary)]"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar Manual
+              </Button>
+            </motion.div>
+          )}
         </div>
       </div>
 

@@ -49,7 +49,7 @@ class ApiService {
    * Get media details by ID
    */
   async getMediaDetails(mediaId: string, type: "movie" | "series") {
-    return this.request(`/media/${type}/${mediaId}`);
+    return this.request(`/media/${type}/${mediaId}/details`);
   }
 
   /**
@@ -65,11 +65,13 @@ class ApiService {
    * Search media by title using the correct API endpoint
    * Returns generic response with media_type to identify movie or series
    */
-  async searchMediaByTitle(query: string, returnMulti: boolean = false) {
+  async searchMediaByTitle(query: string, returnMulti: boolean = false, normalizeText = true) {
     const params = new URLSearchParams({ query });
+    params.append("normalizeText", String(normalizeText));
     if (returnMulti) {
       params.append("returnMode", "multi");
     }
+
     return this.request(`/media/v1/search/title?${params.toString()}`);
   }
 
@@ -77,7 +79,7 @@ class ApiService {
    * Get detailed media information by ID and type
    */
   async getMediaDetailsById(mediaId: string, mediaType: "movie" | "tv") {
-    return this.request(`/media/v1/${mediaType}/${mediaId}`);
+    return this.request(`/media/v1/${mediaType}/${mediaId}/details`);
   }
 }
 

@@ -8,7 +8,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Folder, FolderPlus, X, Film, Tv, AlertCircle, Scan, Grid3x3, List, Search, Settings } from "lucide-react";
-import { Media } from "@/types";
+import { Media, Movie, Series } from "@/types";
 import { useMediaLibrary } from "@/hooks/useMediaLibrary";
 import { useFoldersContext } from "@/context/foldersContext";
 import { StreamingGrid } from "./_components/streaming-grid";
@@ -21,7 +21,28 @@ import { Input } from "@/components/ui/input";
 import { FolderList } from "./_components/folder-list";
 import { FolderMediaHeader } from "./_components/folder-media-header";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
+import { NewMediaNotification } from "@/components/features/library/_components/new-media-notification";
 import Link from "next/link";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarProvider,
+  SidebarSeparator,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { folderScanService, type FolderPreview } from "@/services/folderScanService";
+import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
+import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
+import { Plus } from "lucide-react";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -35,10 +56,43 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
+  const [newMediaNotification, setNewMediaNotification] = useState<{ movies: Movie[]; series: Series[] } | null>(null);
+  const [isAutoScanning, setIsAutoScanning] = useState(false);
+  const [showScanPreview, setShowScanPreview] = useState(false);
+  const [folderPreviews, setFolderPreviews] = useState<FolderPreview[]>([]);
+  const [showManualEntry, setShowManualEntry] = useState(false);
 
-  const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia } = useMediaLibrary(
-    selectedFolder?.id || null,
-  );
+  const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia, refreshMedia } =
+    useMediaLibrary(selectedFolder?.id || null);
+
+  useEffect(() => {
+    const runAutoScan = async () => {
+      if (folders.length === 0) return;
+
+      // Check if auto-scan was already done in this session
+      const autoScanDone = sessionStorage.getItem("autoScanDone");
+      if (autoScanDone) return;
+
+      setIsAutoScanning(true);
+      console.log("🚀 Starting auto-scan on startup...");
+
+      try {
+        // const stats = await folderScanService.autoScanFolders(undefined, (newMedia) => {
+        //   // Show notification when new media is found
+        //   setNewMediaNotification(newMedia);
+        // });
+
+        // console.log("✅ Auto-scan complete:", stats);
+        // sessionStorage.setItem("autoScanDone", "true");
+      } catch (error) {
+        console.error("Auto-scan failed:", error);
+      } finally {
+        setIsAutoScanning(false);
+      }
+    };
+
+    runAutoScan();
+  }, [folders]);
 
   // Debug log
   useEffect(() => {
@@ -73,6 +127,40 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     setEditingMedia(null);
   };
 
+  const handleScanWithPreview = async () => {
+    if (!folders.length) return;
+
+    // Generate preview for all folders
+    const previews = await Promise.all(
+      folders.map(async (folder) => {
+        const preview = await folderScanService.previewFolder(folder.path);
+        return {
+          path: folder.path,
+          name: folder.name,
+          ...preview,
+        };
+      }),
+    );
+
+    setFolderPreviews(previews);
+    setShowScanPreview(true);
+  };
+
+  const handleConfirmScan = async (selectedPaths: string[]) => {
+    // Scan only selected folders
+    for (const path of selectedPaths) {
+      const folder = folders.find((f) => f.path === path);
+      if (folder) {
+        await scanFolder(folder.path);
+      }
+    }
+    refreshMedia();
+  };
+
+  const handleManualEntrySuccess = () => {
+    refreshMedia();
+  };
+
   const filteredMedia = () => {
     let allMedia: Media[] = [];
 
@@ -101,16 +189,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
   const totalCount = movies.length + series.length;
 
   return (
-    <div className="flex h-screen bg-[var(--bg-body)] overflow-hidden">
-      {/* Animated Sidebar */}
-      <motion.aside
-        className="w-72 bg-[var(--bg-surface)] border-r border-[var(--border-color)] flex flex-col backdrop-blur-xl"
-        initial={{ x: -300 }}
-        animate={{ x: 0 }}
-        transition={{ type: "spring", damping: 20 }}
-      >
-        {/* Header */}
-        <div className="p-6 border-b border-[var(--border-color)]">
+    <SidebarProvider defaultOpen={true}>
+      {/* ShadCN Sidebar */}
+      <Sidebar variant="floating" collapsible="icon" className="border-r border-[var(--border-color)]">
+        <SidebarHeader className="p-6 border-b border-[var(--border-color)]">
           <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4 font-display">Biblioteca</h2>
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <Button
@@ -122,53 +204,64 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
               Adicionar Pasta
             </Button>
           </motion.div>
-        </div>
+        </SidebarHeader>
 
-        {/* Folders List */}
-        <FolderList
-          folders={folders}
-          handleFolderSelect={handleFolderSelect}
-          selectedFolder={selectedFolder!}
-          removeFolder={removeFolder}
-        />
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs text-[var(--text-secondary)] px-4 py-2">
+              Pastas Monitoradas
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <FolderList
+                folders={folders}
+                handleFolderSelect={handleFolderSelect}
+                selectedFolder={selectedFolder!}
+                removeFolder={removeFolder}
+              />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-        {/* Footer Stats */}
-        {movies.length + series.length > 0 && (
-          <motion.div
-            className="p-6 border-t border-[var(--border-color)] bg-[var(--bg-surface-light)]/50"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{movies.length}</p>
-                <p className="text-xs text-[var(--text-secondary)] font-sans">Filmes</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{series.length}</p>
-                <p className="text-xs text-[var(--text-secondary)] font-sans">Séries</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Settings Link */}
-        <div className="p-4 border-t border-[var(--border-color)] mt-auto">
-          <Link href="/settings">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
+        <SidebarFooter>
+          {/* Footer Stats */}
+          {movies.length + series.length > 0 && (
+            <motion.div
+              className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-surface-light)]/50"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
             >
-              <Settings className="w-4 h-4 mr-2" />
-              Configurações
-            </Button>
-          </Link>
-        </div>
-      </motion.aside>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{movies.length}</p>
+                  <p className="text-xs text-[var(--text-secondary)] font-sans">Filmes</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{series.length}</p>
+                  <p className="text-xs text-[var(--text-secondary)] font-sans">Séries</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
+          {/* Settings Link */}
+          <SidebarSeparator />
+          <div className="p-4">
+            <Link href="/settings">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Configurações
+              </Button>
+            </Link>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+
+      {/* Main Content with SidebarInset */}
+      <SidebarInset className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
         {selectedFolder ? (
           <motion.div
             className="flex-1 flex flex-col"
@@ -191,6 +284,8 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 totalCount,
                 movies,
                 series,
+                onScanWithPreview: handleScanWithPreview,
+                onManualEntry: () => setShowManualEntry(true),
               }}
             />
             {/* Content Area */}
@@ -286,20 +381,62 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             </div>
           </motion.div>
         )}
-      </main>
 
-      {/* Edit Media Modal */}
-      {editingMedia && (
-        <EditMediaModal
-          isOpen={!!editingMedia}
-          onClose={() => setEditingMedia(null)}
-          currentMedia={{
-            title: editingMedia.title,
-            type: editingMedia.type === "MOVIE" ? "MOVIE" : "SERIES",
-          }}
-          onSelectMedia={handleUpdateMedia}
+        {/* New Media Notification */}
+        {newMediaNotification && (
+          <NewMediaNotification
+            isOpen={!!newMediaNotification}
+            onClose={() => setNewMediaNotification(null)}
+            movies={newMediaNotification.movies}
+            series={newMediaNotification.series}
+          />
+        )}
+
+        {/* Auto-scanning indicator */}
+        {isAutoScanning && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg flex items-center gap-2"
+          >
+            <Scan className="h-4 w-4 animate-spin" />
+            <span className="font-medium">Scanning for new media...</span>
+          </motion.div>
+        )}
+
+        {/* Edit Media Modal */}
+        {editingMedia && (
+          <EditMediaModal
+            isOpen={!!editingMedia}
+            onClose={() => setEditingMedia(null)}
+            currentMedia={{
+              title: editingMedia.title,
+              type: editingMedia.type === "MOVIE" ? "MOVIE" : "SERIES",
+            }}
+            onSelectMedia={handleUpdateMedia}
+          />
+        )}
+
+        {/* Scan Preview Dialog */}
+        <ScanPreviewDialog
+          isOpen={showScanPreview}
+          onClose={() => setShowScanPreview(false)}
+          onConfirm={handleConfirmScan}
+          folders={folderPreviews}
         />
-      )}
+
+        {/* Manual Media Entry Dialog */}
+        {selectedFolder && (
+          <ManualMediaEntryDialog
+            isOpen={showManualEntry}
+            onClose={() => setShowManualEntry(false)}
+            onSuccess={handleManualEntrySuccess}
+            folderId={selectedFolder.id}
+            folderPath={selectedFolder.path}
+          />
+        )}
+      </SidebarInset>
 
       {/* Custom scrollbar styles */}
       <style jsx global>{`
@@ -313,10 +450,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
           background: var(--bg-surface-light);
           border-radius: 4px;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        .custom-scrollbar::-webkit-scrollbar:hover {
           background: var(--color-primary);
         }
       `}</style>
-    </div>
+    </SidebarProvider>
   );
 }

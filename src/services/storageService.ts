@@ -425,6 +425,56 @@ class StorageService {
   }
 
   // ============================================================================
+  // Series Manual Edits
+  // ============================================================================
+
+  /**
+   * Save series manual edits to localStorage
+   */
+  saveSeriesEdits(seriesId: string, edits: any): void {
+    try {
+      const key = `critix_series_edits_${seriesId}`;
+      localStorage.setItem(key, JSON.stringify(edits));
+    } catch (error) {
+      console.error("Error saving series edits:", error);
+    }
+  }
+
+  /**
+   * Get series manual edits from localStorage
+   */
+  getSeriesEdits(seriesId: string): any | null {
+    try {
+      const key = `critix_series_edits_${seriesId}`;
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error("Error loading series edits:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if series has manual edits
+   */
+  hasSeriesEdits(seriesId: string): boolean {
+    const edits = this.getSeriesEdits(seriesId);
+    return edits !== null && edits.manuallyEdited === true;
+  }
+
+  /**
+   * Remove series manual edits
+   */
+  removeSeriesEdits(seriesId: string): void {
+    try {
+      const key = `critix_series_edits_${seriesId}`;
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error("Error removing series edits:", error);
+    }
+  }
+
+  // ============================================================================
   // Legacy Support
   // ============================================================================
 

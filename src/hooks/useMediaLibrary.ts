@@ -74,18 +74,13 @@ export function useMediaLibrary(folderId: string | null) {
   const scanFolder = async (folderPath: string) => {
     if (!folderId) return;
 
-    // Check if this is a rescan of an existing folder
-    if (folders.some((f) => f.path === folderPath)) {
-      // Clear old media for this folder before rescanning
-      const allMovies = await tauriService.getMovies();
-      const allSeries = await tauriService.getSeries();
-
-      const otherMovies = allMovies.filter((m) => m.folderId !== folderId);
-      const otherSeries = allSeries.filter((s) => s.folderId !== folderId);
-
-      await tauriService.saveMovies(otherMovies);
-      await tauriService.saveSeries(otherSeries);
-    }
+    // Get existing media for this folder (for intelligent rescan)
+    const allMovies = await tauriService.getMovies();
+    const allSeries = await tauriService.getSeries();
+    const existingMovies = allMovies.filter((m) => m.folderId === folderId);
+    const existingSeries = allSeries.filter((s) => s.folderId === folderId);
+    const otherMovies = allMovies.filter((m) => m.folderId !== folderId);
+    const otherSeries = allSeries.filter((s) => s.folderId !== folderId);
 
     try {
       setScanning(true);
@@ -102,17 +97,94 @@ export function useMediaLibrary(folderId: string | null) {
 
       console.log("✅ Scan complete:", result);
 
-      // Save to Rust backend (persistent storage)
-      const allMovies = await tauriService.getMovies();
-      const allSeries = await tauriService.getSeries();
+      // Smart rescan: detect new media and mark missing media as watched
+      console.log("📊 Rescan analysis:");
+      console.log(`  - Existing movies: ${existingMovies.length}`);
+      console.log(`  - Existing series: ${existingSeries.length}`);
+      console.log(`  - Found movies: ${result.movies.length}`);
+      console.log(`  - Found series: ${result.series.length}`);
 
-      // Remove old media for this folder
-      const otherMovies = allMovies.filter((m) => m.folderId !== folderId);
-      const otherSeries = allSeries.filter((s) => s.folderId !== folderId);
+      // Create lookup maps for found media (by ID)
+      const foundMovieIds = new Set(result.movies.map((m) => m.id));
+      const foundSeriesIds = new Set(result.series.map((s) => s.id));
 
-      // Add new scanned media
-      await tauriService.saveMovies([...otherMovies, ...result.movies]);
-      await tauriService.saveSeries([...otherSeries, ...result.series]);
+      // Find truly new media (not in existing)
+      const existingMovieIds = new Set(existingMovies.map((m) => m.id));
+      const existingSeriesIds = new Set(existingSeries.map((s) => s.id));
+      const newMovies = result.movies.filter((m) => !existingMovieIds.has(m.id));
+      const newSeries = result.series.filter((s) => !existingSeriesIds.has(s.id));
+
+      console.log("✨ New media to add:");
+      console.log(`  - New movies: ${newMovies.length}`);
+      newMovies.forEach((m) => console.log(`    📽️  ${m.title}`));
+      console.log(`  - New series: ${newSeries.length}`);
+      newSeries.forEach((s) => console.log(`    📺 ${s.title}`));
+
+      // Find missing media (was in folder, not found anymore)
+      const missingMovies = existingMovies.filter((m) => !foundMovieIds.has(m.id));
+      const missingSeries = existingSeries.filter((s) => !foundSeriesIds.has(s.id));
+
+      if (missingMovies.length > 0 || missingSeries.length > 0) {
+        console.log("📝 Missing media (will mark as watched):");
+        console.log(`  - Missing movies: ${missingMovies.length}`);
+        missingMovies.forEach((m) => console.log(`    🗑️  ${m.title}`));
+        console.log(`  - Missing series: ${missingSeries.length}`);
+        missingSeries.forEach((s) => console.log(`    🗑️  ${s.title}`));
+
+        // TODO Task 2: Mark as watched
+        // For now, just keep them in the database
+        console.log("⏳ Task 2: Marking as watched not yet implemented - keeping in database");
+      }
+
+      // IMPORTANT: Keep ALL existing media + add only new ones
+      // Do NOT remove missing media from database (they should be marked as watched instead)
+      const moviesToSave = [...otherMovies, ...existingMovies, ...newMovies].filter((m) => {
+        if (!m.id || m.id === "") {
+          console.warn("⚠️ Skipping movie without ID:", m.title);
+          return false;
+        }
+        return true;
+      });
+
+      const seriesToSave = [...otherSeries, ...existingSeries, ...newSeries]
+        .filter((s) => {
+          if (!s.id || s.id === "") {
+            console.warn("⚠️ Skipping series without ID:", s.title);
+            return false;
+          }
+          return true;
+        })
+        .map((s) => ({
+          ...s,
+          seasons: s.seasons || [],
+          numberOfSeasons: s.numberOfSeasons || 0,
+          numberOfEpisodes: s.numberOfEpisodes || 0,
+        }));
+
+      console.log("💾 Saving movies:", moviesToSave.length);
+      console.log("💾 Saving series:", seriesToSave.length);
+      console.log("📊 Final Summary:");
+      console.log(`  - Total movies in library: ${moviesToSave.length}`);
+      console.log(`  - Total series in library: ${seriesToSave.length}`);
+      console.log(`  - Movies in this folder: ${existingMovies.length + newMovies.length}`);
+      console.log(`  - Series in this folder: ${existingSeries.length + newSeries.length}`);
+      console.log(`  - New added this scan: ${newMovies.length} movies, ${newSeries.length} series`);
+
+      try {
+        await tauriService.saveMovies(moviesToSave);
+        console.log("✅ Movies saved successfully");
+      } catch (movieErr) {
+        console.error("❌ Failed to save movies:", movieErr);
+        throw movieErr;
+      }
+
+      try {
+        await tauriService.saveSeries(seriesToSave);
+        console.log("✅ Series saved successfully");
+      } catch (seriesErr) {
+        console.error("❌ Failed to save series:", seriesErr);
+        throw seriesErr;
+      }
 
       // Reload from storage
       await loadMediaFromStorage();
@@ -237,5 +309,6 @@ export function useMediaLibrary(folderId: string | null) {
     error,
     scanFolder,
     updateMedia,
+    refreshMedia: loadMediaFromStorage, // Expose reload function
   };
 }

@@ -145,17 +145,17 @@ function rustMovieToMovie(rm: RustMovie): Movie {
 function movieToRustMovie(m: Movie): RustMovie {
   return {
     id: m.id,
-    type: m.type,
-    title: m.title,
+    type: m.type || "MOVIE",
+    title: m.title || "",
     original_title: m.originalTitle,
     year: m.year,
     poster: m.poster,
     backdrop: m.backdrop,
     overview: m.overview,
     rating: m.rating,
-    status: m.status,
-    file_path: m.filePath,
-    folder_id: m.folderId,
+    status: m.status || "UNMATCHED",
+    file_path: m.filePath || "",
+    folder_id: m.folderId || "",
     duration: m.duration,
     trailer: m.trailer,
     release_date: m.releaseDate,
@@ -220,30 +220,30 @@ function seriesToRustSeries(s: Series): RustSeries {
     status: s.status,
     file_path: s.filePath,
     folder_id: s.folderId,
-    seasons: s.seasons.map((season) => ({
+    seasons: (s.seasons || []).map((season) => ({
       id: season.id,
-      season_number: season.seasonNumber,
-      name: season.name,
+      season_number: season.seasonNumber || 0,
+      name: season.name || "",
       overview: season.overview,
       poster: season.poster,
-      episode_count: season.episodeCount,
-      episodes: season.episodes.map((ep) => ({
+      episode_count: season.episodeCount || 0,
+      episodes: (season.episodes || []).map((ep) => ({
         id: ep.id,
-        episode_number: ep.episodeNumber,
-        season_number: ep.seasonNumber,
-        title: ep.title,
+        episode_number: ep.episodeNumber || 0,
+        season_number: ep.seasonNumber || 0,
+        title: ep.title || "",
         overview: ep.overview,
         still_path: ep.stillPath,
         air_date: ep.airDate,
         duration: ep.duration,
         file_path: ep.filePath,
-        available: ep.available,
+        available: ep.available ?? false,
       })),
-      available: season.available,
-      downloaded_episodes: season.downloadedEpisodes,
+      available: season.available ?? false,
+      downloaded_episodes: season.downloadedEpisodes || 0,
     })),
-    number_of_seasons: s.numberOfSeasons,
-    number_of_episodes: s.numberOfEpisodes,
+    number_of_seasons: s.numberOfSeasons || 0,
+    number_of_episodes: s.numberOfEpisodes || 0,
     trailer: s.trailer,
     first_air_date: s.firstAirDate,
     last_air_date: s.lastAirDate,
@@ -482,6 +482,13 @@ class TauriService {
    */
   async getFileMetadata(filePath: string) {
     return invoke("get_file_metadata", { filePath });
+  }
+
+  /**
+   * Open file location in system file explorer
+   */
+  async openFileLocation(filePath: string): Promise<void> {
+    return invoke("open_file_location", { filePath });
   }
 }
 

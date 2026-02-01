@@ -15,6 +15,9 @@ const EPISODE_PATTERNS = [
   /[Ss](\d{1,2})[\.\-_ ]?[Ee](\d{1,2})/, // S01.E01, S01-E01, S01 E01
   /(\d{1,2})x(\d{1,2})/, // 1x01
   /[Ss]eason[\.\-_ ]?(\d{1,2})[\.\-_ ]+[Ee]pisode[\.\-_ ]?(\d{1,2})/i, // Season 1 Episode 1
+  /[\-_ ](\d{2,3})(?:[\-_ \.]|$)/, // Anime style: "Series Name - 13", "Series Name 13"
+  /[Ee]p[\.\-_ ]?(\d{1,3})/, // Ep.13, ep 13, Ep-13
+  /[Ee]pisode[\.\-_ ]?(\d{1,3})/, // Episode 13, episode 13
 ];
 
 interface EpisodeFile {
@@ -41,7 +44,46 @@ export interface ScanResult {
   totalProcessed: number;
 }
 
+export interface FolderPreview {
+  path: string;
+  name: string;
+  fileCount: number;
+  estimatedMovies: number;
+  estimatedSeries: number;
+}
+
 class FolderScanService {
+  /**
+   * Preview folder contents before scanning
+   * Returns file count and estimated media types
+   */
+  async previewFolder(folderPath: string): Promise<{
+    fileCount: number;
+    estimatedMovies: number;
+    estimatedSeries: number;
+  }> {
+    try {
+      const files = await this.scanFolderRecursive(folderPath);
+      const mediaFiles = files.filter((file) => this.isMediaFile(file));
+
+      const { episodeFiles, standaloneFiles } = this.categorizeFiles(mediaFiles, folderPath);
+      const seriesGroups = this.groupEpisodesBySeries(episodeFiles);
+
+      return {
+        fileCount: mediaFiles.length,
+        estimatedMovies: standaloneFiles.length,
+        estimatedSeries: seriesGroups.size,
+      };
+    } catch (error) {
+      console.error("Error previewing folder:", error);
+      return {
+        fileCount: 0,
+        estimatedMovies: 0,
+        estimatedSeries: 0,
+      };
+    }
+  }
+
   /**
    * Scan a folder and match files with Critix API
    */
@@ -71,7 +113,7 @@ class FolderScanService {
       const mediaFiles = files.filter((file) => this.isMediaFile(file));
 
       // Step 2: Separate episode files from standalone movies
-      const { episodeFiles, standaloneFiles } = this.categorizeFiles(mediaFiles);
+      const { episodeFiles, standaloneFiles } = this.categorizeFiles(mediaFiles, folderPath);
 
       // Step 3: Group episode files by series
       const seriesGroups = this.groupEpisodesBySeries(episodeFiles);
@@ -178,13 +220,16 @@ class FolderScanService {
   /**
    * Categorize files into episode files and standalone files
    */
-  private categorizeFiles(files: string[]): { episodeFiles: EpisodeFile[]; standaloneFiles: string[] } {
+  private categorizeFiles(
+    files: string[],
+    baseFolderPath: string,
+  ): { episodeFiles: EpisodeFile[]; standaloneFiles: string[] } {
     const episodeFiles: EpisodeFile[] = [];
     const standaloneFiles: string[] = [];
 
     for (const file of files) {
       const fileName = this.extractFileName(file);
-      const episodeInfo = this.parseEpisodeInfo(fileName, file);
+      const episodeInfo = this.parseEpisodeInfo(fileName, file, baseFolderPath);
 
       if (episodeInfo) {
         episodeFiles.push(episodeInfo);
@@ -199,7 +244,7 @@ class FolderScanService {
   /**
    * Parse episode information from filename
    */
-  private parseEpisodeInfo(fileName: string, filePath: string): EpisodeFile | null {
+  private parseEpisodeInfo(fileName: string, filePath: string, baseFolderPath: string): EpisodeFile | null {
     for (const pattern of EPISODE_PATTERNS) {
       const match = fileName.match(pattern);
 
@@ -208,11 +253,17 @@ class FolderScanService {
         const episodeNumber = parseInt(match[2], 10);
 
         // Extract series name (everything before the episode pattern)
-        const seriesName = fileName
+        let seriesName = fileName
           .substring(0, match.index)
           .replace(/[\.\-_]/g, " ")
           .replace(/\s+/g, " ")
           .trim();
+
+        // If series name is empty or too short, extract from folder name
+        if (!seriesName || seriesName.length < 2) {
+          seriesName = this.extractSeriesNameFromPath(filePath, baseFolderPath);
+          console.log(`📁 Using folder name for series: "${seriesName}"`);
+        }
 
         if (seriesName) {
           return {
@@ -227,6 +278,31 @@ class FolderScanService {
     }
 
     return null;
+  }
+
+  /**
+   * Extract series name from folder path
+   * Example: "C:/Series/Dexter - The Pirate Filmes/S01/episode.mkv" -> "Dexter"
+   */
+  private extractSeriesNameFromPath(filePath: string, baseFolderPath: string): string {
+    // Get relative path
+    const relativePath = filePath.replace(baseFolderPath, "").replace(/^[\\\/]+/, "");
+    const pathSegments = relativePath.split(/[\\\/]/);
+
+    // First segment after base folder is usually the series folder
+    const seriesFolderName = pathSegments[0] || "";
+
+    // Clean up folder name
+    return seriesFolderName
+      .replace(/The Pirate Filmes?/gi, "")
+      .replace(/RARBG|YTS|EZTV|1337x/gi, "")
+      .replace(/Season\s*\d+/gi, "")
+      .replace(/S\d{2}/gi, "")
+      .replace(/[\[\](){}]/g, "")
+      .replace(/\d{4}$/g, "") // Remove year at end
+      .replace(/[-_.]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   /**
@@ -290,6 +366,18 @@ class FolderScanService {
    * Transform API response to Series with local episodes mapped
    */
   private transformToSeriesWithEpisodes(apiData: any, localEpisodes: EpisodeFile[], folderId: string): Series {
+    // Validate that we have an ID
+    if (!apiData.id) {
+      console.error("❌ API data missing ID:", apiData);
+      throw new Error("Series API data is missing required ID field");
+    }
+
+    // Validate first_air_date for year
+    const year = parseInt(apiData.first_air_date?.split("-")[0] || "0");
+    if (!year || year === 0) {
+      console.warn("⚠️ Series has invalid year, using current year:", apiData.name);
+    }
+
     // Group local episodes by season
     const episodesBySeason = new Map<number, EpisodeFile[]>();
 
@@ -342,14 +430,14 @@ class FolderScanService {
         : "";
 
     return {
-      id: apiData.id?.toString() || "",
+      id: apiData.id.toString(),
       title: apiData.name || apiData.title || "Unknown",
       originalTitle: apiData.original_name || apiData.original_title,
       overview: apiData.overview,
       poster: apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : undefined,
       backdrop: apiData.backdrop_path ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}` : undefined,
       rating: apiData.vote_average,
-      year: parseInt(apiData.first_air_date?.split("-")[0] || "0"),
+      year: year || new Date().getFullYear(),
       firstAirDate: apiData.first_air_date,
       lastAirDate: apiData.last_air_date,
       status: "MATCHED",
@@ -460,15 +548,21 @@ class FolderScanService {
     filePath: string,
     folderId: string,
   ): Movie | Series {
+    // Validate that we have an ID
+    if (!apiData.id) {
+      console.error("❌ API data missing ID:", apiData);
+      throw new Error(`${type} API data is missing required ID field`);
+    }
+
     const baseInfo = {
-      id: apiData.id?.toString() || "",
+      id: apiData.id.toString(),
       title: apiData.title || apiData.name || "Unknown",
       originalTitle: apiData.original_title || apiData.original_name,
       overview: apiData.overview,
       poster: apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : undefined,
       backdrop: apiData.backdrop_path ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}` : undefined,
       rating: apiData.vote_average,
-      year: apiData.release_date?.split("-")[0] || apiData.first_air_date?.split("-")[0],
+      year: parseInt(apiData.release_date?.split("-")[0] || apiData.first_air_date?.split("-")[0] || "0", 10),
       releaseDate: apiData.release_date || apiData.first_air_date,
       status: "MATCHED" as const,
       type,

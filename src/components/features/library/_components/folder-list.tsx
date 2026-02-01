@@ -22,13 +22,8 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
           </motion.div>
         ) : (
           folders.map((folder, index) => (
-            <motion.div
-              key={folder.id}
-              className="folder-item"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ scale: 1.02 }}
+            <div
+             
             >
               <div
                 className={cn(
@@ -70,7 +65,7 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-            </motion.div>
+            </div>
           ))
         )}
       </div>

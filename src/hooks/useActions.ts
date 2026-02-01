@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
-import { storageService } from "@/services/storageService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useFoldersContext } from "@/context/foldersContext";
 
@@ -34,7 +33,7 @@ export function useActions() {
         return;
       }
 
-      // Add folder to context (will persist automatically)
+      // Add folder to context (will persist automatically via Rust backend)
       const folder = await addFolder(selectedPath);
 
       // Scan the folder for media files using RUST
@@ -43,14 +42,14 @@ export function useActions() {
         setScanProgress(percent);
       });
 
-      // Save scanned media to localStorage
+      // Save scanned media to Rust backend (persistent storage)
       if (result.movies.length > 0) {
-        const existingMovies = storageService.getMovies();
-        storageService.saveMovies([...existingMovies, ...result.movies]);
+        const existingMovies = await tauriService.getMovies();
+        await tauriService.saveMovies([...existingMovies, ...result.movies]);
       }
       if (result.series.length > 0) {
-        const existingSeries = storageService.getSeries();
-        storageService.saveSeries([...existingSeries, ...result.series]);
+        const existingSeries = await tauriService.getSeries();
+        await tauriService.saveSeries([...existingSeries, ...result.series]);
       }
 
       setScanning(false);

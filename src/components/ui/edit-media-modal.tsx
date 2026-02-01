@@ -12,18 +12,7 @@ import { Card } from "./card";
 import { X, Search, Loader2, Film, Tv, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiService } from "@/services/api";
-
-interface MediaSearchResult {
-  id: string;
-  title?: string;
-  name?: string;
-  media_type: "movie" | "tv";
-  poster_path?: string;
-  vote_average?: number;
-  release_date?: string;
-  first_air_date?: string;
-  overview?: string;
-}
+import { MediaSearchResult } from "@/types/api";
 
 interface EditMediaModalProps {
   isOpen: boolean;
@@ -53,10 +42,10 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
 
     setLoading(true);
     try {
-      const response = (await apiService.searchMediaByTitle(query, true)) as { results?: MediaSearchResult[] };
+      const response = (await apiService.searchMediaByTitle(query, true, false)) as { details?: MediaSearchResult[] };
 
-      if (response && response.results) {
-        setResults(response.results);
+      if (response && response.details) {
+        setResults(response.details);
       } else {
         setResults([]);
       }
@@ -232,7 +221,7 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
           </div>
         </motion.div>
 
-        <style jsx global>{`
+        <style>{`
           .custom-scrollbar::-webkit-scrollbar {
             width: 8px;
           }

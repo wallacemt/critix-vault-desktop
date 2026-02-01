@@ -1,10 +1,10 @@
 import { tauriService } from "@/services/tauri";
-import { storageService } from "@/services/storageService";
 import { AsyncState, Folder } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 
 /**
  * Hook to manage folders
+ * Uses Rust backend for persistent storage
  */
 export function useFolders() {
   const [state, setState] = useState<AsyncState<Folder[]>>({
@@ -16,19 +16,14 @@ export function useFolders() {
   const loadFolders = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      // Try localStorage first for instant load
-      const storedFolders = storageService.getFolders();
-      if (storedFolders.length > 0) {
-        setState({ data: storedFolders, loading: false, error: null });
-      }
-
-      // Then sync with Tauri
+      // Load folders from Rust backend (persistent storage)
       const folders = await tauriService.getFolders();
+      console.log("📁 Loaded folders from Rust backend:", folders.length);
       setState({ data: folders, loading: false, error: null });
-      storageService.saveFolders(folders);
       return folders;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to load folders";
+      console.error("❌ Failed to load folders:", errorMessage);
       setState({ data: null, loading: false, error: errorMessage });
       throw error;
     }
@@ -45,7 +40,6 @@ export function useFolders() {
         ...prev,
         data: updatedFolders,
       }));
-      storageService.saveFolders(updatedFolders);
       return folder;
     } catch (error) {
       console.error("Failed to add folder:", error);
@@ -62,9 +56,6 @@ export function useFolders() {
           ...prev,
           data: updatedFolders,
         }));
-        if (updatedFolders) {
-          storageService.saveFolders(updatedFolders);
-        }
       } catch (error) {
         console.error("Failed to remove folder:", error);
         throw error;

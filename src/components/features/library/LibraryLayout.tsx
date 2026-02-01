@@ -81,7 +81,6 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
         //   // Show notification when new media is found
         //   setNewMediaNotification(newMedia);
         // });
-
         // console.log("✅ Auto-scan complete:", stats);
         // sessionStorage.setItem("autoScanDone", "true");
       } catch (error) {
@@ -292,13 +291,13 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             <div className="flex-1 mt-62 overflow-y-auto custom-scrollbar">
               <div className="p-6">
                 <AnimatePresence mode="wait">
-                  {scanning ? (
+                  {scanning && (
                     <motion.div
                       key="scanning"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="flex flex-col items-center justify-center py-20"
+                      className="flex flex-col items-center justify-center py-20 inset-0 fixed z-1  backdrop-blur-xs bg-[var(--bg-surface)]/50"
                     >
                       <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600/20 to-purple-600/20 flex items-center justify-center mb-6">
                         <Scan className="w-10 h-10 text-[var(--color-primary)] animate-spin" />
@@ -318,11 +317,13 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                         />
                       </div>
                     </motion.div>
-                  ) : loading ? (
+                  )}
+                  {loading && (
                     <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                       <MediaGridSkeleton count={12} />
                     </motion.div>
-                  ) : error ? (
+                  )}
+                  {error ? (
                     <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                       <InlineError message={error} onRetry={() => scanFolder(selectedFolder.path)} />
                     </motion.div>

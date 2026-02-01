@@ -11,5 +11,5 @@ pub struct Episode {
     pub air_date: Option<String>,
     pub duration: Option<u32>,
     pub file_path: Option<String>,
-    pub available: bool,
+    pub available: Option<bool>,
 }

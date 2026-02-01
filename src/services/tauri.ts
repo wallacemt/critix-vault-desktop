@@ -11,6 +11,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { Folder, Movie, Series } from "@/types";
+import { folderScanService } from "./folderScanService";
 
 // Types for Rust backend communication
 interface RustMovie {
@@ -221,7 +222,7 @@ function seriesToRustSeries(s: Series): RustSeries {
     file_path: s.filePath,
     folder_id: s.folderId,
     seasons: (s.seasons || []).map((season) => ({
-      id: season.id,
+      id: season.id ?? `${s.id}-s${season.seasonNumber}`,
       season_number: season.seasonNumber || 0,
       name: season.name || "",
       overview: season.overview,
@@ -322,7 +323,8 @@ class TauriService {
    * Save all series (persisted to disk)
    */
   async saveSeries(series: Series[]): Promise<void> {
-    const rustSeries = series.map(seriesToRustSeries);
+    const rustSeries = series.map((s) => seriesToRustSeries(s));
+    console.log(rustSeries);
     return invoke("save_series", { series: rustSeries });
   }
 

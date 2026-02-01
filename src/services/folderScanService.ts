@@ -142,9 +142,13 @@ class FolderScanService {
         try {
           const seriesInfo = await this.matchSeriesWithApi(seriesName, episodes, folderId);
 
-          if (seriesInfo) {
-            result.series.push(seriesInfo);
-          } else {
+          if (seriesInfo && !seriesInfo.isSerieResult) {
+            result.movies.push(seriesInfo as Movie);
+          }
+
+          if (seriesInfo && seriesInfo.isSerieResult) {
+            result.series.push(seriesInfo as Series);
+          } else if (seriesInfo?.isSerieResult) {
             // Add all episode files as unmatched
             episodes.forEach((ep) => result.unmatchedFiles.push(ep.filePath));
           }
@@ -331,7 +335,7 @@ class FolderScanService {
     seriesName: string,
     episodes: EpisodeFile[],
     folderId: string,
-  ): Promise<Series | null> {
+  ): Promise<(Series & { isSerieResult: boolean }) | (Movie & { isSerieResult: boolean }) | null> {
     try {
       const cleanQuery = this.cleanMediaName(seriesName);
       console.log(`🎬 Searching series: "${cleanQuery}" with ${episodes.length} local episodes`);
@@ -347,7 +351,8 @@ class FolderScanService {
       const appType = searchResults.mediaType === "movie" ? "MOVIE" : "SERIES";
 
       if (appType === "MOVIE") {
-        console.log(`⚠️ API returned movie for "${seriesName}", treating as series anyway`);
+        console.log(`⚠️ API returned movie for "${seriesName}", return for movie`);
+        return { ...(searchResults as Movie), isSerieResult: false };
       }
 
       console.log(`✅ Series matched: ${seriesName} -> ${searchResults.details?.name || searchResults.details?.title}`);
@@ -355,7 +360,7 @@ class FolderScanService {
       // Transform to Series with local episode info
       const series = this.transformToSeriesWithEpisodes(searchResults.details, episodes, folderId);
 
-      return series;
+      return { ...series, isSerieResult: true };
     } catch (error) {
       console.error(`Failed to match series with API: ${seriesName}`, error);
       return null;
@@ -600,6 +605,8 @@ class FolderScanService {
       } as Series;
     }
   }
+
+ 
 }
 
 export const folderScanService = new FolderScanService();

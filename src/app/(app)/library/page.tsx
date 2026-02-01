@@ -13,16 +13,6 @@ export default function LibraryPage() {
   const { handleAddFolder, handleMediaClick, handlePlayMovie, scanning, scanProgress } = useActions();
   const router = useRouter();
 
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center flex-col justify-center flex-1 h-screen w-full">
-        <LoaderIcon className="animate-spin size-6" />
-        <p>Carregando mídias...</p>
-      </div>
-    );
-  }
-
   // Redirect if no folders
   if (!folders || folders.length === 0) {
     router.push("/landing");
@@ -31,15 +21,22 @@ export default function LibraryPage() {
 
   return (
     <>
-      <LibraryLayout
-        onAddFolder={handleAddFolder}
-        onMediaClick={handleMediaClick}
-        onMediaPlay={(media) => {
-          if (media.type === "MOVIE") {
-            handlePlayMovie(media as Movie);
-          }
-        }}
-      />
+      {isLoading ? (
+        <div className="flex items-center flex-col justify-center flex-1 h-screen w-full">
+          <LoaderIcon className="animate-spin size-6" />
+          <p>Carregando mídias...</p>
+        </div>
+      ) : (
+        <LibraryLayout
+          onAddFolder={handleAddFolder}
+          onMediaClick={handleMediaClick}
+          onMediaPlay={(media) => {
+            if (media.type === "MOVIE") {
+              handlePlayMovie(media as Movie);
+            }
+          }}
+        />
+      )}
 
       {/* Show scanning modal when adding folder from library */}
       {scanning && (

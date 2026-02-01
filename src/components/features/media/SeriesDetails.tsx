@@ -29,9 +29,10 @@ import { cn } from "@/lib/utils";
 import { rematchSeriesEpisodes, fetchSeasonDetails } from "@/services/mediaService";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { tauriService } from "@/services/tauri";
-import { SeriesEditDialog, SeriesEditState } from "./SeriesEditDialog";
+import { SeriesEditDialog, SeriesEditState } from "./series-edit-dialog";
 import { storageService } from "@/services/storageService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
+import { SeasonCard } from "./_components/season-card";
 
 interface SeriesDetailsProps {
   series: Series;
@@ -77,9 +78,9 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
             if (seasonDetails) {
               updatedSeasons.push({
                 ...season,
-                episodes: seasonDetails.episodes,
+                episodes: seasonDetails.episodes as Episode[],
                 overview: seasonDetails.overview || season.overview,
-                poster: seasonDetails.poster || season.poster,
+                poster: seasonDetails.poster_path || season.poster,
               });
               console.log(`✅ Loaded Season ${season.seasonNumber}: ${seasonDetails.episodes.length} episodes`);
             } else {
@@ -395,7 +396,6 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
           </div>
         </div>
       </div>
-
       {/* Details Section */}
       <div className="max-w-7xl mx-auto px-8 py-12">
         {/* Overview */}
@@ -426,7 +426,6 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
           </div>
         </div>
       </div>
-
       {/* Edit Media Modal */}
       <EditMediaModal
         isOpen={isEditModalOpen}
@@ -437,7 +436,6 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
         }}
         onSelectMedia={handleSeriesChange}
       />
-
       {/* Advanced Edit Dialog */}
       <SeriesEditDialog
         series={series}
@@ -445,151 +443,15 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
         onClose={() => setIsAdvancedEditOpen(false)}
         onSave={handleSaveSeriesEdits}
       />
+      {/* Delete Confirmation Dialog */}
+      <DeleteMediaDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleDelete}
+        media={series}
+        isDeleting={isDeleting}
+      />
+      ;
     </div>
   );
 }
-
-interface SeasonCardProps {
-  season: Season;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onPlayEpisode: (episode: Episode) => void;
-}
-
-function SeasonCard({ season, isExpanded, onToggle, onPlayEpisode }: SeasonCardProps) {
-  const [posterError, setPosterError] = useState(false);
-
-  return (
-    <Card className="bg-slate-900 border-slate-800 overflow-hidden">
-      {/* Season Header */}
-      <button onClick={onToggle} className="w-full p-6 flex items-center gap-6 hover:bg-slate-800/50 transition-colors">
-        {/* Season Poster */}
-        <div className="w-24 aspect-[2/3] rounded overflow-hidden flex-shrink-0 bg-slate-800">
-          {season.poster && !posterError ? (
-            <img
-              src={season.poster}
-              alt={season.name}
-              className="w-full h-full object-cover"
-              onError={() => setPosterError(true)}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Play className="w-8 h-8 text-slate-600" />
-            </div>
-          )}
-        </div>
-
-        {/* Season Info */}
-        <div className="flex-1 text-left">
-          <h3 className="text-xl font-bold text-white mb-2">{season.name}</h3>
-          {season.overview && <p className="text-sm text-slate-400 line-clamp-2 mb-2">{season.overview}</p>}
-          <div className="flex items-center gap-4 text-sm text-slate-500">
-            <span>{season.episodeCount} episodes</span>
-            {season.available ? (
-              <Badge variant="outline" className="bg-green-600/10 text-green-400 border-green-600">
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                {season.downloadedEpisodes} Downloaded
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="bg-red-600/10 text-red-400 border-red-600">
-                <XCircle className="w-3 h-3 mr-1" />
-                Not Downloaded
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Expand Icon */}
-        {isExpanded ? (
-          <ChevronUp className="w-6 h-6 text-slate-400" />
-        ) : (
-          <ChevronDown className="w-6 h-6 text-slate-400" />
-        )}
-      </button>
-
-      {/* Episodes List */}
-      {isExpanded && (
-        <div className="border-t border-slate-800">
-          <div className="p-4 space-y-2">
-            {season.episodes.length === 0 ? (
-              <p className="text-center text-slate-500 py-8">No episodes available</p>
-            ) : (
-              season.episodes
-                .sort((a, b) => a.episodeNumber - b.episodeNumber)
-                .map((episode) => <EpisodeCard key={episode.id} episode={episode} onPlay={onPlayEpisode} />)
-            )}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-interface EpisodeCardProps {
-  episode: Episode;
-  onPlay: (episode: Episode) => void;
-}
-
-function EpisodeCard({ episode, onPlay }: EpisodeCardProps) {
-  const [stillError, setStillError] = useState(false);
-
-  return (
-    <button
-      onClick={() => episode.available && onPlay(episode)}
-      disabled={!episode.available}
-      className={cn(
-        "w-full flex items-center gap-4 p-3 rounded-lg transition-all",
-        episode.available ? "hover:bg-slate-800 cursor-pointer" : "opacity-50 cursor-not-allowed",
-      )}
-    >
-      {/* Episode Still */}
-      <div className="w-40 aspect-video rounded overflow-hidden flex-shrink-0 bg-slate-800">
-        {episode.stillPath && !stillError ? (
-          <img
-            src={episode.stillPath}
-            alt={episode.title}
-            className="w-full h-full object-cover"
-            onError={() => setStillError(true)}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Play className="w-6 h-6 text-slate-600" />
-          </div>
-        )}
-      </div>
-
-      {/* Episode Info */}
-      <div className="flex-1 text-left">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-slate-400">E{episode.episodeNumber}</span>
-          <h4 className="text-base font-semibold text-white">{episode.title}</h4>
-        </div>
-        {episode.overview && <p className="text-sm text-slate-400 line-clamp-2">{episode.overview}</p>}
-        <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
-          {episode.airDate && <span>{new Date(episode.airDate).toLocaleDateString()}</span>}
-          {episode.duration && <span>{episode.duration}min</span>}
-        </div>
-      </div>
-
-      {/* Play Icon */}
-      {episode.available && (
-        <div className="flex-shrink-0">
-          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-            <Play className="w-5 h-5 text-white fill-current" />
-          </div>
-        </div>
-      )}
-    </button>
-  );
-}
-
-{
-  /* Delete Confirmation Dialog */
-}
-<DeleteMediaDialog
-  isOpen={showDeleteDialog}
-  onClose={() => setShowDeleteDialog(false)}
-  onConfirm={handleDelete}
-  media={series}
-  isDeleting={isDeleting}
-/>;

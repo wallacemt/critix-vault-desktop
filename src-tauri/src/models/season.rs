@@ -9,6 +9,6 @@ pub struct Season {
     pub poster: Option<String>,
     pub episode_count: u32,
     pub episodes: Vec<Episode>,
-    pub available: bool,
+    pub available: Option<bool>,
     pub downloaded_episodes: u32,
 }

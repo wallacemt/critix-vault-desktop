@@ -60,6 +60,7 @@ export interface Season {
 // Series Interface
 export interface Series extends Media {
   type: "SERIES" | "ANIME";
+  
   seasons: Season[];
   numberOfSeasons: number;
   numberOfEpisodes: number;

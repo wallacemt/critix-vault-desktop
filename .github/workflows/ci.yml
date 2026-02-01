@@ -27,7 +27,7 @@ jobs:
               run: bun install
 
             - name: Lint (eslint)
-              run: bun run lint || bunx eslint .
+              run: bun run lint
 
             - name: Type check (tsc)
               run: bun run typecheck || bunx tsc --noEmit

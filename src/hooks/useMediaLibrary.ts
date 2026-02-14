@@ -89,11 +89,17 @@ export function useMediaLibrary(folderId: string | null) {
 
       console.log("🔍 Starting folder scan:", folderPath);
 
-      // Scan the folder using Rust + API
-      const result = await folderScanService.scanAndMatchFolder(folderId, folderPath, (progress) => {
-        const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
-        setScanProgress(percent);
-      });
+      // Scan the folder using Rust + API (pass existing media to avoid rescanning)
+      const result = await folderScanService.scanAndMatchFolder(
+        folderId,
+        folderPath,
+        (progress) => {
+          const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
+          setScanProgress(percent);
+        },
+        existingMovies,
+        existingSeries,
+      );
 
       console.log("✅ Scan complete:", result);
 

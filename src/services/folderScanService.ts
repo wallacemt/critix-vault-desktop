@@ -86,11 +86,15 @@ class FolderScanService {
 
   /**
    * Scan a folder and match files with Critix API
+   * @param existingMovies - Movies already in database to skip rescanning
+   * @param existingSeries - Series already in database to skip rescanning
    */
   async scanAndMatchFolder(
     folderId: string,
     folderPath: string,
     onProgress?: (progress: ScanProgress) => void,
+    existingMovies: Movie[] = [],
+    existingSeries: Series[] = [],
   ): Promise<ScanResult> {
     const result: ScanResult = {
       movies: [],
@@ -112,10 +116,42 @@ class FolderScanService {
       const files = await this.scanFolderRecursive(folderPath);
       const mediaFiles = files.filter((file) => this.isMediaFile(file));
 
-      // Step 2: Separate episode files from standalone movies
-      const { episodeFiles, standaloneFiles } = this.categorizeFiles(mediaFiles, folderPath);
+      // Step 2: Filter out files that are already in the database (optimization)
+      const existingFilePaths = new Set([
+        ...existingMovies.map((m) => m.filePath),
+        ...existingSeries.flatMap(
+          (s) => s.seasons?.flatMap((season) => season.episodes?.map((ep) => ep.filePath) || []) || [],
+        ),
+      ]);
 
-      // Step 3: Group episode files by series
+      const newMediaFiles = mediaFiles.filter((file) => !existingFilePaths.has(file));
+
+      console.log(`📊 Scan optimization:`);
+      console.log(`  - Total media files found: ${mediaFiles.length}`);
+      console.log(`  - Already in database: ${mediaFiles.length - newMediaFiles.length}`);
+      console.log(`  - New files to scan: ${newMediaFiles.length}`);
+
+      // If no new files, return early with existing media
+      if (newMediaFiles.length === 0) {
+        console.log(`✅ No new files to scan, returning existing media`);
+        onProgress?.({
+          status: "complete",
+          totalFiles: 0,
+          processedFiles: 0,
+          matchedMedia: existingMovies.length + existingSeries.length,
+        });
+        return {
+          movies: [],
+          series: [],
+          unmatchedFiles: [],
+          totalProcessed: 0,
+        };
+      }
+
+      // Step 3: Separate episode files from standalone movies (only new files)
+      const { episodeFiles, standaloneFiles } = this.categorizeFiles(newMediaFiles, folderPath);
+
+      // Step 4: Group episode files by series
       const seriesGroups = this.groupEpisodesBySeries(episodeFiles);
 
       const totalToProcess = standaloneFiles.length + seriesGroups.size;
@@ -129,7 +165,7 @@ class FolderScanService {
 
       let processed = 0;
 
-      // Step 4: Process grouped series (one API call per series)
+      // Step 5: Process grouped series (one API call per series)
       for (const [seriesName, episodes] of seriesGroups) {
         onProgress?.({
           status: "matching",
@@ -161,7 +197,7 @@ class FolderScanService {
         result.totalProcessed++;
       }
 
-      // Step 5: Process standalone files (likely movies)
+      // Step 6: Process standalone files (likely movies)
       for (const file of standaloneFiles) {
         const fileName = this.extractFileName(file);
 
@@ -605,8 +641,6 @@ class FolderScanService {
       } as Series;
     }
   }
-
- 
 }
 
 export const folderScanService = new FolderScanService();

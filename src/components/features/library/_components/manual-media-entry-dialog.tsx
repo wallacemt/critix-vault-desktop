@@ -59,27 +59,25 @@ export function ManualMediaEntryDialog({
     setSelectedMedia(null);
 
     try {
-      const response = (await apiService.searchMediaByTitle(searchQuery)) as {
-        details?: MediaSearchResult;
+      const response = (await apiService.searchMediaByTitle(searchQuery, true, false)) as {
+        details?: MediaSearchResult[];
         mediaType: string;
       };
 
       // Convert single result to array format
       if (response && response.details) {
-        setSearchResults([
-          {
-            id: response.details.id?.toString() || "",
-            title: response.details.name || response.details.title || "Unknown",
-            originalTitle: response.details.original_name || response.details.original_title,
-            year: parseInt(
-              (response.details.first_air_date || response.details.release_date || "").split("-")[0] || "0",
-            ),
-            poster: response.details.poster_path ? `   ${response.details.poster_path}` : undefined,
-            overview: response.details.overview,
-            mediaType: response.mediaType === "movie" ? "movie" : "tv",
-            details: response.details,
-          },
-        ]);
+        setSearchResults(
+          response.details.map((response) => ({
+            id: response.id?.toString() || "",
+            title: response.name || response.title || "Unknown",
+            originalTitle: response.original_name || response.original_title,
+            year: parseInt((response.first_air_date || response.release_date || "").split("-")[0] || "0"),
+            poster: response.poster_path ? `https://image.tmdb.org/t/p/w500/${response.poster_path}` : undefined,
+            overview: response.overview,
+            mediaType: response.media_type === "movie" ? "movie" : "tv",
+            details: response.media_type,
+          })),
+        );
       }
     } catch (error) {
       console.error("Search error:", error);
@@ -139,7 +137,9 @@ export function ManualMediaEntryDialog({
             : undefined,
         };
 
-        await tauriService.saveMovies([movie]);
+        // Load existing movies and add the new one
+        const existingMovies = await tauriService.getMovies();
+        await tauriService.saveMovies([...existingMovies, movie]);
         console.log("✅ Movie added manually:", movie.title);
       } else {
         // For series, we need to get season details
@@ -168,7 +168,9 @@ export function ManualMediaEntryDialog({
             : undefined,
         };
 
-        await tauriService.saveSeries([series]);
+        // Load existing series and add the new one
+        const existingSeries = await tauriService.getSeries();
+        await tauriService.saveSeries([...existingSeries, series]);
         console.log("✅ Series added manually:", series.title);
       }
 
@@ -190,7 +192,7 @@ export function ManualMediaEntryDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="min-w-2xl max-h-[95vh]">
         <DialogHeader>
           <DialogTitle>Adicionar Mídia Manualmente</DialogTitle>
           <DialogDescription>Busque por um filme ou série e associe a um arquivo local</DialogDescription>
@@ -218,7 +220,7 @@ export function ManualMediaEntryDialog({
           {searchResults.length > 0 && (
             <div className="space-y-2">
               <Label>Resultados da Busca</Label>
-              <ScrollArea className="h-[200px] border rounded-lg p-2">
+              <ScrollArea className="h-[600px] border rounded-lg p-2">
                 <div className="space-y-2">
                   {searchResults.map((result) => (
                     <button
@@ -229,7 +231,13 @@ export function ManualMediaEntryDialog({
                       }`}
                     >
                       {result.poster ? (
-                        <img src={result.poster} alt={result.title} className="w-16 h-24 object-cover rounded" />
+                        <img
+                          src={result.poster}
+                          height={200}
+                          width={200}
+                          alt={result.title}
+                          className="w-16 h-24 object-cover rounded"
+                        />
                       ) : (
                         <div className="w-16 h-24 bg-secondary rounded flex items-center justify-center">
                           {result.mediaType === "movie" ? (

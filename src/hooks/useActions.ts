@@ -36,19 +36,27 @@ export function useActions() {
       // Add folder to context (will persist automatically via Rust backend)
       const folder = await addFolder(selectedPath);
 
+      // Get existing media from database before scanning
+      const existingMovies = await tauriService.getMovies();
+      const existingSeries = await tauriService.getSeries();
+
       // Scan the folder for media files using RUST
-      const result = await folderScanService.scanAndMatchFolder(folder.id, folder.path, (progress) => {
-        const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
-        setScanProgress(percent);
-      });
+      const result = await folderScanService.scanAndMatchFolder(
+        folder.id,
+        folder.path,
+        (progress) => {
+          const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
+          setScanProgress(percent);
+        },
+        existingMovies,
+        existingSeries,
+      );
 
       // Save scanned media to Rust backend (persistent storage)
       if (result.movies.length > 0) {
-        const existingMovies = await tauriService.getMovies();
         await tauriService.saveMovies([...existingMovies, ...result.movies]);
       }
       if (result.series.length > 0) {
-        const existingSeries = await tauriService.getSeries();
         await tauriService.saveSeries([...existingSeries, ...result.series]);
       }
 

@@ -3,6 +3,9 @@ import { cn } from "@/lib/utils";
 import { Folder } from "@/types";
 import { motion } from "framer-motion";
 import { Folder as FolderIcon, X } from "lucide-react";
+import { watchHistoryService } from "@/services/watchHistoryService";
+import { tauriService } from "@/services/tauri";
+import { useEffect, useState } from "react";
 
 interface FolderListProps {
   folders: Folder[];
@@ -11,6 +14,33 @@ interface FolderListProps {
   removeFolder: (id: string) => void;
 }
 export function FolderList({ folders, selectedFolder, handleFolderSelect, removeFolder }: FolderListProps) {
+  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
+
+  // Calculate unwatched media count for each folder
+  useEffect(() => {
+    const calculateCounts = async () => {
+      const counts: Record<string, number> = {};
+      const allMovies = await tauriService.getMovies();
+      const allSeries = await tauriService.getSeries();
+
+      for (const folder of folders) {
+        const folderMovies = allMovies.filter((m) => m.folderId === folder.id);
+        const folderSeries = allSeries.filter((s) => s.folderId === folder.id);
+
+        // Count only unwatched movies
+        const unwatchedMovies = folderMovies.filter((m) => !watchHistoryService.isMovieWatched(m.id));
+
+        counts[folder.id] = unwatchedMovies.length + folderSeries.length;
+      }
+
+      setFolderCounts(counts);
+    };
+
+    if (folders.length > 0) {
+      calculateCounts();
+    }
+  }, [folders]);
+
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar">
       {/* Folders List */}
@@ -22,9 +52,7 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
           </motion.div>
         ) : (
           folders.map((folder, index) => (
-            <div
-             
-            >
+            <div>
               <div
                 className={cn(
                   "group flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300 relative overflow-hidden",
@@ -50,7 +78,9 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
                   <p className="text-sm font-semibold text-[var(--text-primary)] truncate font-display">
                     {folder.name}
                   </p>
-                  <p className="text-xs text-[var(--text-secondary)] truncate font-sans">{folder.mediaCount} itens</p>
+                  <p className="text-xs text-[var(--text-secondary)] truncate font-sans">
+                    {folderCounts[folder.id] ?? folder.mediaCount} itens
+                  </p>
                 </div>
 
                 <Button

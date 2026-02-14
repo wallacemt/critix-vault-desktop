@@ -18,7 +18,7 @@ export interface SeasonDetailsDTO {
 
 // Episode Response
 export interface EpisodeDTO extends Episode {
-  id: number;
+  id: string;
   name: string;
   overview: string;
   episode_number: number;

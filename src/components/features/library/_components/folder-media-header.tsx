@@ -2,23 +2,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { Folder, Movie, Series } from "@/types";
+import { Folder } from "@/types";
 import { motion } from "framer-motion";
-import { Film, Grid3x3, List, Scan, Search, Tv, Plus } from "lucide-react";
+import { Film, Grid3x3, List, Scan, Search, Tv, Plus, CheckCircleIcon } from "lucide-react";
 import { Dispatch, SetStateAction } from "react";
 
 interface FolderMediaHeaderProps {
   selectedFolder: Folder;
-  activeTab: "all" | "movies" | "series";
+  activeTab: "all" | "movies" | "series" | "watched";
   viewMode: "grid" | "list";
   scanning: boolean;
   scanProgress: number;
   totalCount: number;
-  movies: Movie[];
-  series: Series[];
+  unwatchedMoviesCount: number;
+  watchedMoviesCount: number;
+  seriesCount: number;
   searchQuery: string;
   setSearchQuery: Dispatch<SetStateAction<string>>;
-  setActiveTab: Dispatch<SetStateAction<"all" | "movies" | "series">>;
+  setActiveTab: Dispatch<SetStateAction<"all" | "movies" | "series" | "watched">>;
   setViewMode: Dispatch<SetStateAction<"grid" | "list">>;
   scanFolder: (folderPath: string) => Promise<void>;
   onScanWithPreview?: () => void;
@@ -36,8 +37,9 @@ export function FolderMediaHeader({
   searchQuery,
   setSearchQuery,
   totalCount,
-  movies,
-  series,
+  unwatchedMoviesCount,
+  watchedMoviesCount,
+  seriesCount,
   onScanWithPreview,
   onManualEntry,
 }: FolderMediaHeaderProps) {
@@ -148,8 +150,14 @@ export function FolderMediaHeader({
       <div className="flex items-center gap-3">
         {[
           { key: "all", label: "Tudo", icon: null, count: totalCount },
-          { key: "movies", label: "Filmes", icon: Film, count: movies.length },
-          { key: "series", label: "Séries", icon: Tv, count: series.length },
+          { key: "movies", label: "Filmes", icon: Film, count: unwatchedMoviesCount },
+          { key: "series", label: "Séries", icon: Tv, count: seriesCount },
+          {
+            key: "watched",
+            label: "Assitidos",
+            icon: CheckCircleIcon,
+            count: watchedMoviesCount,
+          },
         ].map((tab) => (
           <motion.div key={tab.key} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Button

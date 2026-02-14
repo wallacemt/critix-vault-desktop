@@ -97,8 +97,12 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
           seasons: updatedSeasons,
         };
 
-        // Save updated series to database
-        await tauriService.saveSeries([updatedSeries]);
+        // Save updated series to database (update the existing series, don't overwrite all)
+        const allSeries = await tauriService.getSeries();
+        const updatedAllSeries = allSeries.map((s) =>
+          s.id === updatedSeries.id && s.folderId === updatedSeries.folderId ? updatedSeries : s,
+        );
+        await tauriService.saveSeries(updatedAllSeries);
         console.log(`✅ Saved updated series with season details: ${series.title}`);
 
         // Notify parent component

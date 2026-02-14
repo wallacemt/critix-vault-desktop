@@ -43,6 +43,7 @@ import { folderScanService, type FolderPreview } from "@/services/folderScanServ
 import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
 import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
 import { Plus } from "lucide-react";
+import { watchHistoryService } from "@/services/watchHistoryService";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -52,7 +53,7 @@ interface LibraryLayoutProps {
 
 export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: LibraryLayoutProps) {
   const { folders, selectedFolder, selectFolder, removeFolder } = useFoldersContext();
-  const [activeTab, setActiveTab] = useState<"all" | "movies" | "series">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "movies" | "series" | "watched">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
@@ -165,13 +166,16 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
 
     switch (activeTab) {
       case "movies":
-        allMedia = movies;
+        allMedia = movies.filter((media) => !watchHistoryService.isMovieWatched(media.id));
         break;
       case "series":
         allMedia = series;
         break;
+      case "watched":
+        allMedia = movies.filter((media) => watchHistoryService.isMovieWatched(media.id));
+        break;
       default:
-        allMedia = [...movies, ...series];
+        allMedia = [...movies, ...series].filter((media) => !watchHistoryService.isMovieWatched(media.id));
     }
 
     // Apply search filter
@@ -185,7 +189,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     return allMedia;
   };
 
-  const totalCount = movies.length + series.length;
+  // Count unwatched media
+  const unwatchedMovies = movies.filter((movie) => !watchHistoryService.isMovieWatched(movie.id));
+  const watchedMovies = movies.filter((movie) => watchHistoryService.isMovieWatched(movie.id));
+  const totalCount = unwatchedMovies.length + series.length;
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -223,7 +230,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
 
         <SidebarFooter>
           {/* Footer Stats */}
-          {movies.length + series.length > 0 && (
+          {unwatchedMovies.length + series.length > 0 && (
             <motion.div
               className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-surface-light)]/50"
               initial={{ opacity: 0, y: 20 }}
@@ -232,7 +239,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             >
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{movies.length}</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{unwatchedMovies.length}</p>
                   <p className="text-xs text-[var(--text-secondary)] font-sans">Filmes</p>
                 </div>
                 <div className="text-center">
@@ -281,8 +288,9 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 searchQuery,
                 setSearchQuery,
                 totalCount,
-                movies,
-                series,
+                unwatchedMoviesCount: unwatchedMovies.length,
+                watchedMoviesCount: watchedMovies.length,
+                seriesCount: series.length,
                 onScanWithPreview: handleScanWithPreview,
                 onManualEntry: () => setShowManualEntry(true),
               }}

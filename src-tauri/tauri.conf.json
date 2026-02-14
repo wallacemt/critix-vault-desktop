@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' https://image.tmdb.org data: blob:;"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:* https://*; img-src 'self' https://image.tmdb.org data: blob: http://localhost:*; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
     }
   },
   "bundle": {

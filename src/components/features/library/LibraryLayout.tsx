@@ -14,10 +14,8 @@ import { useFoldersContext } from "@/context/foldersContext";
 import { StreamingGrid } from "./_components/streaming-grid";
 import { MediaGridSkeleton } from "@/components/ui/media-skeleton";
 import { InlineError } from "@/components/ui/error-state";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import gsap from "gsap";
-import { Input } from "@/components/ui/input";
 import { FolderList } from "./_components/folder-list";
 import { FolderMediaHeader } from "./_components/folder-media-header";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
@@ -32,17 +30,12 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   SidebarProvider,
   SidebarSeparator,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { folderScanService, type FolderPreview } from "@/services/folderScanService";
 import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
 import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
-import { Plus } from "lucide-react";
 import { watchHistoryService } from "@/services/watchHistoryService";
 
 interface LibraryLayoutProps {

@@ -1,7 +1,7 @@
 /**
  * Custom hooks for Critix Vault
  *
- * Uses Rust backend for persistent storage that survives app restarts.
+ * Uses SQLite database via API for persistent storage that survives app restarts.
  */
 
 "use client";
@@ -9,13 +9,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { folderScanService } from "@/services/folderScanService";
 import { apiService } from "@/services/api";
-import { tauriService } from "@/services/tauri";
 import { Movie, Series, Media } from "@/types";
 import { useFoldersContext } from "@/context/foldersContext";
+import { 
+  getMovies, 
+  getSeries, 
+  removeMovie, 
+  removeSeries, 
+  saveMovies, 
+  saveSeries 
+} from "@/services/databaseService";
 
 /**
  * Hook to manage media library for a specific folder
- * Reads from Rust backend (persistent storage) and filters by folderId
+ * Reads from database (persistent storage) and filters by folderId
  */
 export function useMediaLibrary(folderId: string | null) {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -36,12 +43,12 @@ export function useMediaLibrary(folderId: string | null) {
 
     setLoading(true);
     try {
-      // Load media from Rust backend (persistent storage)
-      const allMovies = await tauriService.getMovies();
-      const allSeries = await tauriService.getSeries();
+      // Load media from database
+      const allMovies = await getMovies();
+      const allSeries = await getSeries();
 
-      console.log("📦 All movies in storage:", allMovies.length);
-      console.log("📦 All series in storage:", allSeries.length);
+      console.log("📦 All movies in database:", allMovies.length);
+      console.log("📦 All series in database:", allSeries.length);
       console.log("🔍 Filtering for folderId:", folderId);
 
       const filteredMovies = allMovies.filter((movie) => {
@@ -75,8 +82,8 @@ export function useMediaLibrary(folderId: string | null) {
     if (!folderId) return;
 
     // Get existing media for this folder (for intelligent rescan)
-    const allMovies = await tauriService.getMovies();
-    const allSeries = await tauriService.getSeries();
+    const allMovies = await getMovies();
+    const allSeries = await getSeries();
     const existingMovies = allMovies.filter((m) => m.folderId === folderId);
     const existingSeries = allSeries.filter((s) => s.folderId === folderId);
     const otherMovies = allMovies.filter((m) => m.folderId !== folderId);
@@ -89,17 +96,11 @@ export function useMediaLibrary(folderId: string | null) {
 
       console.log("🔍 Starting folder scan:", folderPath);
 
-      // Scan the folder using Rust + API (pass existing media to avoid rescanning)
-      const result = await folderScanService.scanAndMatchFolder(
-        folderId,
-        folderPath,
-        (progress) => {
-          const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
-          setScanProgress(percent);
-        },
-        existingMovies,
-        existingSeries,
-      );
+      // Scan the folder using Rust + API
+      const result = await folderScanService.scanAndMatchFolder(folderId, folderPath, (progress) => {
+        const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
+        setScanProgress(percent);
+      });
 
       console.log("✅ Scan complete:", result);
 
@@ -177,22 +178,22 @@ export function useMediaLibrary(folderId: string | null) {
       console.log(`  - New added this scan: ${newMovies.length} movies, ${newSeries.length} series`);
 
       try {
-        await tauriService.saveMovies(moviesToSave);
-        console.log("✅ Movies saved successfully");
+        await saveMovies(moviesToSave);
+        console.log("✅ Movies saved to database successfully");
       } catch (movieErr) {
         console.error("❌ Failed to save movies:", movieErr);
         throw movieErr;
       }
 
       try {
-        await tauriService.saveSeries(seriesToSave);
-        console.log("✅ Series saved successfully");
+        await saveSeries(seriesToSave);
+        console.log("✅ Series saved to database successfully");
       } catch (seriesErr) {
         console.error("❌ Failed to save series:", seriesErr);
         throw seriesErr;
       }
 
-      // Reload from storage
+      // Reload from database
       await loadMediaFromStorage();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to scan folder";
@@ -247,7 +248,7 @@ export function useMediaLibrary(folderId: string | null) {
         if (newMediaType === "movie") {
           // Remove from series if it was there, then add/update as movie
           if (originalMedia.type === "SERIES") {
-            await tauriService.removeSeries(originalMedia.id, folderId);
+            await removeSeries(originalMedia.id);
           }
 
           const updatedMovie: Movie = {
@@ -260,11 +261,11 @@ export function useMediaLibrary(folderId: string | null) {
               : undefined,
           };
 
-          await tauriService.updateMovie(updatedMovie);
+          await saveMovies([updatedMovie]);
         } else {
           // Remove from movies if it was there, then add/update as series
           if (originalMedia.type === "MOVIE") {
-            await tauriService.removeMovie(originalMedia.id, folderId);
+            await removeMovie(originalMedia.id);
           }
 
           const updatedSeries: Series = {
@@ -291,7 +292,7 @@ export function useMediaLibrary(folderId: string | null) {
               : undefined,
           };
 
-          await tauriService.updateSeries(updatedSeries);
+          await saveSeries([updatedSeries]);
         }
 
         // Reload from storage to update UI

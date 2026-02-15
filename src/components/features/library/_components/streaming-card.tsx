@@ -21,9 +21,17 @@ interface StreamingCardProps {
   onPlay?: (media: Media) => void;
   onEdit?: (media: Media) => void;
   viewMode?: "grid" | "list";
+  demoMode?: boolean;
 }
 
-export function StreamingCard({ media, onClick, onPlay, onEdit, viewMode = "grid" }: StreamingCardProps) {
+export function StreamingCard({
+  media,
+  onClick,
+  onPlay,
+  onEdit,
+  viewMode = "grid",
+  demoMode = false,
+}: StreamingCardProps) {
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isWatched, setIsWatched] = useState(false);
@@ -119,7 +127,7 @@ export function StreamingCard({ media, onClick, onPlay, onEdit, viewMode = "grid
 
               {/* Actions */}
               <div className="flex gap-2 mt-2">
-                {onPlay && (
+                {!demoMode && onPlay && (
                   <Button
                     size="sm"
                     onClick={(e) => {
@@ -252,7 +260,7 @@ export function StreamingCard({ media, onClick, onPlay, onEdit, viewMode = "grid
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                {onPlay && (
+                { !demoMode &&  onPlay && (
                   <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 }}>
                     <Button
                       size="icon"

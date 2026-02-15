@@ -1,13 +1,3 @@
-/**
- * Settings Page - Critix Vault
- *
- * Allows users to:
- * - View storage information
- * - Clear all data (reset app)
- * - Clear image cache only
- * - Export/Import data
- */
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -268,6 +258,7 @@ export default function SettingsPage() {
                   <Upload className="w-4 h-4 mr-2" />
                   Importar Dados
                 </Button>
+           
               </div>
             </CardContent>
           </Card>

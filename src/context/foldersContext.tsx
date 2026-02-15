@@ -2,8 +2,7 @@
  * Folders Context
  * Global state management for monitored folders
  *
- * Now uses Rust backend for persistent storage that survives app restarts.
- * Data is stored in the app's data directory, not localStorage.
+ * Now uses SQLite database via API for persistent storage that survives app restarts.
  */
 
 "use client";
@@ -11,6 +10,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { Folder } from "@/types";
 import { tauriService } from "@/services/tauri";
+import { getFolders as getDBFolders, addFolder as addDBFolder, removeFolder as removeDBFolder } from "@/services/databaseService";
 
 interface FoldersContextType {
   folders: Folder[];
@@ -46,12 +46,12 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
 
-      // Load folders from Rust backend (persistent storage)
-      const savedFolders = await tauriService.getFolders();
-      console.log("📁 Folders loaded from Rust backend:", savedFolders);
+      // Load folders from database (persistent storage)
+      const savedFolders = await getDBFolders();
+      console.log("📁 Folders loaded from database:", savedFolders);
       setFolders(savedFolders);
 
-      // Load last selected folder from Rust backend
+      // Load last selected folder from Rust backend (UI preference)
       if (savedFolders.length > 0) {
         const lastFolderId = await tauriService.getLastSelectedFolder();
         console.log("🔍 Last selected folder ID:", lastFolderId);
@@ -74,9 +74,12 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
 
   const addFolder = async (path: string): Promise<Folder> => {
     try {
-      // Use Tauri to create folder object (automatically persisted to disk)
-      const newFolder = await tauriService.addFolder(path);
-      console.log("📂 New folder created and persisted:", newFolder);
+      // Extract folder name from path
+      const folderName = path.split(/[\\\/]/).pop() || path;
+      
+      // Save to database
+      const newFolder = await addDBFolder(path, folderName);
+      console.log("📂 New folder created and saved to database:", newFolder);
 
       // Update state
       const updatedFolders = [...folders, newFolder];
@@ -96,8 +99,8 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
 
   const removeFolder = async (folderId: string): Promise<void> => {
     try {
-      // Remove from Rust backend (also removes associated media automatically)
-      await tauriService.removeFolder(folderId);
+      // Remove from database (cascade deletes associated media automatically)
+      await removeDBFolder(folderId);
 
       // Update state
       const updatedFolders = folders.filter((f) => f.id !== folderId);

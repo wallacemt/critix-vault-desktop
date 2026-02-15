@@ -2,15 +2,17 @@ mod commands;
 /**
  * Critix Vault - Rust Backend
  *
- * Sistema de persistência de dados robusto que armazena:
- * - Pastas monitoradas
- * - Metadados de mídia (filmes e séries)
+ * Sistema atualizado: Agora usa SQLite via API HTTP para persistência de dados.
+ * O Rust backend mantém apenas operações de sistema:
+ * - Diálogos de seleção de pasta
+ * - Scan de arquivos do sistema
+ * - Abertura de arquivos/pastas
  * - Cache de imagens para funcionamento offline
+ * - Preferências de UI (última pasta selecionada)
  *
- * Os dados são armazenados no diretório de dados da aplicação:
- * - Windows: C:\Users\{user}\AppData\Roaming\critix-vault\
- * - macOS: ~/Library/Application Support/critix-vault/
- * - Linux: ~/.local/share/critix-vault/
+ * REMOVIDO (migrado para SQLite):
+ * - Gerenciamento de pastas (agora na API /api/folders)
+ * - Metadados de mídia (agora na API /api/movies e /api/series)
  */
 mod models;
 mod storage;
@@ -21,27 +23,14 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            // Folder management
-            commands::folders::add_folder,
+            // Folder dialogs (UI only - storage moved to SQLite)
             commands::folders::select_folder_dialog,
-            commands::folders::remove_folder,
-            commands::folders::get_folders,
-            commands::folders::update_folder,
-            // Media management
-            commands::media::save_movies,
-            commands::media::get_movies,
-            commands::media::save_series,
-            commands::media::get_series,
-            commands::media::update_movie,
-            commands::media::update_series,
-            commands::media::remove_movie,
-            commands::media::remove_series,
-            // Settings & state
+            // Settings & state (UI preferences only)
             commands::settings::save_last_selected_folder,
             commands::settings::get_last_selected_folder,
             commands::settings::save_settings,
             commands::settings::get_settings,
-            // Image cache
+            // Image cache (offline functionality)
             commands::cache::cache_image,
             commands::cache::get_cached_image_path,
             commands::cache::is_image_cached,
@@ -51,7 +40,7 @@ pub fn run() {
             commands::data::get_data_directory,
             commands::data::export_data,
             commands::data::import_data,
-            // File operations
+            // File operations (system access)
             commands::files::scan_folder,
             commands::files::open_media,
             commands::files::get_file_metadata,

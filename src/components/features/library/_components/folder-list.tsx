@@ -4,7 +4,7 @@ import { Folder } from "@/types";
 import { motion } from "framer-motion";
 import { Folder as FolderIcon, X } from "lucide-react";
 import { watchHistoryService } from "@/services/watchHistoryService";
-import { tauriService } from "@/services/tauri";
+import { getMovies, getSeries } from "@/services/databaseService";
 import { useEffect, useState } from "react";
 
 interface FolderListProps {
@@ -20,8 +20,8 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
   useEffect(() => {
     const calculateCounts = async () => {
       const counts: Record<string, number> = {};
-      const allMovies = await tauriService.getMovies();
-      const allSeries = await tauriService.getSeries();
+      const allMovies = await getMovies();
+      const allSeries = await getSeries();
 
       for (const folder of folders) {
         const folderMovies = allMovies.filter((m) => m.folderId === folder.id);

@@ -1,14 +1,17 @@
 /**
  * Storage Service for Critix Vault
  *
- * This service acts as a bridge between the frontend and the Rust backend.
- * All data is now persisted via Tauri commands to the app's data directory,
- * ensuring data survives app restarts.
+ * ⚠️ DEPRECATED - Use databaseService.ts instead
+ * 
+ * This service is now deprecated and will be removed in a future version.
+ * All storage operations have been migrated to SQLite via databaseService.ts
  *
- * Data location:
- * - Windows: C:\Users\{user}\AppData\Roaming\critix-vault\
- * - macOS: ~/Library/Application Support/critix-vault/
- * - Linux: ~/.local/share/critix-vault/
+ * Migration Guide:
+ * - Use databaseService functions for all storage operations
+ * - Database provides better performance, type safety, and referential integrity
+ * - Data location: {appDataDir}/critix.db
+ *
+ * @deprecated Use databaseService.ts for all storage operations
  */
 
 import { Folder, Movie, Series } from "@/types";

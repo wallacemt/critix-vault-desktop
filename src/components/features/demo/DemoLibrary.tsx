@@ -8,14 +8,14 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, AlertCircle, Film, Tv, TrendingUp } from "lucide-react";
-import { Media,  } from "@/types";
+import { Media } from "@/types";
 import { StreamingGrid } from "../library/_components/streaming-grid";
 import { cn } from "@/lib/utils";
 import { useDemoData } from "@/hooks/useDemoData";
 
 interface DemoLibraryProps {
   onBack: () => void;
-  onMediaClick: (media: Media) => void;
+  onMediaClick: (media: Media, onDemo?: boolean) => void;
   onMediaPlay: (media: Media) => void;
 }
 
@@ -158,6 +158,7 @@ export function DemoLibrary({ onBack, onMediaClick, onMediaPlay }: DemoLibraryPr
               </div>
             ) : (
               <StreamingGrid
+                demoMode
                 media={filteredMedia()}
                 onMediaClick={onMediaClick}
                 onMediaPlay={onMediaPlay}

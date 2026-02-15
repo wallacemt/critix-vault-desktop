@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
 import { watchHistoryService } from "@/services/watchHistoryService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
+import { removeMovie } from "@/services/databaseService";
 
 interface MovieDetailsProps {
   movie: Movie;
@@ -73,7 +74,7 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await tauriService.removeMovie(movie.id, movie.folderId);
+      await removeMovie(movie.id);
       console.log(`✅ Movie deleted: ${movie.title}`);
       setShowDeleteDialog(false);
 

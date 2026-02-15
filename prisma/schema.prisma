@@ -1,0 +1,149 @@
+// Critix Vault Database Schema
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+// Folder Model
+model Folder {
+    id         String   @id @default(uuid())
+    name       String
+    path       String   @unique
+    mediaCount Int      @default(0)
+    addedAt    DateTime @default(now())
+
+    movies Movie[]
+    series Series[]
+
+    @@map("folders")
+}
+
+// Movie Model
+model Movie {
+    id            String  @id
+    title         String
+    originalTitle String?
+    overview      String?
+    poster        String?
+    backdrop      String?
+    rating        Float?
+    year          Int?
+    releaseDate   String?
+    status        String // MATCHED, UNMATCHED, ERROR
+    type          String  @default("MOVIE")
+    filePath      String
+    duration      Int?
+    trailer       String?
+
+    folderId String
+    folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+    watchHistory WatchHistory[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([folderId])
+    @@index([status])
+    @@map("movies")
+}
+
+// Series Model
+model Series {
+    id               String  @id
+    title            String
+    originalTitle    String?
+    overview         String?
+    poster           String?
+    backdrop         String?
+    rating           Float?
+    year             Int?
+    firstAirDate     String?
+    lastAirDate      String?
+    status           String // MATCHED, UNMATCHED, ERROR
+    type             String  @default("SERIES")
+    filePath         String
+    folderPath       String?
+    numberOfSeasons  Int     @default(0)
+    numberOfEpisodes Int     @default(0)
+    duration         Int?
+    trailer          String?
+
+    folderId String
+    folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+    seasons      Season[]
+    watchHistory WatchHistory[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([folderId])
+    @@index([status])
+    @@map("series")
+}
+
+// Season Model
+model Season {
+    id                 String  @id @default(uuid())
+    seasonNumber       Int
+    name               String
+    overview           String?
+    poster             String?
+    episodeCount       Int     @default(0)
+    available          Boolean @default(false)
+    downloadedEpisodes Int     @default(0)
+
+    seriesId String
+    series   Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+    episodes Episode[]
+
+    @@unique([seriesId, seasonNumber])
+    @@index([seriesId])
+    @@map("seasons")
+}
+
+// Episode Model
+model Episode {
+    id            String  @id @default(uuid())
+    episodeNumber Int
+    seasonNumber  Int
+    title         String
+    overview      String?
+    stillPath     String?
+    airDate       String?
+    duration      Int?
+    filePath      String?
+    available     Boolean @default(false)
+
+    seasonId String
+    season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+    @@unique([seasonId, episodeNumber])
+    @@index([seasonId])
+    @@map("episodes")
+}
+
+// Watch History Model
+model WatchHistory {
+    id            String   @id @default(uuid())
+    mediaId       String
+    mediaType     String // MOVIE, SERIES
+    episodeId     String?
+    seasonNumber  Int?
+    episodeNumber Int?
+    watchedAt     DateTime @default(now())
+    progress      Float? // 0-100
+    completed     Boolean  @default(false)
+
+    movie  Movie?  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+    series Series? @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+    @@index([mediaId])
+    @@index([watchedAt])
+    @@map("watch_history")
+}

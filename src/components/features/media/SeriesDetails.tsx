@@ -33,6 +33,7 @@ import { SeriesEditDialog, SeriesEditState } from "./series-edit-dialog";
 import { storageService } from "@/services/storageService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { SeasonCard } from "./_components/season-card";
+import { getSeries, saveSeries, removeSeries } from "@/services/databaseService";
 
 interface SeriesDetailsProps {
   series: Series;
@@ -98,11 +99,11 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
         };
 
         // Save updated series to database (update the existing series, don't overwrite all)
-        const allSeries = await tauriService.getSeries();
+        const allSeries = await getSeries();
         const updatedAllSeries = allSeries.map((s) =>
           s.id === updatedSeries.id && s.folderId === updatedSeries.folderId ? updatedSeries : s,
         );
-        await tauriService.saveSeries(updatedAllSeries);
+        await saveSeries(updatedAllSeries);
         console.log(`✅ Saved updated series with season details: ${series.title}`);
 
         // Notify parent component
@@ -223,7 +224,7 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await tauriService.removeSeries(series.id, series.folderId);
+      await removeSeries(series.id);
       console.log(`✅ Series deleted: ${series.title}`);
       setShowDeleteDialog(false);
 

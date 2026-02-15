@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Film, Tv, Loader2, FolderOpen, FileVideo } from "lucide-react";
 import { useState } from "react";
 import { apiService } from "@/services/api";
-import { tauriService } from "@/services/tauri";
+import { getMovies, saveMovies, getSeries, saveSeries } from "@/services/databaseService";
 import { Movie, Series } from "@/types";
 import { open } from "@tauri-apps/plugin-dialog";
 import { MediaSearchResult } from "@/types/api";
@@ -138,8 +138,8 @@ export function ManualMediaEntryDialog({
         };
 
         // Load existing movies and add the new one
-        const existingMovies = await tauriService.getMovies();
-        await tauriService.saveMovies([...existingMovies, movie]);
+        const existingMovies = await getMovies();
+        await saveMovies([...existingMovies, movie]);
         console.log("✅ Movie added manually:", movie.title);
       } else {
         // For series, we need to get season details
@@ -169,8 +169,8 @@ export function ManualMediaEntryDialog({
         };
 
         // Load existing series and add the new one
-        const existingSeries = await tauriService.getSeries();
-        await tauriService.saveSeries([...existingSeries, series]);
+        const existingSeries = await getSeries();
+        await saveSeries([...existingSeries, series]);
         console.log("✅ Series added manually:", series.title);
       }
 

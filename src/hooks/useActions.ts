@@ -5,6 +5,7 @@ import { tauriService } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useFoldersContext } from "@/context/foldersContext";
+import { getMovies, getSeries, saveMovies, saveSeries } from "@/services/databaseService";
 
 export function useActions() {
   const { folders, addFolder, selectedFolder } = useFoldersContext();
@@ -33,12 +34,12 @@ export function useActions() {
         return;
       }
 
-      // Add folder to context (will persist automatically via Rust backend)
+      // Add folder to context (will persist automatically via database)
       const folder = await addFolder(selectedPath);
 
       // Get existing media from database before scanning
-      const existingMovies = await tauriService.getMovies();
-      const existingSeries = await tauriService.getSeries();
+      const existingMovies = await getMovies();
+      const existingSeries = await getSeries();
 
       // Scan the folder for media files using RUST
       const result = await folderScanService.scanAndMatchFolder(
@@ -52,12 +53,12 @@ export function useActions() {
         existingSeries,
       );
 
-      // Save scanned media to Rust backend (persistent storage)
+      // Save scanned media to database (persistent storage)
       if (result.movies.length > 0) {
-        await tauriService.saveMovies([...existingMovies, ...result.movies]);
+        await saveMovies([...existingMovies, ...result.movies]);
       }
       if (result.series.length > 0) {
-        await tauriService.saveSeries([...existingSeries, ...result.series]);
+        await saveSeries([...existingSeries, ...result.series]);
       }
 
       setScanning(false);

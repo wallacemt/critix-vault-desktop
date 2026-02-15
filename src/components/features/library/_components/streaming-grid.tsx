@@ -17,6 +17,7 @@ interface StreamingGridProps {
   onMediaEdit?: (media: Media) => void;
   viewMode?: "grid" | "list";
   emptyMessage?: string;
+  demoMode?: boolean;
 }
 
 export function StreamingGrid({
@@ -26,6 +27,7 @@ export function StreamingGrid({
   onMediaEdit,
   viewMode = "grid",
   emptyMessage = "No media found",
+  demoMode = false,
 }: StreamingGridProps) {
   if (media.length === 0) {
     return (
@@ -67,6 +69,7 @@ export function StreamingGrid({
             onPlay={onMediaPlay}
             onEdit={onMediaEdit}
             viewMode={viewMode}
+            demoMode={demoMode}
           />
         </motion.div>
       ))}

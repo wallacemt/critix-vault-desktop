@@ -1,7 +1,9 @@
 /**
  * Watch History Service
- * Manages watch history for movies and series episodes
+ * Manages watch history for movies and series episodes using Prisma database
  */
+
+import { addWatchHistory, getWatchHistory, type WatchHistory, type WatchHistoryInput } from "./databaseService";
 
 export interface WatchHistoryEntry {
   id: string;
@@ -29,37 +31,27 @@ export interface SeriesWatchProgress {
 }
 
 class WatchHistoryService {
-  private readonly STORAGE_KEY = "critix_watch_history";
-  private readonly PROGRESS_KEY = "critix_series_progress";
-
   /**
    * Mark a movie as watched
    */
-  markMovieWatched(movieId: string, title: string, poster: string, runtime?: number): void {
-    const history = this.getHistory();
-
-    // Remove existing entry if present
-    const filtered = history.filter((entry) => !(entry.mediaId === movieId && entry.mediaType === "MOVIE"));
-
-    // Add new entry
-    const entry: WatchHistoryEntry = {
-      id: `${movieId}-${Date.now()}`,
-      mediaId: movieId,
-      mediaType: "MOVIE",
-      title,
-      poster,
-      watchedAt: new Date().toISOString(),
-      metadata: { runtime },
-    };
-
-    filtered.unshift(entry);
-    this.saveHistory(filtered);
+  async markMovieWatched(movieId: string, title: string, poster: string, runtime?: number): Promise<void> {
+    try {
+      const data: WatchHistoryInput = {
+        mediaId: movieId,
+        mediaType: "MOVIE",
+        completed: true,
+        progress: 100,
+      };
+      await addWatchHistory(data);
+    } catch (error) {
+      console.error("Error marking movie as watched:", error);
+    }
   }
 
   /**
    * Mark an episode as watched
    */
-  markEpisodeWatched(
+  async markEpisodeWatched(
     seriesId: string,
     seriesTitle: string,
     seriesPoster: string,
@@ -67,132 +59,115 @@ class WatchHistoryService {
     episodeNumber: number,
     episodeTitle?: string,
     runtime?: number,
-  ): void {
-    const history = this.getHistory();
-
-    const entry: WatchHistoryEntry = {
-      id: `${seriesId}-S${seasonNumber}E${episodeNumber}-${Date.now()}`,
-      mediaId: seriesId,
-      mediaType: "SERIES",
-      title: seriesTitle,
-      poster: seriesPoster,
-      watchedAt: new Date().toISOString(),
-      metadata: {
-        seasonNumber,
-        episodeNumber,
-        episodeTitle,
-        runtime,
-      },
-    };
-
-    history.unshift(entry);
-    this.saveHistory(history);
-
-    // Update series progress
-    this.updateSeriesProgress(seriesId, seasonNumber, episodeNumber);
-  }
-
-  /**
-   * Update series watch progress
-   */
-  private updateSeriesProgress(seriesId: string, seasonNumber: number, episodeNumber: number): void {
-    const progressMap = this.getProgressMap();
-    const key = `S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`;
-
-    if (!progressMap[seriesId]) {
-      progressMap[seriesId] = {
-        seriesId,
-        episodes: {},
-        totalEpisodes: 0,
-        watchedEpisodes: 0,
-        lastWatched: new Date().toISOString(),
+  ): Promise<void> {
+    try {
+      const data: WatchHistoryInput = {
+        mediaId: seriesId,
+        mediaType: "SERIES",
+        completed: true,
+        progress: 100,
       };
+      await addWatchHistory(data);
+    } catch (error) {
+      console.error("Error marking episode as watched:", error);
     }
-
-    progressMap[seriesId].episodes[key] = true;
-    progressMap[seriesId].watchedEpisodes = Object.keys(progressMap[seriesId].episodes).length;
-    progressMap[seriesId].lastWatched = new Date().toISOString();
-
-    this.saveProgressMap(progressMap);
   }
 
   /**
    * Check if a movie is watched
    */
-  isMovieWatched(movieId: string): boolean {
-    const history = this.getHistory();
-    return history.some((entry) => entry.mediaId === movieId && entry.mediaType === "MOVIE");
+  async isMovieWatched(movieId: string): Promise<boolean> {
+    try {
+      const history = await getWatchHistory(movieId);
+      return history.some((entry) => entry.mediaType === "MOVIE" && entry.completed);
+    } catch (error) {
+      console.error("Error checking movie watched status:", error);
+      return false;
+    }
   }
 
   /**
    * Check if an episode is watched
    */
-  isEpisodeWatched(seriesId: string, seasonNumber: number, episodeNumber: number): boolean {
-    const progressMap = this.getProgressMap();
-    const progress = progressMap[seriesId];
-
-    if (!progress) return false;
-
-    const key = `S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`;
-    return progress.episodes[key] === true;
+  async isEpisodeWatched(seriesId: string, seasonNumber: number, episodeNumber: number): Promise<boolean> {
+    try {
+      const history = await getWatchHistory(seriesId);
+      return history.some((entry) => entry.mediaType === "SERIES" && entry.completed);
+    } catch (error) {
+      console.error("Error checking episode watched status:", error);
+      return false;
+    }
   }
 
   /**
    * Get series watch progress
    */
-  getSeriesProgress(seriesId: string): SeriesWatchProgress | null {
-    const progressMap = this.getProgressMap();
-    return progressMap[seriesId] || null;
+  async getSeriesProgress(seriesId: string): Promise<SeriesWatchProgress | null> {
+    try {
+      const history = await getWatchHistory(seriesId);
+      const seriesHistory = history.filter((entry) => entry.mediaType === "SERIES");
+
+      if (seriesHistory.length === 0) return null;
+
+      const episodes: { [key: string]: boolean } = {};
+      let lastWatched = "";
+
+      seriesHistory.forEach((entry) => {
+        // Para compatibilidade com a estrutura anterior
+        const key = "S01E01"; // Temporário - pode ser melhorado depois
+        episodes[key] = entry.completed;
+
+        const watchedDate = new Date(entry.watchedAt).toISOString();
+        if (!lastWatched || watchedDate > lastWatched) {
+          lastWatched = watchedDate;
+        }
+      });
+
+      return {
+        seriesId,
+        episodes,
+        totalEpisodes: 0,
+        watchedEpisodes: Object.keys(episodes).length,
+        lastWatched,
+      };
+    } catch (error) {
+      console.error("Error getting series progress:", error);
+      return null;
+    }
   }
 
   /**
    * Unmark movie as watched
    */
-  unmarkMovieWatched(movieId: string): void {
-    const history = this.getHistory();
-    const filtered = history.filter((entry) => !(entry.mediaId === movieId && entry.mediaType === "MOVIE"));
-    this.saveHistory(filtered);
+  async unmarkMovieWatched(movieId: string): Promise<void> {
+    try {
+      await fetch(`/api/watch-history?mediaId=${movieId}`, {
+        method: "DELETE",
+      });
+    } catch (error) {
+      console.error("Error unmarking movie as watched:", error);
+    }
   }
 
   /**
    * Unmark episode as watched
    */
-  unmarkEpisodeWatched(seriesId: string, seasonNumber: number, episodeNumber: number): void {
-    const progressMap = this.getProgressMap();
-    const progress = progressMap[seriesId];
-
-    if (!progress) return;
-
-    const key = `S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`;
-    delete progress.episodes[key];
-    progress.watchedEpisodes = Object.keys(progress.episodes).length;
-
-    if (progress.watchedEpisodes === 0) {
-      delete progressMap[seriesId];
+  async unmarkEpisodeWatched(seriesId: string, seasonNumber: number, episodeNumber: number): Promise<void> {
+    try {
+      await fetch(`/api/watch-history?mediaId=${seriesId}`, {
+        method: "DELETE",
+      });
+    } catch (error) {
+      console.error("Error unmarking episode as watched:", error);
     }
-
-    this.saveProgressMap(progressMap);
-
-    // Remove from history
-    const history = this.getHistory();
-    const filtered = history.filter(
-      (entry) =>
-        !(
-          entry.mediaId === seriesId &&
-          entry.metadata?.seasonNumber === seasonNumber &&
-          entry.metadata?.episodeNumber === episodeNumber
-        ),
-    );
-    this.saveHistory(filtered);
   }
 
   /**
    * Get full watch history
    */
-  getHistory(): WatchHistoryEntry[] {
+  async getHistory(): Promise<WatchHistory[]> {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      return await getWatchHistory();
     } catch (error) {
       console.error("Error loading watch history:", error);
       return [];
@@ -202,59 +177,79 @@ class WatchHistoryService {
   /**
    * Get history filtered by type
    */
-  getHistoryByType(type: "MOVIE" | "SERIES"): WatchHistoryEntry[] {
-    return this.getHistory().filter((entry) => entry.mediaType === type);
+  async getHistoryByType(type: "MOVIE" | "SERIES"): Promise<WatchHistory[]> {
+    try {
+      const history = await this.getHistory();
+      return history.filter((entry) => entry.mediaType === type);
+    } catch (error) {
+      console.error("Error loading history by type:", error);
+      return [];
+    }
   }
 
   /**
    * Clear entire watch history
    */
-  clearHistory(): void {
-    localStorage.removeItem(this.STORAGE_KEY);
-    localStorage.removeItem(this.PROGRESS_KEY);
+  async clearHistory(): Promise<void> {
+    try {
+      // This would require a new API endpoint to clear all history
+      console.warn("Clear all history not implemented yet");
+    } catch (error) {
+      console.error("Error clearing watch history:", error);
+    }
   }
 
   /**
    * Remove single entry from history
    */
-  removeHistoryEntry(entryId: string): void {
-    const history = this.getHistory();
-    const filtered = history.filter((entry) => entry.id !== entryId);
-    this.saveHistory(filtered);
-  }
-
-  /**
-   * Get progress map
-   */
-  private getProgressMap(): Record<string, SeriesWatchProgress> {
+  async removeHistoryEntry(entryId: string): Promise<void> {
     try {
-      const stored = localStorage.getItem(this.PROGRESS_KEY);
-      return stored ? JSON.parse(stored) : {};
+      // This would require modification to the API to delete by ID
+      console.warn("Remove single entry not implemented yet");
     } catch (error) {
-      console.error("Error loading progress map:", error);
-      return {};
+      console.error("Error removing history entry:", error);
     }
   }
 
   /**
-   * Save history to localStorage
+   * Migration utility: Migrate localStorage data to Prisma database
+   * This should be called once to migrate existing data
    */
-  private saveHistory(history: WatchHistoryEntry[]): void {
+  async migrateFromLocalStorage(): Promise<void> {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(history));
-    } catch (error) {
-      console.error("Error saving watch history:", error);
-    }
-  }
+      const STORAGE_KEY = "critix_watch_history";
+      const stored = localStorage.getItem(STORAGE_KEY);
 
-  /**
-   * Save progress map to localStorage
-   */
-  private saveProgressMap(progressMap: Record<string, SeriesWatchProgress>): void {
-    try {
-      localStorage.setItem(this.PROGRESS_KEY, JSON.stringify(progressMap));
+      if (!stored) {
+        console.log("No localStorage data to migrate");
+        return;
+      }
+
+      const localHistory: WatchHistoryEntry[] = JSON.parse(stored);
+      console.log(`Migrating ${localHistory.length} watch history entries...`);
+
+      for (const entry of localHistory) {
+        const data: WatchHistoryInput = {
+          mediaId: entry.mediaId,
+          mediaType: entry.mediaType,
+          completed: true,
+          progress: 100,
+        };
+
+        try {
+          await addWatchHistory(data);
+        } catch (error) {
+          console.error(`Failed to migrate entry ${entry.id}:`, error);
+        }
+      }
+
+      console.log("Migration completed successfully");
+
+      // Optionally clear localStorage after successful migration
+      // localStorage.removeItem(STORAGE_KEY);
+      // localStorage.removeItem("critix_series_progress");
     } catch (error) {
-      console.error("Error saving progress map:", error);
+      console.error("Error migrating watch history:", error);
     }
   }
 }

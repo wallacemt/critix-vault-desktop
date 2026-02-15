@@ -11,13 +11,14 @@ import { folderScanService } from "@/services/folderScanService";
 import { apiService } from "@/services/api";
 import { Movie, Series, Media } from "@/types";
 import { useFoldersContext } from "@/context/foldersContext";
-import { 
-  getMovies, 
-  getSeries, 
-  removeMovie, 
-  removeSeries, 
-  saveMovies, 
-  saveSeries 
+import {
+  getMovies,
+  getSeries,
+  removeMovie,
+  removeSeries,
+  saveMovies,
+  saveSeries,
+  getAllWatchedMediaIds,
 } from "@/services/databaseService";
 
 /**
@@ -43,24 +44,36 @@ export function useMediaLibrary(folderId: string | null) {
 
     setLoading(true);
     try {
-      // Load media from database
-      const allMovies = await getMovies();
-      const allSeries = await getSeries();
+      // Load media and watch history in parallel (single request for all watched IDs)
+      const [allMovies, allSeries, watchedIds] = await Promise.all([getMovies(), getSeries(), getAllWatchedMediaIds()]);
 
       console.log("📦 All movies in database:", allMovies.length);
       console.log("📦 All series in database:", allSeries.length);
       console.log("🔍 Filtering for folderId:", folderId);
+      console.log("👁️ Watched media IDs:", watchedIds.size);
 
-      const filteredMovies = allMovies.filter((movie) => {
-        const match = movie.folderId === folderId;
-        if (match) console.log("✅ Movie matched:", movie.title);
-        return match;
-      });
-      const filteredSeries = allSeries.filter((s) => {
-        const match = s.folderId === folderId;
-        if (match) console.log("✅ Series matched:", s.title);
-        return match;
-      });
+      // Filter by folder and enrich with watch status
+      const filteredMovies = allMovies
+        .filter((movie) => {
+          const match = movie.folderId === folderId;
+          if (match) console.log("✅ Movie matched:", movie.title);
+          return match;
+        })
+        .map((movie) => ({
+          ...movie,
+          isWatched: watchedIds.has(movie.id),
+        }));
+
+      const filteredSeries = allSeries
+        .filter((s) => {
+          const match = s.folderId === folderId;
+          if (match) console.log("✅ Series matched:", s.title);
+          return match;
+        })
+        .map((series) => ({
+          ...series,
+          isWatched: watchedIds.has(series.id),
+        }));
 
       console.log("🎬 Loaded movies for folder:", filteredMovies.length);
       console.log("📺 Loaded series for folder:", filteredSeries.length);

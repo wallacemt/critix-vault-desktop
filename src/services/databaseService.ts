@@ -234,3 +234,20 @@ export async function isMediaWatched(mediaId: string): Promise<boolean> {
   const history = await getWatchHistory(mediaId);
   return history.some((h) => h.completed);
 }
+
+/**
+ * Get all watched media IDs in a single request
+ * More efficient than checking each media individually
+ */
+export async function getAllWatchedMediaIds(): Promise<Set<string>> {
+  const history = await getWatchHistory();
+  const watchedIds = new Set<string>();
+
+  history.forEach((entry) => {
+    if (entry.completed) {
+      watchedIds.add(entry.mediaId);
+    }
+  });
+
+  return watchedIds;
+}

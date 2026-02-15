@@ -38,6 +38,19 @@ model Movie {
     duration      Int?
     trailer       String?
 
+    // New TMDB fields
+    genres     String? // JSON array of genre names
+    imdbId     String?
+    tagline    String?
+    budget     Int?
+    revenue    Int?
+    voteCount  Int?
+    popularity Float?
+    images     String? // JSON array of image URLs
+    videos     String? // JSON array of video objects
+    cast       String? // JSON array of cast member objects
+    crew       String? // JSON array of crew member objects
+
     folderId String
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
@@ -71,6 +84,19 @@ model Series {
     numberOfEpisodes Int     @default(0)
     duration         Int?
     trailer          String?
+
+    // New TMDB fields
+    genres              String? // JSON array of genre names
+    imdbId              String?
+    tagline             String?
+    voteCount           Int?
+    popularity          Float?
+    images              String? // JSON array of image URLs
+    videos              String? // JSON array of video objects
+    cast                String? // JSON array of cast member objects
+    crew                String? // JSON array of crew member objects
+    networks            String? // JSON array of network names
+    productionCompanies String? // JSON array of production companies
 
     folderId String
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)

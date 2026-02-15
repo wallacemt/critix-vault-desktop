@@ -40,7 +40,7 @@ export async function getPrismaClient() {
   // Create Prisma Client
   prismaInstance = new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+    log: process.env.NODE_ENV === "development" ? [ "error", "warn"] : ["error"],
     errorFormat: "minimal",
   });
 

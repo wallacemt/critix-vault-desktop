@@ -49,6 +49,8 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
   const [activeTab, setActiveTab] = useState<"all" | "movies" | "series" | "watched">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"title" | "rating" | "duration" | "year">("title");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
   const [newMediaNotification, setNewMediaNotification] = useState<{ movies: Movie[]; series: Series[] } | null>(null);
   const [isAutoScanning, setIsAutoScanning] = useState(false);
@@ -159,16 +161,16 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
 
     switch (activeTab) {
       case "movies":
-        allMedia = movies.filter((media) => !watchHistoryService.isMovieWatched(media.id));
+        allMedia = movies.filter((media) => !media.isWatched);
         break;
       case "series":
         allMedia = series;
         break;
       case "watched":
-        allMedia = movies.filter((media) => watchHistoryService.isMovieWatched(media.id));
+        allMedia = movies.filter((media) => media.isWatched);
         break;
       default:
-        allMedia = [...movies, ...series].filter((media) => !watchHistoryService.isMovieWatched(media.id));
+        allMedia = [...movies, ...series].filter((media) => !media.isWatched);
     }
 
     // Apply search filter
@@ -179,12 +181,43 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
       );
     }
 
+    // Apply sorting
+    allMedia.sort((a, b) => {
+      let compareA: any;
+      let compareB: any;
+
+      switch (sortBy) {
+        case "title":
+          compareA = a.title.toLowerCase();
+          compareB = b.title.toLowerCase();
+          break;
+        case "rating":
+          compareA = a.rating || 0;
+          compareB = b.rating || 0;
+          break;
+        case "duration":
+          compareA = a.duration || 0;
+          compareB = b.duration || 0;
+          break;
+        case "year":
+          compareA = a.year || 0;
+          compareB = b.year || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (compareA < compareB) return sortOrder === "asc" ? -1 : 1;
+      if (compareA > compareB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
     return allMedia;
   };
 
   // Count unwatched media
-  const unwatchedMovies = movies.filter((movie) => !watchHistoryService.isMovieWatched(movie.id));
-  const watchedMovies = movies.filter((movie) => watchHistoryService.isMovieWatched(movie.id));
+  const unwatchedMovies = movies.filter((movie) => !movie.isWatched);
+  const watchedMovies = movies.filter((movie) => movie.isWatched);
   const totalCount = unwatchedMovies.length + series.length;
 
   return (
@@ -280,6 +313,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 scanProgress,
                 searchQuery,
                 setSearchQuery,
+                sortBy,
+                sortOrder,
+                setSortBy,
+                setSortOrder,
                 totalCount,
                 unwatchedMoviesCount: unwatchedMovies.length,
                 watchedMoviesCount: watchedMovies.length,

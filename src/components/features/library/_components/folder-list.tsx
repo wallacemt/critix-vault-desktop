@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import { Folder } from "@/types";
 import { motion } from "framer-motion";
 import { Folder as FolderIcon, X } from "lucide-react";
-import { watchHistoryService } from "@/services/watchHistoryService";
 import { getMovies, getSeries } from "@/services/databaseService";
 import { useEffect, useState } from "react";
 
@@ -27,8 +26,8 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
         const folderMovies = allMovies.filter((m) => m.folderId === folder.id);
         const folderSeries = allSeries.filter((s) => s.folderId === folder.id);
 
-        // Count only unwatched movies
-        const unwatchedMovies = folderMovies.filter((m) => !watchHistoryService.isMovieWatched(m.id));
+        // Count only unwatched movies (isWatched property already loaded)
+        const unwatchedMovies = folderMovies.filter((m) => !m.isWatched);
 
         counts[folder.id] = unwatchedMovies.length + folderSeries.length;
       }

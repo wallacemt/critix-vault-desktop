@@ -7,31 +7,73 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Play, ExternalLink, Clock, Calendar, Star, FolderOpen, Check, X, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Play,
+  ExternalLink,
+  Clock,
+  Calendar,
+  Star,
+  FolderOpen,
+  Check,
+  X,
+  Trash2,
+  Pencil,
+} from "lucide-react";
 import { Movie } from "@/types";
 import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
 import { watchHistoryService } from "@/services/watchHistoryService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
-import { removeMovie } from "@/services/databaseService";
+import { removeMovie, saveMovies } from "@/services/databaseService";
+import { MovieEditDialog } from "./movie-edit-dialog";
+import { useMediaContext } from "@/context/mediaContext";
+import { useActions } from "@/hooks/useActions";
+import { useRouter } from "next/navigation";
 
 interface MovieDetailsProps {
-  movie: Movie;
-  onBack: () => void;
-  onPlay: (movie: Movie) => void;
-  onDelete?: () => void;
+  demoMode?: boolean;
 }
 
-export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsProps) {
+export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const [backdropError, setBackdropError] = useState(false);
   const [posterError, setPosterError] = useState(false);
-  const [isWatched, setIsWatched] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const { movie: currentMovie, setMovie: setCurrentMovie } = useMediaContext();
+  const { handlePlayMovie: onPlay } = useActions();
+
+  const router = useRouter();
+
+  // Use the isWatched property from the movie, or check async if not available
+  const [isWatched, setIsWatched] = useState(false);
+
+  function onDelete() {
+    router.push("/library");
+  }
+
+  function onBack() {
+    router.back();
+  }
+
+  if (!currentMovie) return null;
+
+  // Sync watch status - prefer the property that comes with the movie
   useEffect(() => {
-    setIsWatched(watchHistoryService.isMovieWatched(movie.id));
-  }, [movie.id]);
+    const checkWatchedStatus = async () => {
+      if (currentMovie.isWatched !== undefined) {
+        // Use the property that comes with the movie (optimized)
+        setIsWatched(currentMovie.isWatched);
+      } else {
+        // Fallback: fetch from API if property not available
+        const watched = await watchHistoryService.isMovieWatched(currentMovie.id);
+        setIsWatched(watched);
+      }
+    };
+    checkWatchedStatus();
+  }, [currentMovie.id, currentMovie.isWatched]);
 
   const formatDuration = (minutes?: number) => {
     if (!minutes) return "N/A";
@@ -41,25 +83,30 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
   };
 
   const handleOpenFolder = async () => {
-    if (!movie.filePath || movie.filePath.includes("/demo/")) {
+    if (!currentMovie.filePath || currentMovie.filePath.includes("/demo/")) {
       alert("Arquivo não encontrado localmente");
       return;
     }
 
     try {
-      await tauriService.openFileLocation(movie.filePath);
+      await tauriService.openFileLocation(currentMovie.filePath);
     } catch (error) {
       console.error("Error opening folder:", error);
       alert(`Erro ao abrir pasta: ${error}`);
     }
   };
 
-  const handleMarkAsWatched = () => {
+  const handleMarkAsWatched = async () => {
     if (isWatched) {
-      watchHistoryService.unmarkMovieWatched(movie.id);
+      await watchHistoryService.unmarkMovieWatched(currentMovie.id);
       setIsWatched(false);
     } else {
-      watchHistoryService.markMovieWatched(movie.id, movie.title, movie.poster || "", movie.duration);
+      await watchHistoryService.markMovieWatched(
+        currentMovie.id,
+        currentMovie.title,
+        currentMovie.poster || "",
+        currentMovie.duration,
+      );
       setIsWatched(true);
     }
   };
@@ -69,13 +116,13 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
       alert("Você já assistiu este filme. Desmarque como assistido para reproduzir novamente.");
       return;
     }
-    onPlay(movie);
+    onPlay(currentMovie);
   };
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      await removeMovie(movie.id);
-      console.log(`✅ Movie deleted: ${movie.title}`);
+      await removeMovie(currentMovie.id);
+      console.log(`✅ Movie deleted: ${currentMovie.title}`);
       setShowDeleteDialog(false);
 
       // Call parent callback if provided
@@ -92,15 +139,26 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
       setIsDeleting(false);
     }
   };
+
+  const handleEditSave = async (updatedMovie: Movie) => {
+    try {
+      await saveMovies([updatedMovie]);
+      setCurrentMovie(updatedMovie);
+      console.log(`✅ Movie updated: ${updatedMovie.title}`);
+    } catch (error) {
+      console.error("Error updating movie:", error);
+      throw error;
+    }
+  };
   return (
     <div className="fixed inset-0 bg-slate-950 z-50 overflow-auto">
       {/* Backdrop Section */}
       <div className="relative h-[60vh] overflow-hidden">
         {/* Backdrop Image */}
-        {movie.backdrop && !backdropError ? (
+        {currentMovie.backdrop && !backdropError ? (
           <img
-            src={movie.backdrop}
-            alt={movie.title}
+            src={currentMovie.backdrop}
+            alt={currentMovie.title}
             className="w-full h-full object-cover"
             onError={() => setBackdropError(true)}
           />
@@ -136,10 +194,10 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
             {/* Poster */}
             <div className="hidden md:block flex-shrink-0">
               <div className="w-64 aspect-[2/3] rounded-lg overflow-hidden shadow-2xl border border-slate-800">
-                {movie.poster && !posterError ? (
+                {currentMovie.poster && !posterError ? (
                   <img
-                    src={movie.poster}
-                    alt={movie.title}
+                    src={currentMovie.poster}
+                    alt={currentMovie.title}
                     className="w-full h-full object-cover"
                     onError={() => setPosterError(true)}
                   />
@@ -155,30 +213,42 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
             <div className="flex-1 flex flex-col justify-end">
               <div className="mb-4">
                 <Badge className="bg-blue-600 text-white border-blue-500 mb-3">Movie</Badge>
-                <h1 className="text-5xl font-bold text-white mb-2">{movie.title}</h1>
-                {movie.originalTitle && movie.originalTitle !== movie.title && (
-                  <p className="text-lg text-slate-400 mb-3">{movie.originalTitle}</p>
+                <h1 className="text-5xl font-bold text-white mb-2">{currentMovie.title}</h1>
+                {currentMovie.originalTitle && currentMovie.originalTitle !== currentMovie.title && (
+                  <p className="text-lg text-slate-400 mb-3">{currentMovie.originalTitle}</p>
+                )}
+                {currentMovie.tagline && <p className="text-md text-slate-300 italic mb-3">{currentMovie.tagline}</p>}
+
+                {/* Genres */}
+                {currentMovie.genres && currentMovie.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {currentMovie.genres.map((genre, index) => (
+                      <Badge key={index} variant="outline" className="bg-slate-800/50 border-slate-600 text-slate-300">
+                        {genre}
+                      </Badge>
+                    ))}
+                  </div>
                 )}
               </div>
 
               {/* Meta Info */}
               <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-slate-300">
-                {movie.year && (
+                {currentMovie.year && (
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    <span>{movie.year}</span>
+                    <span>{currentMovie.year}</span>
                   </div>
                 )}
-                {movie.duration && (
+                {currentMovie.duration && (
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    <span>{formatDuration(movie.duration)}</span>
+                    <span>{formatDuration(currentMovie.duration)}</span>
                   </div>
                 )}
-                {movie.rating && (
+                {currentMovie.rating && (
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                    <span>{movie.rating.toFixed(1)}/10</span>
+                    <span>{currentMovie.rating.toFixed(1)}/10</span>
                   </div>
                 )}
               </div>
@@ -212,14 +282,14 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
                     </>
                   )}
                 </Button>
-                {movie.trailer && (
+                {currentMovie.trailer && (
                   <Button
                     size="lg"
                     variant="outline"
                     asChild
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
                   >
-                    <a href={movie.trailer} target="_blank" rel="noopener noreferrer">
+                    <a href={currentMovie.trailer} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="w-5 h-5 mr-2" />
                       Trailer
                     </a>
@@ -237,6 +307,15 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
                 <Button
                   size="lg"
                   variant="outline"
+                  onClick={() => setShowEditDialog(true)}
+                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm text-blue-400 hover:text-blue-300"
+                >
+                  <Pencil className="w-5 h-5 mr-2" />
+                  Editar
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
                   onClick={() => setShowDeleteDialog(true)}
                   className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
                 >
@@ -249,12 +328,20 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
         </div>
       </div>
 
+      {/* Edit Dialog */}
+      <MovieEditDialog
+        movie={currentMovie}
+        isOpen={showEditDialog}
+        onClose={() => setShowEditDialog(false)}
+        onSave={handleEditSave}
+      />
+
       {/* Delete Confirmation Dialog */}
       <DeleteMediaDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleDelete}
-        media={movie}
+        media={currentMovie}
         isDeleting={isDeleting}
       />
 
@@ -264,8 +351,8 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
           {/* Overview */}
           <div className="md:col-span-2">
             <h2 className="text-2xl font-bold text-white mb-4">Overview</h2>
-            {movie.overview ? (
-              <p className="text-slate-300 leading-relaxed text-lg">{movie.overview}</p>
+            {currentMovie.overview ? (
+              <p className="text-slate-300 leading-relaxed text-lg">{currentMovie.overview}</p>
             ) : (
               <p className="text-slate-500 italic">No overview available</p>
             )}
@@ -276,8 +363,8 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
             <div>
               <h3 className="text-sm font-semibold text-slate-400 mb-2">Release Date</h3>
               <p className="text-white">
-                {movie.releaseDate
-                  ? new Date(movie.releaseDate).toLocaleDateString("en-US", {
+                {currentMovie.releaseDate
+                  ? new Date(currentMovie.releaseDate).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
@@ -289,16 +376,16 @@ export function MovieDetails({ movie, onBack, onPlay, onDelete }: MovieDetailsPr
             <div>
               <h3 className="text-sm font-semibold text-slate-400 mb-2">Status</h3>
               <Badge
-                variant={movie.status === "MATCHED" ? "default" : "destructive"}
-                className={movie.status === "MATCHED" ? "bg-green-600 text-white" : ""}
+                variant={currentMovie.status === "MATCHED" ? "default" : "destructive"}
+                className={currentMovie.status === "MATCHED" ? "bg-green-600 text-white" : ""}
               >
-                {movie.status}
+                {currentMovie.status}
               </Badge>
             </div>
 
             <div>
               <h3 className="text-sm font-semibold text-slate-400 mb-2">File Location</h3>
-              <p className="text-sm text-slate-500 break-all">{movie.filePath}</p>
+              <p className="text-sm text-slate-500 break-all">{currentMovie.filePath}</p>
             </div>
           </div>
         </div>

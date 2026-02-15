@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check } from "luci
 import { Media, MediaType } from "@/types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { watchHistoryService } from "@/services/watchHistoryService";
 
 interface StreamingCardProps {
   media: Media;
@@ -34,13 +33,9 @@ export function StreamingCard({
 }: StreamingCardProps) {
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isWatched, setIsWatched] = useState(false);
 
-  useEffect(() => {
-    if (media.type === "MOVIE") {
-      setIsWatched(watchHistoryService.isMovieWatched(media.id));
-    }
-  }, [media.id, media.type]);
+  // Use the isWatched property that comes with the media data
+  const isWatched = media.isWatched ?? false;
 
   const getMediaIcon = (type: MediaType) => {
     switch (type) {
@@ -55,6 +50,16 @@ export function StreamingCard({
   };
 
   const MediaIcon = getMediaIcon(media.type);
+
+  const formatDuration = (minutes?: number) => {
+    if (!minutes) return null;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
 
   if (viewMode === "list") {
     return (
@@ -105,11 +110,32 @@ export function StreamingCard({
                   </Badge>
                 </div>
 
+                {/* Genres */}
+                {media.genres && media.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {media.genres.slice(0, 3).map((genre, index) => (
+                      <Badge
+                        key={index}
+                        variant="outline"
+                        className="text-xs px-2 py-0.5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
+                      >
+                        {genre}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-4 text-sm text-[var(--text-secondary)] mb-2 font-sans">
                   {media.year && (
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
                       {media.year}
+                    </div>
+                  )}
+                  {media.duration && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {formatDuration(media.duration)}
                     </div>
                   )}
                   {media.rating && (
@@ -260,7 +286,7 @@ export function StreamingCard({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                { !demoMode &&  onPlay && (
+                {!demoMode && onPlay && (
                   <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 }}>
                     <Button
                       size="icon"
@@ -312,8 +338,32 @@ export function StreamingCard({
           <h3 className="font-bold truncate text-[var(--text-primary)] text-sm line-clamp-2 mb-2 font-display leading-tight">
             {media.title}
           </h3>
-          <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] font-sans">
-            {media.year && <span>{media.year}</span>}
+
+          {/* Genres */}
+          {media.genres && media.genres.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {media.genres.slice(0, 2).map((genre, index) => (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 h-5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
+                >
+                  {genre}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] font-sans gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {media.year && <span>{media.year}</span>}
+              {media.duration && (
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>{formatDuration(media.duration)}</span>
+                </div>
+              )}
+            </div>
             {media.rating && (
               <div className="flex items-center gap-1">
                 <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />

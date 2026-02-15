@@ -20,6 +20,7 @@ export interface Media {
   status: MediaStatus;
   filePath: string;
   folderId: string;
+  isWatched?: boolean; // Loaded from watch history
 }
 
 // Movie Interface
@@ -28,6 +29,47 @@ export interface Movie extends Media {
   duration?: number;
   trailer?: string;
   releaseDate?: string;
+
+  // TMDB Extended fields
+  genres?: string[]; // Array of genre names
+  imdbId?: string;
+  tagline?: string;
+  budget?: number;
+  revenue?: number;
+  voteCount?: number;
+  popularity?: number;
+  images?: string[]; // Array of image URLs
+  videos?: TMDBVideo[]; // Array of video objects
+  cast?: TMDBCast[]; // Array of cast members
+  crew?: TMDBCrew[]; // Array of crew members
+}
+
+// TMDB Video Interface
+export interface TMDBVideo {
+  id: string;
+  key: string;
+  name: string;
+  site: string; // YouTube, Vimeo, etc.
+  type: string; // Trailer, Teaser, Clip, etc.
+  official: boolean;
+}
+
+// TMDB Cast Interface
+export interface TMDBCast {
+  id: number;
+  name: string;
+  character: string;
+  profilePath?: string;
+  order: number;
+}
+
+// TMDB Crew Interface
+export interface TMDBCrew {
+  id: number;
+  name: string;
+  job: string;
+  department: string;
+  profilePath?: string;
 }
 
 // Episode Interface
@@ -60,13 +102,26 @@ export interface Season {
 // Series Interface
 export interface Series extends Media {
   type: "SERIES" | "ANIME";
-  
+
   seasons: Season[];
   numberOfSeasons: number;
   numberOfEpisodes: number;
   trailer?: string;
   firstAirDate?: string;
   lastAirDate?: string;
+
+  // TMDB Extended fields
+  genres?: string[]; // Array of genre names
+  imdbId?: string;
+  tagline?: string;
+  voteCount?: number;
+  popularity?: number;
+  images?: string[]; // Array of image URLs
+  videos?: TMDBVideo[]; // Array of video objects
+  cast?: TMDBCast[]; // Array of cast members
+  crew?: TMDBCrew[]; // Array of crew members
+  networks?: string[]; // Array of network names
+  productionCompanies?: string[]; // Array of production companies
 }
 
 // Folder Interface

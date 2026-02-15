@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Folder } from "@/types";
 import { motion } from "framer-motion";
-import { Film, Grid3x3, List, Scan, Search, Tv, Plus, CheckCircleIcon } from "lucide-react";
+import { Film, Grid3x3, List, Scan, Search, Tv, Plus, CheckCircleIcon, ArrowUpDown } from "lucide-react";
 import { Dispatch, SetStateAction } from "react";
 
 interface FolderMediaHeaderProps {
@@ -18,9 +19,13 @@ interface FolderMediaHeaderProps {
   watchedMoviesCount: number;
   seriesCount: number;
   searchQuery: string;
+  sortBy: "title" | "rating" | "duration" | "year";
+  sortOrder: "asc" | "desc";
   setSearchQuery: Dispatch<SetStateAction<string>>;
   setActiveTab: Dispatch<SetStateAction<"all" | "movies" | "series" | "watched">>;
   setViewMode: Dispatch<SetStateAction<"grid" | "list">>;
+  setSortBy: Dispatch<SetStateAction<"title" | "rating" | "duration" | "year">>;
+  setSortOrder: Dispatch<SetStateAction<"asc" | "desc">>;
   scanFolder: (folderPath: string) => Promise<void>;
   onScanWithPreview?: () => void;
   onManualEntry?: () => void;
@@ -36,6 +41,10 @@ export function FolderMediaHeader({
   scanProgress,
   searchQuery,
   setSearchQuery,
+  sortBy,
+  sortOrder,
+  setSortBy,
+  setSortOrder,
   totalCount,
   unwatchedMoviesCount,
   watchedMoviesCount,
@@ -80,8 +89,8 @@ export function FolderMediaHeader({
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-4  flex  items-center gap-4">
+      {/* Search Bar and Filters */}
+      <div className="mb-4 flex items-center gap-4">
         <SidebarTrigger className="z-20" />
         <div className="relative max-w-md flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
@@ -93,7 +102,51 @@ export function FolderMediaHeader({
             className="pl-10 bg-[var(--bg-surface-light)] border-[var(--border-color)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
           />
         </div>
-        <div className="flex gap-4 items-center  justify-center z-30">
+
+        {/* Sort Controls */}
+        <div className="flex items-center gap-2">
+          <Select
+            value={`${sortBy}-${sortOrder}`}
+            onValueChange={(value) => {
+              const [field, order] = value.split("-") as [typeof sortBy, typeof sortOrder];
+              setSortBy(field);
+              setSortOrder(order);
+            }}
+          >
+            <SelectTrigger className="w-[200px] bg-[var(--bg-surface-light)] border-[var(--border-color)] text-[var(--text-primary)]">
+              <ArrowUpDown className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent className="bg-[var(--bg-surface)] border-[var(--border-color)]">
+              <SelectItem value="title-asc" className="text-[var(--text-primary)]">
+                Título (A-Z)
+              </SelectItem>
+              <SelectItem value="title-desc" className="text-[var(--text-primary)]">
+                Título (Z-A)
+              </SelectItem>
+              <SelectItem value="rating-desc" className="text-[var(--text-primary)]">
+                Avaliação (Maior)
+              </SelectItem>
+              <SelectItem value="rating-asc" className="text-[var(--text-primary)]">
+                Avaliação (Menor)
+              </SelectItem>
+              <SelectItem value="duration-desc" className="text-[var(--text-primary)]">
+                Duração (Maior)
+              </SelectItem>
+              <SelectItem value="duration-asc" className="text-[var(--text-primary)]">
+                Duração (Menor)
+              </SelectItem>
+              <SelectItem value="year-desc" className="text-[var(--text-primary)]">
+                Ano (Mais Recente)
+              </SelectItem>
+              <SelectItem value="year-asc" className="text-[var(--text-primary)]">
+                Ano (Mais Antigo)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex gap-4 items-center justify-center z-30">
           {/* View Mode Toggle */}
           <div className="   gap-1 bg-[var(--bg-surface-light)] rounded-lg p-1">
             <Button

@@ -13,6 +13,7 @@ import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check } from "luci
 import { Media, MediaType } from "@/types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { markAsWatched } from "@/services/databaseService";
 
 interface StreamingCardProps {
   media: Media;
@@ -35,7 +36,7 @@ export function StreamingCard({
   const [isHovered, setIsHovered] = useState(false);
 
   // Use the isWatched property that comes with the media data
-  const isWatched = media.isWatched ?? false;
+  const [isWatched, setIsWatched] = useState(media.isWatched ?? false);
 
   const getMediaIcon = (type: MediaType) => {
     switch (type) {
@@ -119,7 +120,7 @@ export function StreamingCard({
                         variant="outline"
                         className="text-xs px-2 py-0.5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
                       >
-                        {genre}
+                        {genre.name}
                       </Badge>
                     ))}
                   </div>
@@ -304,13 +305,14 @@ export function StreamingCard({
                   <Button
                     size="icon"
                     variant="secondary"
-                    className="w-14 h-14 rounded-full bg-[var(--bg-surface)]/90 hover:bg-[var(--bg-surface)] border-[var(--border-color)] backdrop-blur-sm"
-                    onClick={(e) => {
+                    className="w-14 h-14 rounded-full bg-green-800/30 hover:bg-[var(--bg-surface)] border-[var(--border-color)] backdrop-blur-sm"
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      onClick?.(media);
+                      await markAsWatched(media.id, media.type);
+                      setIsWatched(true);
                     }}
                   >
-                    <Info className="w-5 h-5" />
+                    <Check className="w-5 h-5" />
                   </Button>
                 </motion.div>
                 {onEdit && (
@@ -348,7 +350,7 @@ export function StreamingCard({
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 h-5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
                 >
-                  {genre}
+                  {genre.name}
                 </Badge>
               ))}
             </div>

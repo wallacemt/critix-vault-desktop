@@ -104,7 +104,7 @@ export function FolderMediaHeader({
         </div>
 
         {/* Sort Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 z-20">
           <Select
             value={`${sortBy}-${sortOrder}`}
             onValueChange={(value) => {

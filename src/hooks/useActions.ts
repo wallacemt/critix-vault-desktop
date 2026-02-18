@@ -8,8 +8,8 @@ import { useFoldersContext } from "@/context/foldersContext";
 import { getMovies, getSeries, saveMovies, saveSeries } from "@/services/databaseService";
 
 export function useActions() {
-  const { folders, addFolder, selectedFolder } = useFoldersContext();
-  const { setMovie, setSerie } = useMediaContext();
+  const { folders, addFolder, } = useFoldersContext();
+  const { setCurrentMovie, setCurrentSerie } = useMediaContext();
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -75,10 +75,10 @@ export function useActions() {
   };
   const handleMediaClick = (media: Media) => {
     if (media.type === "MOVIE") {
-      setMovie(media as Movie);
+      setCurrentMovie(media as Movie);
       router.push("/movie-details");
     } else {
-      setSerie(media as Series);
+      setCurrentSerie(media as Series);
       router.push("/series-details");
     }
   };

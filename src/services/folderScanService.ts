@@ -450,7 +450,7 @@ class FolderScanService {
         overview: apiSeason.overview,
         poster: apiSeason.poster_path ? `https://image.tmdb.org/t/p/w500${apiSeason.poster_path}` : undefined,
         episodeCount: apiSeason.episode_count || 0,
-        episodes: episodes.sort((a, b) => a.episodeNumber - b.episodeNumber),
+        episodes: episodes.sort((a, b) => a.episode_number - b.episode_number),
         available: localSeasonEpisodes.length > 0,
         downloadedEpisodes: localSeasonEpisodes.length,
       };
@@ -470,6 +470,56 @@ class FolderScanService {
           )
         : "";
 
+    // Extract genres from TMDB data
+    const genres = apiData.genres?.map((g: any) => g.name) || [];
+
+    // Extract extended TMDB fields for series
+    const imdbId = apiData.imdb_id || undefined;
+    const tagline = apiData.tagline || undefined;
+    const voteCount = apiData.vote_count || undefined;
+    const popularity = apiData.popularity || undefined;
+
+    // Extract networks and production companies
+    const networks = apiData.networks?.map((n: any) => n.name) || [];
+    const productionCompanies = apiData.production_companies?.map((p: any) => p.name) || [];
+
+    // Extract images
+    const images: string[] = [];
+    if (apiData.backdrop_path) images.push(`https://image.tmdb.org/t/p/original${apiData.backdrop_path}`);
+    if (apiData.poster_path) images.push(`https://image.tmdb.org/t/p/w500${apiData.poster_path}`);
+
+    // Extract videos
+    const videos =
+      apiData.videos?.results?.map((v: any) => ({
+        id: v.id,
+        key: v.key,
+        name: v.name,
+        type: v.type,
+        site: v.site,
+        official: v.official,
+      })) || [];
+
+    // Extract cast and crew
+    const cast =
+      apiData.credits?.cast?.slice(0, 20).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : undefined,
+        order: c.order,
+      })) || [];
+
+    const crew =
+      apiData.credits?.crew
+        ?.filter((c: any) => c.job === "Director" || c.job === "Producer" || c.job === "Writer")
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          job: c.job,
+          department: c.department,
+          profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : undefined,
+        })) || [];
+
     return {
       id: apiData.id.toString(),
       title: apiData.name || apiData.title || "Unknown",
@@ -487,10 +537,21 @@ class FolderScanService {
       filePath: folderPath,
       numberOfSeasons: apiData.number_of_seasons || seasons.length,
       numberOfEpisodes: apiData.number_of_episodes || 0,
-      seasons: seasons.filter((s) => s.seasonNumber > 0), // Exclude specials (season 0)
+      seasons: seasons.filter((s) => s.seasonNumber > 0),
       trailer: apiData.videos?.results?.[0]?.key
         ? `https://www.youtube.com/watch?v=${apiData.videos.results[0].key}`
         : undefined,
+      genres,
+      imdbId,
+      tagline,
+      voteCount,
+      popularity,
+      networks,
+      productionCompanies,
+      images,
+      videos,
+      cast,
+      crew,
     } as Series;
   }
 
@@ -595,6 +656,54 @@ class FolderScanService {
       throw new Error(`${type} API data is missing required ID field`);
     }
 
+    // Extract genres from TMDB data
+    const genres = apiData.genres?.map((g: any) => g.name) || [];
+
+    // Extract extended TMDB fields
+    const imdbId = apiData.imdb_id || undefined;
+    const tagline = apiData.tagline || undefined;
+    const budget = apiData.budget || undefined;
+    const revenue = apiData.revenue || undefined;
+    const voteCount = apiData.vote_count || undefined;
+    const popularity = apiData.popularity || undefined;
+
+    // Extract images (backdrops and posters)
+    const images: string[] = [];
+    if (apiData.backdrop_path) images.push(`https://image.tmdb.org/t/p/original${apiData.backdrop_path}`);
+    if (apiData.poster_path) images.push(`https://image.tmdb.org/t/p/w500${apiData.poster_path}`);
+
+    // Extract videos
+    const videos =
+      apiData.videos?.results?.map((v: any) => ({
+        id: v.id,
+        key: v.key,
+        name: v.name,
+        type: v.type,
+        site: v.site,
+        official: v.official,
+      })) || [];
+
+    // Extract cast and crew
+    const cast =
+      apiData.credits?.cast?.slice(0, 20).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : undefined,
+        order: c.order,
+      })) || [];
+
+    const crew =
+      apiData.credits?.crew
+        ?.filter((c: any) => c.job === "Director" || c.job === "Producer" || c.job === "Writer")
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          job: c.job,
+          department: c.department,
+          profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : undefined,
+        })) || [];
+
     const baseInfo = {
       id: apiData.id.toString(),
       title: apiData.title || apiData.name || "Unknown",
@@ -608,6 +717,17 @@ class FolderScanService {
       status: "MATCHED" as const,
       type,
       folderId,
+      genres,
+      imdbId,
+      tagline,
+      budget,
+      revenue,
+      voteCount,
+      popularity,
+      images,
+      videos,
+      cast,
+      crew,
     };
 
     if (type === "MOVIE") {

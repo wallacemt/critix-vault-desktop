@@ -2,6 +2,8 @@
  * Core type definitions for Critix Vault
  */
 
+import { EpisodeDTO, GenreDTO } from "./api";
+
 // Media Types
 export type MediaType = "MOVIE" | "SERIES" | "ANIME";
 export type MediaStatus = "UNMATCHED" | "MATCHED" | "ERROR";
@@ -12,6 +14,7 @@ export interface Media {
   type: MediaType;
   title: string;
   originalTitle?: string;
+  genres?: GenreDTO[];
   year?: number;
   poster?: string;
   backdrop?: string;
@@ -20,18 +23,19 @@ export interface Media {
   status: MediaStatus;
   filePath: string;
   folderId: string;
+  duration?: number;
   isWatched?: boolean; // Loaded from watch history
 }
 
 // Movie Interface
 export interface Movie extends Media {
   type: "MOVIE";
-  duration?: number;
+
   trailer?: string;
   releaseDate?: string;
 
   // TMDB Extended fields
-  genres?: string[]; // Array of genre names
+
   imdbId?: string;
   tagline?: string;
   budget?: number;
@@ -73,14 +77,8 @@ export interface TMDBCrew {
 }
 
 // Episode Interface
-export interface Episode {
-  id: string;
-  episodeNumber: number;
-  seasonNumber: number;
+export interface Episode extends EpisodeDTO {
   title: string;
-  overview?: string;
-  stillPath?: string;
-  airDate?: string;
   duration?: number;
   filePath?: string;
   available: boolean;
@@ -111,7 +109,6 @@ export interface Series extends Media {
   lastAirDate?: string;
 
   // TMDB Extended fields
-  genres?: string[]; // Array of genre names
   imdbId?: string;
   tagline?: string;
   voteCount?: number;

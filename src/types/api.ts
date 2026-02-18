@@ -3,7 +3,6 @@
  * These types match the backend responses
  */
 
-import { Episode } from ".";
 
 // Season Details Response
 export interface SeasonDetailsDTO {
@@ -17,7 +16,7 @@ export interface SeasonDetailsDTO {
 }
 
 // Episode Response
-export interface EpisodeDTO extends Episode {
+export interface EpisodeDTO  {
   id: string;
   name: string;
   overview: string;

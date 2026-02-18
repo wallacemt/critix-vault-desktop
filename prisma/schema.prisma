@@ -54,7 +54,6 @@ model Movie {
     folderId String
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
-    watchHistory WatchHistory[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -102,7 +101,6 @@ model Series {
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
     seasons      Season[]
-    watchHistory WatchHistory[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -157,7 +155,7 @@ model Episode {
 // Watch History Model
 model WatchHistory {
     id            String   @id @default(uuid())
-    mediaId       String
+    mediaId       String?
     mediaType     String // MOVIE, SERIES
     episodeId     String?
     seasonNumber  Int?
@@ -165,9 +163,6 @@ model WatchHistory {
     watchedAt     DateTime @default(now())
     progress      Float? // 0-100
     completed     Boolean  @default(false)
-
-    movie  Movie?  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-    series Series? @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
     @@index([mediaId])
     @@index([watchedAt])

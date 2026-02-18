@@ -55,6 +55,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "mediaId and mediaType are required" }, { status: 400 });
     }
 
+
+    console.log(`data: ${JSON.stringify({ mediaId, mediaType, progress, completed })}`);
     const db = await prisma();
 
     // Find existing entry
@@ -127,7 +129,7 @@ export async function DELETE(request: NextRequest) {
  */
 export async function getRecentlyWatched() {
   try {
-    const db = await prisma;
+    const db = await prisma();
 
     const history = await db.watchHistory.findMany({
       where: { completed: true },

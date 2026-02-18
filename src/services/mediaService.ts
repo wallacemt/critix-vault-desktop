@@ -72,7 +72,7 @@ export function parseEpisodeFilename(filename: string): EpisodeInfo | null {
     const match = filename.match(pattern);
     if (match) {
       // For Episode/Ep patterns, assume season 1
-      if (pattern.source.includes("pisode") || pattern.source.includes("p\\s")) {
+      if (pattern.source.includes("episode") || pattern.source.includes("p\\s")) {
         return {
           seasonNumber: 1,
           episodeNumber: parseInt(match[1], 10),

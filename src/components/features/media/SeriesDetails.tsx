@@ -29,21 +29,23 @@ import { cn } from "@/lib/utils";
 import { rematchSeriesEpisodes, fetchSeasonDetails } from "@/services/mediaService";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { tauriService } from "@/services/tauri";
-import { SeriesEditDialog, SeriesEditState } from "./series-edit-dialog";
+import { SeriesEditDialog, SeriesEditState } from "./_components/series-edit-dialog";
 import { storageService } from "@/services/storageService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { SeasonCard } from "./_components/season-card";
 import { getSeries, saveSeries, removeSeries } from "@/services/databaseService";
+import { useMediaContext } from "@/context/mediaContext";
+import { useActions } from "@/hooks/useActions";
+import { useRouter } from "next/navigation";
+import { CastSection } from "./_components/cast-section";
+import { TrailerModal } from "./_components/trailer-modal";
+import { ImageGallery } from "./_components/image-gallery";
 
 interface SeriesDetailsProps {
-  series: Series;
-  onBack: () => void;
-  onPlayEpisode: (episode: Episode) => void;
-  onSeriesUpdate?: (updatedSeries: Series) => void;
-  onDelete?: () => void;
+  demoMode?: boolean;
 }
 
-export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, onDelete }: SeriesDetailsProps) {
+export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   const [backdropError, setBackdropError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
@@ -54,7 +56,17 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
   const [isLoadingSeasons, setIsLoadingSeasons] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
+  const { serie: series, setCurrentSerie: onSeriesUpdate } = useMediaContext();
+  const { handlePlayEpisode: onPlayEpisode } = useActions();
+  if (!series) return null;
 
+  function onDelete() {
+    router.push("/library");
+  }
+  function onBack() {
+    router.back();
+  }
   // Task 4: Auto-fetch and save season details when series page opens
   useEffect(() => {
     const loadSeasonDetails = async () => {
@@ -158,7 +170,7 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
         setRematchStatus(`✓ ${result.matched} episódios mapeados, ${result.unmatched} não mapeados`);
 
         // Notify parent component to update series
-        if (onSeriesUpdate) {
+        if (onSeriesUpdate != null) {
           // Here you would fetch the full updated series details and update
           // For now, we'll just show success message
           setTimeout(() => {
@@ -341,18 +353,8 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
 
               {/* Actions */}
               <div className="flex gap-3 flex-wrap">
-                {series.trailer && (
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    asChild
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                  >
-                    <a href={series.trailer} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-5 h-5 mr-2" />
-                      Trailer
-                    </a>
-                  </Button>
+                {series.videos && series.videos.length > 0 && (
+                  <TrailerModal videos={series.videos} title={series.title} />
                 )}
                 <Button
                   size="lg"
@@ -412,6 +414,20 @@ export function SeriesDetails({ series, onBack, onPlayEpisode, onSeriesUpdate, o
             <p className="text-slate-500 italic">No overview available</p>
           )}
         </div>
+
+        {/* Cast Section */}
+        {series.cast && series.cast.length > 0 && (
+          <div className="mb-12">
+            <CastSection cast={series.cast} />
+          </div>
+        )}
+
+        {/* Image Gallery */}
+        {series.images && series.images.length > 0 && (
+          <div className="mb-12">
+            <ImageGallery images={series.images} title={series.title} />
+          </div>
+        )}
 
         {/* Seasons & Episodes */}
         <div>

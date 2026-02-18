@@ -151,7 +151,7 @@ export async function removeSeries(seriesId: string): Promise<void> {
 
 export type WatchHistoryInput = {
   mediaId: string;
-  mediaType: "MOVIE" | "SERIES";
+  mediaType: "MOVIE" | "SERIES" | "ANIME";
   progress?: number;
   completed?: boolean;
 };
@@ -198,7 +198,7 @@ export async function addWatchHistory(data: WatchHistoryInput): Promise<WatchHis
   return response.json();
 }
 
-export async function markAsWatched(mediaId: string, mediaType: "MOVIE" | "SERIES"): Promise<WatchHistory> {
+export async function markAsWatched(mediaId: string, mediaType: "MOVIE" | "SERIES" | "ANIME"): Promise<WatchHistory> {
   return addWatchHistory({
     mediaId,
     mediaType,

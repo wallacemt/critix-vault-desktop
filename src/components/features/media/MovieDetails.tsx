@@ -26,7 +26,10 @@ import { tauriService } from "@/services/tauri";
 import { watchHistoryService } from "@/services/watchHistoryService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { removeMovie, saveMovies } from "@/services/databaseService";
-import { MovieEditDialog } from "./movie-edit-dialog";
+import { MovieEditDialog } from "./_components/movie-edit-dialog";
+import { CastSection } from "./_components/cast-section";
+import { TrailerModal } from "./_components/trailer-modal";
+import { ImageGallery } from "./_components/image-gallery";
 import { useMediaContext } from "@/context/mediaContext";
 import { useActions } from "@/hooks/useActions";
 import { useRouter } from "next/navigation";
@@ -42,14 +45,10 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { movie: currentMovie, setMovie: setCurrentMovie } = useMediaContext();
+  const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
   const { handlePlayMovie: onPlay } = useActions();
 
   const router = useRouter();
-
-  // Use the isWatched property from the movie, or check async if not available
-  const [isWatched, setIsWatched] = useState(false);
-
   function onDelete() {
     router.push("/library");
   }
@@ -59,21 +58,6 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   }
 
   if (!currentMovie) return null;
-
-  // Sync watch status - prefer the property that comes with the movie
-  useEffect(() => {
-    const checkWatchedStatus = async () => {
-      if (currentMovie.isWatched !== undefined) {
-        // Use the property that comes with the movie (optimized)
-        setIsWatched(currentMovie.isWatched);
-      } else {
-        // Fallback: fetch from API if property not available
-        const watched = await watchHistoryService.isMovieWatched(currentMovie.id);
-        setIsWatched(watched);
-      }
-    };
-    checkWatchedStatus();
-  }, [currentMovie.id, currentMovie.isWatched]);
 
   const formatDuration = (minutes?: number) => {
     if (!minutes) return "N/A";
@@ -97,9 +81,9 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   };
 
   const handleMarkAsWatched = async () => {
-    if (isWatched) {
+    if (currentMovie.isWatched) {
       await watchHistoryService.unmarkMovieWatched(currentMovie.id);
-      setIsWatched(false);
+      await refreshMedia(currentMovie.id);
     } else {
       await watchHistoryService.markMovieWatched(
         currentMovie.id,
@@ -107,12 +91,11 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
         currentMovie.poster || "",
         currentMovie.duration,
       );
-      setIsWatched(true);
     }
   };
 
   const handlePlay = () => {
-    if (isWatched) {
+    if (currentMovie.isWatched) {
       alert("Você já assistiu este filme. Desmarque como assistido para reproduzir novamente.");
       return;
     }
@@ -181,7 +164,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
         </Button>
 
         {/* Watched Badge */}
-        {isWatched && (
+        {currentMovie.isWatched && (
           <Badge className="absolute top-6 right-6 bg-green-600 text-white border-green-500">
             <Check className="w-4 h-4 mr-1" />
             Assistido
@@ -224,7 +207,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                   <div className="flex flex-wrap gap-2 mb-3">
                     {currentMovie.genres.map((genre, index) => (
                       <Badge key={index} variant="outline" className="bg-slate-800/50 border-slate-600 text-slate-300">
-                        {genre}
+                        {genre.name}
                       </Badge>
                     ))}
                   </div>
@@ -254,75 +237,67 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 flex-wrap">
-                <Button
-                  size="lg"
-                  onClick={handlePlay}
-                  disabled={isWatched}
-                  className="bg-white text-slate-900 hover:bg-slate-100 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Play className="w-5 h-5 mr-2 fill-current" />
-                  {isWatched ? "Já Assistido" : "Assistir Agora"}
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={handleMarkAsWatched}
-                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                >
-                  {isWatched ? (
-                    <>
-                      <X className="w-5 h-5 mr-2" />
-                      Desmarcar
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-5 h-5 mr-2" />
-                      Marcar como Assistido
-                    </>
-                  )}
-                </Button>
-                {currentMovie.trailer && (
+              {!demoMode && (
+                <div className="flex gap-3 flex-wrap">
+                  <Button
+                    size="lg"
+                    onClick={handlePlay}
+                    disabled={currentMovie.isWatched}
+                    className="bg-white text-slate-900 hover:bg-slate-100 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Play className="w-5 h-5 mr-2 fill-current" />
+                    {currentMovie.isWatched ? "Já Assistido" : "Assistir Agora"}
+                  </Button>
                   <Button
                     size="lg"
                     variant="outline"
-                    asChild
+                    onClick={handleMarkAsWatched}
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
                   >
-                    <a href={currentMovie.trailer} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-5 h-5 mr-2" />
-                      Trailer
-                    </a>
+                    {currentMovie.isWatched ? (
+                      <>
+                        <X className="w-5 h-5 mr-2" />
+                        Desmarcar
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5 mr-2" />
+                        Marcar como Assistido
+                      </>
+                    )}
                   </Button>
-                )}
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={handleOpenFolder}
-                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                >
-                  <FolderOpen className="w-5 h-5 mr-2" />
-                  Abrir Pasta
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setShowEditDialog(true)}
-                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm text-blue-400 hover:text-blue-300"
-                >
-                  <Pencil className="w-5 h-5 mr-2" />
-                  Editar
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
-                >
-                  <Trash2 className="w-5 h-5 mr-2" />
-                  Excluir
-                </Button>
-              </div>
+                  {currentMovie.videos && currentMovie.videos.length > 0 && (
+                    <TrailerModal videos={currentMovie.videos} title={currentMovie.title} />
+                  )}
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={handleOpenFolder}
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                  >
+                    <FolderOpen className="w-5 h-5 mr-2" />
+                    Abrir Pasta
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setShowEditDialog(true)}
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm text-blue-400 hover:text-blue-300"
+                  >
+                    <Pencil className="w-5 h-5 mr-2" />
+                    Editar
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
+                  >
+                    <Trash2 className="w-5 h-5 mr-2" />
+                    Excluir
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -389,6 +364,14 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
             </div>
           </div>
         </div>
+
+        {/* Cast Section */}
+        {currentMovie.cast && currentMovie.cast.length > 0 && <CastSection cast={currentMovie.cast} maxDisplay={12} />}
+
+        {/* Image Gallery */}
+        {currentMovie.images && currentMovie.images.length > 1 && (
+          <ImageGallery images={currentMovie.images} title={currentMovie.title} />
+        )}
       </div>
     </div>
   );

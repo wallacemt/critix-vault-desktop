@@ -32,3 +32,32 @@ export interface TMDBTrendingPostersResponse  {
   title: string;
   subtitle: string;
 };
+
+
+// TMDB Video Interface
+export interface TMDBVideo {
+  id: string;
+  key: string;
+  name: string;
+  site: string; // YouTube, Vimeo, etc.
+  type: string; // Trailer, Teaser, Clip, etc.
+  official: boolean;
+}
+
+// TMDB Cast Interface
+export interface TMDBCast {
+  id: number;
+  name: string;
+  character: string;
+  profile_path?: string;
+  order: number;
+}
+
+// TMDB Crew Interface
+export interface TMDBCrew {
+  id: number;
+  name: string;
+  job: string;
+  department: string;
+  profilePath?: string;
+}

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { X, Save, Info, List, Film, Folder } from "lucide-react";
-import { Series, Season, Episode } from "@/types";
+import { Series, Season, Episode } from "@/types/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SeriesEditDialogProps {

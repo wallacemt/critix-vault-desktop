@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import type { Movie } from "@/types";
+import type { Movie } from "@/types/movie";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,18 @@ export async function GET(request: NextRequest) {
       folderId: movie.folderId,
       duration: movie.duration || undefined,
       trailer: movie.trailer || undefined,
+      // TMDB Extended Fields
+      genres: movie.genres ? JSON.parse(movie.genres) : undefined,
+      imdbId: movie.imdbId || undefined,
+      tagline: movie.tagline || undefined,
+      budget: movie.budget || undefined,
+      revenue: movie.revenue || undefined,
+      voteCount: movie.voteCount || undefined,
+      popularity: movie.popularity || undefined,
+      images: movie.images ? JSON.parse(movie.images) : undefined,
+      videos: movie.videos ? JSON.parse(movie.videos) : undefined,
+      cast: movie.cast ? JSON.parse(movie.cast) : undefined,
+      crew: movie.crew ? JSON.parse(movie.crew) : undefined,
     }));
 
     return NextResponse.json(transformed, { status: 200 });
@@ -67,27 +79,27 @@ export async function POST(request: NextRequest) {
     const db = await prisma();
 
     // Validate that all folders exist
-    const uniqueFolderIds = [...new Set(movies.map(m => m.folderId))]
+    const uniqueFolderIds = [...new Set(movies.map((m) => m.folderId))];
     const existingFolders = await db.folder.findMany({
       where: { id: { in: uniqueFolderIds } },
-      select: { id: true }
-    })
-    const existingFolderIds = new Set(existingFolders.map(f => f.id))
-    
+      select: { id: true },
+    });
+    const existingFolderIds = new Set(existingFolders.map((f) => f.id));
+
     // Filter out movies with invalid folder references
-    const validMovies = movies.filter(movie => {
+    const validMovies = movies.filter((movie) => {
       if (!existingFolderIds.has(movie.folderId)) {
-        console.warn(`⚠️ Skipping movie "${movie.title}" - folder ${movie.folderId} not found`)
-        return false
+        console.warn(`⚠️ Skipping movie "${movie.title}" - folder ${movie.folderId} not found`);
+        return false;
       }
-      return true
-    })
+      return true;
+    });
 
     if (validMovies.length === 0) {
       return NextResponse.json(
-        { error: 'No valid movies to save. All folder references are invalid.' },
-        { status: 400 }
-      )
+        { error: "No valid movies to save. All folder references are invalid." },
+        { status: 400 },
+      );
     }
 
     // Upsert each movie
@@ -111,6 +123,18 @@ export async function POST(request: NextRequest) {
             folderId: movie.folderId,
             duration: movie.duration,
             trailer: movie.trailer,
+            // TMDB Extended Fields
+            genres: movie.genres ? JSON.stringify(movie.genres) : null,
+            imdbId: movie.imdbId,
+            tagline: movie.tagline,
+            budget: movie.budget,
+            revenue: movie.revenue,
+            voteCount: movie.voteCount,
+            popularity: movie.popularity,
+            images: movie.images ? JSON.stringify(movie.images) : null,
+            videos: movie.videos ? JSON.stringify(movie.videos) : null,
+            cast: movie.cast ? JSON.stringify(movie.cast) : null,
+            crew: movie.crew ? JSON.stringify(movie.crew) : null,
           },
           update: {
             title: movie.title,
@@ -125,6 +149,18 @@ export async function POST(request: NextRequest) {
             filePath: movie.filePath,
             duration: movie.duration,
             trailer: movie.trailer,
+            // TMDB Extended Fields
+            genres: movie.genres ? JSON.stringify(movie.genres) : null,
+            imdbId: movie.imdbId,
+            tagline: movie.tagline,
+            budget: movie.budget,
+            revenue: movie.revenue,
+            voteCount: movie.voteCount,
+            popularity: movie.popularity,
+            images: movie.images ? JSON.stringify(movie.images) : null,
+            videos: movie.videos ? JSON.stringify(movie.videos) : null,
+            cast: movie.cast ? JSON.stringify(movie.cast) : null,
+            crew: movie.crew ? JSON.stringify(movie.crew) : null,
           },
         }),
       ),

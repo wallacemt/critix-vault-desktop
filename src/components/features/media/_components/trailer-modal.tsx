@@ -5,7 +5,7 @@
 
 "use client";
 
-import { TMDBVideo } from "@/types";
+import { TMDBVideo } from "@/types/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Play, Youtube } from "lucide-react";

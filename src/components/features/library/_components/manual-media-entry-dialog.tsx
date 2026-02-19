@@ -14,7 +14,7 @@ import { Search, Film, Tv, Loader2, FolderOpen, FileVideo } from "lucide-react";
 import { useState } from "react";
 import { apiService } from "@/services/api";
 import { getMovies, saveMovies, getSeries, saveSeries } from "@/services/databaseService";
-import { Movie, Series } from "@/types";
+import { Movie, Series } from "@/types/utils";
 import { open } from "@tauri-apps/plugin-dialog";
 import { MediaSearchResult } from "@/types/api";
 

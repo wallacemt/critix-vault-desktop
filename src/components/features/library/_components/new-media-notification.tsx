@@ -12,7 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Movie, Series } from "@/types";
+import { Movie, Series } from "@/types/utils";
 import { Film, Tv } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 

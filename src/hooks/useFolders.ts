@@ -1,11 +1,12 @@
-import { AsyncState, Folder } from "@/types";
+import {  Folder } from "@/types/folder";
 import { useCallback, useEffect, useState } from "react";
-import { 
-  getFolders as getDBFolders, 
-  addFolder as addDBFolder, 
-  removeFolder as removeDBFolder 
+import {
+  getFolders as getDBFolders,
+  addFolder as addDBFolder,
+  removeFolder as removeDBFolder,
 } from "@/services/databaseService";
 import { invoke } from "@tauri-apps/api/core";
+import { AsyncState } from "@/types/utils";
 
 /**
  * Hook to manage folders
@@ -37,15 +38,15 @@ export function useFolders() {
   const addFolder = useCallback(async () => {
     try {
       // Use Tauri dialog to select folder
-      const path = await invoke<string | null>('select_folder_dialog');
+      const path = await invoke<string | null>("select_folder_dialog");
       if (!path) return null;
 
       // Extract folder name from path
-      const folderName = path.split(/[/\\]/).pop() || 'Folder';
+      const folderName = path.split(/[/\\]/).pop() || "Folder";
 
       // Add folder to database
       const folder = await addDBFolder(path, folderName);
-      
+
       const updatedFolders = [...(state.data || []), folder];
       setState((prev) => ({
         ...prev,

@@ -2,8 +2,9 @@
  * Database API Service
  * Frontend service for making HTTP requests to the database API
  */
-
-import type { Folder, Movie, Series } from "@/types";
+import { Folder } from "@/types/folder";
+import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
 
 const API_BASE = "/api";
 
@@ -154,6 +155,9 @@ export type WatchHistoryInput = {
   mediaType: "MOVIE" | "SERIES" | "ANIME";
   progress?: number;
   completed?: boolean;
+  episodeId?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
 };
 
 export type WatchHistory = {
@@ -163,6 +167,9 @@ export type WatchHistory = {
   watchedAt: Date;
   progress: number | null;
   completed: boolean;
+  episodeId?: string | null;
+  seasonNumber?: number | null;
+  episodeNumber?: number | null;
 };
 
 export async function getWatchHistory(mediaId?: string, limit?: number): Promise<WatchHistory[]> {
@@ -230,9 +237,70 @@ export async function clearWatchHistory(mediaId: string): Promise<void> {
   }
 }
 
+export async function toggleWatchStatus(mediaId: string, mediaType: "MOVIE" | "SERIES" | "ANIME"): Promise<boolean> {
+  const isWatched = await isMediaWatched(mediaId);
+  if (isWatched) {
+    await clearWatchHistory(mediaId);
+    return false;
+  } else {
+    await markAsWatched(mediaId, mediaType);
+    return true;
+  }
+}
+
 export async function isMediaWatched(mediaId: string): Promise<boolean> {
   const history = await getWatchHistory(mediaId);
   return history.some((h) => h.completed);
+}
+
+/**
+ * Episode watch status functions
+ */
+export async function markEpisodeAsWatched(
+  seriesId: string,
+  episodeId: string,
+  seasonNumber: number,
+  episodeNumber: number,
+): Promise<WatchHistory> {
+  return addWatchHistory({
+    mediaId: seriesId,
+    mediaType: "SERIES",
+    episodeId,
+    seasonNumber,
+    episodeNumber,
+    progress: 100,
+    completed: true,
+  });
+}
+
+export async function isEpisodeWatched(
+  seriesId: string,
+  seasonNumber: number,
+  episodeNumber: number,
+): Promise<boolean> {
+  const history = await getWatchHistory(seriesId);
+  return history.some((h) => h.completed && h.seasonNumber === seasonNumber && h.episodeNumber === episodeNumber);
+}
+
+export async function toggleEpisodeWatchStatus(
+  seriesId: string,
+  episodeId: string,
+  seasonNumber: number,
+  episodeNumber: number,
+): Promise<boolean> {
+  const isWatched = await isEpisodeWatched(seriesId, seasonNumber, episodeNumber);
+
+  if (isWatched) {
+    // Delete the specific episode watch history by episodeId
+    await fetch(`${API_BASE}/watch-history?episodeId=${episodeId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
+    return false;
+  } else {
+    await markEpisodeAsWatched(seriesId, episodeId, seasonNumber, episodeNumber);
+    return true;
+  }
 }
 
 /**
@@ -250,4 +318,22 @@ export async function getAllWatchedMediaIds(): Promise<Set<string>> {
   });
 
   return watchedIds;
+}
+
+/**
+ * Get all watched episodes for a series
+ * Returns a map of "seasonNumber-episodeNumber" to isWatched boolean
+ */
+export async function getSeriesEpisodeWatchStatus(seriesId: string): Promise<Map<string, boolean>> {
+  const history = await getWatchHistory(seriesId);
+  const watchedEpisodes = new Map<string, boolean>();
+
+  history.forEach((entry) => {
+    if (entry.seasonNumber !== null && entry.episodeNumber !== null && entry.completed) {
+      const key = `${entry.seasonNumber}-${entry.episodeNumber}`;
+      watchedEpisodes.set(key, true);
+    }
+  });
+
+  return watchedEpisodes;
 }

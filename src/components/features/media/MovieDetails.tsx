@@ -20,7 +20,7 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
-import { Movie } from "@/types";
+import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
 import { watchHistoryService } from "@/services/watchHistoryService";
@@ -33,6 +33,8 @@ import { ImageGallery } from "./_components/image-gallery";
 import { useMediaContext } from "@/context/mediaContext";
 import { useActions } from "@/hooks/useActions";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { userActionService } from "@/services/userActionService";
 
 interface MovieDetailsProps {
   demoMode?: boolean;
@@ -49,6 +51,22 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const { handlePlayMovie: onPlay } = useActions();
 
   const router = useRouter();
+
+  // Save movie view action - must be before early return
+  useEffect(() => {
+    if (!currentMovie) return;
+
+    const saveView = async () => {
+      try {
+        await userActionService.saveMovieView(currentMovie.id);
+      } catch (error) {
+        console.error("Failed to save movie view:", error);
+      }
+    };
+
+    saveView();
+  }, [currentMovie?.id]);
+
   function onDelete() {
     router.push("/library");
   }
@@ -83,7 +101,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const handleMarkAsWatched = async () => {
     if (currentMovie.isWatched) {
       await watchHistoryService.unmarkMovieWatched(currentMovie.id);
-      await refreshMedia(currentMovie.id);
+      await refreshMedia(currentMovie.id, currentMovie.type);
     } else {
       await watchHistoryService.markMovieWatched(
         currentMovie.id,
@@ -133,10 +151,22 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
       throw error;
     }
   };
+
   return (
-    <div className="fixed inset-0 bg-slate-950 z-50 overflow-auto">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className="fixed inset-0 bg-slate-950 z-50 overflow-auto"
+    >
       {/* Backdrop Section */}
-      <div className="relative h-[60vh] overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="relative h-[60vh] overflow-hidden"
+      >
         {/* Backdrop Image */}
         {currentMovie.backdrop && !backdropError ? (
           <img
@@ -301,7 +331,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Edit Dialog */}
       <MovieEditDialog
@@ -321,20 +351,35 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
       />
 
       {/* Details Section */}
-      <div className="max-w-7xl mx-auto px-8 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="max-w-7xl mx-auto px-8 py-12"
+      >
         <div className="grid md:grid-cols-3 gap-12">
           {/* Overview */}
-          <div className="md:col-span-2">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            className="md:col-span-2"
+          >
             <h2 className="text-2xl font-bold text-white mb-4">Overview</h2>
             {currentMovie.overview ? (
               <p className="text-slate-300 leading-relaxed text-lg">{currentMovie.overview}</p>
             ) : (
               <p className="text-slate-500 italic">No overview available</p>
             )}
-          </div>
+          </motion.div>
 
           {/* Additional Info */}
-          <div className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
+            className="space-y-6"
+          >
             <div>
               <h3 className="text-sm font-semibold text-slate-400 mb-2">Release Date</h3>
               <p className="text-white">
@@ -362,17 +407,31 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
               <h3 className="text-sm font-semibold text-slate-400 mb-2">File Location</h3>
               <p className="text-sm text-slate-500 break-all">{currentMovie.filePath}</p>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Cast Section */}
-        {currentMovie.cast && currentMovie.cast.length > 0 && <CastSection cast={currentMovie.cast} maxDisplay={12} />}
+        {currentMovie.cast && currentMovie.cast.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+          >
+            <CastSection cast={currentMovie.cast} maxDisplay={12} />
+          </motion.div>
+        )}
 
         {/* Image Gallery */}
         {currentMovie.images && currentMovie.images.length > 1 && (
-          <ImageGallery images={currentMovie.images} title={currentMovie.title} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.6 }}
+          >
+            <ImageGallery images={currentMovie.images} title={currentMovie.title} />
+          </motion.div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

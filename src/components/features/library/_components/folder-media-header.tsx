@@ -3,10 +3,11 @@ import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Folder } from "@/types";
+import { Folder } from "@/types/folder";
 import { motion } from "framer-motion";
 import { Film, Grid3x3, List, Scan, Search, Tv, Plus, CheckCircleIcon, ArrowUpDown } from "lucide-react";
 import { Dispatch, SetStateAction } from "react";
+import { userActionService } from "@/services/userActionService";
 
 interface FolderMediaHeaderProps {
   selectedFolder: Folder;
@@ -216,7 +217,10 @@ export function FolderMediaHeader({
             <Button
               variant={activeTab === tab.key ? "default" : "ghost"}
               size="lg"
-              onClick={() => setActiveTab(tab.key as any)}
+              onClick={async () => {
+                setActiveTab(tab.key as any);
+                await userActionService.saveTabView(tab.key);
+              }}
               className={cn(
                 "relative",
                 activeTab === tab.key

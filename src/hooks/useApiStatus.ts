@@ -1,5 +1,6 @@
 import { apiService } from "@/services/api";
-import { ApiStatus, AsyncState } from "@/types";
+import { ApiStatus } from "@/types/api";
+import { AsyncState } from "@/types/utils";
 import { useCallback, useEffect, useState } from "react";
 
 /**

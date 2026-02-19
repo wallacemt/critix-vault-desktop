@@ -9,11 +9,12 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check } from "lucide-react";
-import { Media, MediaType } from "@/types";
+import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { markAsWatched } from "@/services/databaseService";
+import { toggleWatchStatus } from "@/services/databaseService";
+import { Media, MediaType } from "@/types/media";
+import { useFoldersContext } from "@/context/foldersContext";
 
 interface StreamingCardProps {
   media: Media;
@@ -34,7 +35,7 @@ export function StreamingCard({
 }: StreamingCardProps) {
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-
+  const { refreshFolders } = useFoldersContext();
   // Use the isWatched property that comes with the media data
   const [isWatched, setIsWatched] = useState(media.isWatched ?? false);
 
@@ -179,6 +180,34 @@ export function StreamingCard({
                   <Info className="w-4 h-4 mr-1" />
                   Detalhes
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={cn(
+                    "border-[var(--border-color)]",
+                    isWatched
+                      ? "bg-green-600/20 hover:bg-red-600/20 border-green-500/30"
+                      : "bg-[var(--bg-surface-light)] hover:bg-green-600/20",
+                  )}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const newStatus = await toggleWatchStatus(media.id, media.type);
+                    setIsWatched(newStatus);
+                  }}
+                  title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
+                >
+                  {isWatched ? (
+                    <>
+                      <X className="w-4 h-4 mr-1" />
+                      Assistido
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-1" />
+                      Marcar
+                    </>
+                  )}
+                </Button>
                 {onEdit && (
                   <Button
                     size="sm"
@@ -305,14 +334,23 @@ export function StreamingCard({
                   <Button
                     size="icon"
                     variant="secondary"
-                    className="w-14 h-14 rounded-full bg-green-800/30 hover:bg-[var(--bg-surface)] border-[var(--border-color)] backdrop-blur-sm"
+                    className={cn(
+                      "w-14 h-14 rounded-full backdrop-blur-sm transition-colors",
+                      isWatched
+                        ? "bg-green-600/80 hover:bg-red-600/80 border-green-400"
+                        : "bg-gray-600/30 hover:bg-green-600/80 border-gray-400",
+                    )}
                     onClick={async (e) => {
                       e.stopPropagation();
-                      await markAsWatched(media.id, media.type);
-                      setIsWatched(true);
+                      const newStatus = await toggleWatchStatus(media.id, media.type);
+                    
+
+                      refreshFolders();
+                      setIsWatched(newStatus);
                     }}
+                    title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
                   >
-                    <Check className="w-5 h-5" />
+                    {isWatched ? <X className="w-5 h-5" /> : <Check className="w-5 h-5" />}
                   </Button>
                 </motion.div>
                 {onEdit && (

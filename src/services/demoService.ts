@@ -4,7 +4,7 @@
  */
 
 import { getTrendingMedia } from "./mediaService";
-import { Media, Movie, Series } from "@/types";
+import { Media, Movie, Series } from "@/types/utils";
 
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original";
 

@@ -8,23 +8,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import {
-  ArrowLeft,
-  Play,
-  ExternalLink,
-  Calendar,
-  Star,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  XCircle,
-  Edit,
-  Loader2,
-  FolderOpen,
-  Trash2,
-} from "lucide-react";
-import { Series, Season, Episode } from "@/types";
+import { ArrowLeft, Play, Calendar, Star, Edit, Loader2, FolderOpen, Trash2 } from "lucide-react";
+import { Season, Episode } from "@/types/serie";
 import { cn } from "@/lib/utils";
 import { rematchSeriesEpisodes, fetchSeasonDetails } from "@/services/mediaService";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
@@ -32,14 +17,16 @@ import { tauriService } from "@/services/tauri";
 import { SeriesEditDialog, SeriesEditState } from "./_components/series-edit-dialog";
 import { storageService } from "@/services/storageService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
+import { EpisodeEditDialog } from "./_components/episode-edit-dialog";
 import { SeasonCard } from "./_components/season-card";
-import { getSeries, saveSeries, removeSeries } from "@/services/databaseService";
+import { getSeries, saveSeries, removeSeries, toggleEpisodeWatchStatus } from "@/services/databaseService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useActions } from "@/hooks/useActions";
 import { useRouter } from "next/navigation";
 import { CastSection } from "./_components/cast-section";
 import { TrailerModal } from "./_components/trailer-modal";
 import { ImageGallery } from "./_components/image-gallery";
+import { motion } from "framer-motion";
 
 interface SeriesDetailsProps {
   demoMode?: boolean;
@@ -56,19 +43,16 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   const [isLoadingSeasons, setIsLoadingSeasons] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
   const router = useRouter();
   const { serie: series, setCurrentSerie: onSeriesUpdate } = useMediaContext();
   const { handlePlayEpisode: onPlayEpisode } = useActions();
-  if (!series) return null;
 
-  function onDelete() {
-    router.push("/library");
-  }
-  function onBack() {
-    router.back();
-  }
+  // All hooks must be before early return
   // Task 4: Auto-fetch and save season details when series page opens
   useEffect(() => {
+    if (!series) return;
+
     const loadSeasonDetails = async () => {
       // Check if seasons are already populated with episode details
       const hasEpisodeDetails = series.seasons.some((season) => season.episodes && season.episodes.length > 0);
@@ -130,7 +114,75 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     };
 
     loadSeasonDetails();
-  }, [series.id]); // Only run when series ID changes
+  }, [series?.id]); // Only run when series ID changes
+
+  // Load episode watch status on mount
+  useEffect(() => {
+    if (!series) return;
+
+    const loadEpisodeWatchStatus = async () => {
+      try {
+        const { getSeriesEpisodeWatchStatus } = await import("@/services/databaseService");
+        const watchedEpisodes = await getSeriesEpisodeWatchStatus(series.id);
+
+        if (watchedEpisodes.size === 0) return;
+
+        // Update series with watch status for each episode
+        const updatedSeasons = series.seasons.map((season) => ({
+          ...season,
+          episodes: season.episodes.map((episode) => {
+            const key = `${episode.season_number}-${episode.episode_number}`;
+            return {
+              ...episode,
+              isWatched: watchedEpisodes.get(key) || false,
+            };
+          }),
+        }));
+
+        const updatedSeries = {
+          ...series,
+          seasons: updatedSeasons,
+        };
+
+        if (onSeriesUpdate) {
+          onSeriesUpdate(updatedSeries);
+        }
+      } catch (error) {
+        console.error("Failed to load episode watch status:", error);
+      }
+    };
+
+    // Only load watch status if we have episodes
+    const hasEpisodes = series.seasons.some((season) => season.episodes && season.episodes.length > 0);
+    if (hasEpisodes) {
+      loadEpisodeWatchStatus();
+    }
+  }, [series?.id, series?.seasons?.length]); // Re-run when series or seasons change
+
+  // Save series view action
+  useEffect(() => {
+    if (!series) return;
+
+    const saveView = async () => {
+      try {
+        const { userActionService } = await import("@/services/userActionService");
+        await userActionService.saveSeriesView(series.id);
+      } catch (error) {
+        console.error("Failed to save series view:", error);
+      }
+    };
+
+    saveView();
+  }, [series?.id]);
+
+  if (!series) return null;
+
+  function onDelete() {
+    router.push("/library");
+  }
+  function onBack() {
+    router.back();
+  }
 
   const toggleSeason = (seasonId: string) => {
     setExpandedSeasons((prev) => {
@@ -233,6 +285,78 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   };
 
+  const handleEpisodeWatchToggle = async (episode: Episode, isWatched: boolean) => {
+    try {
+      await toggleEpisodeWatchStatus(series.id, episode.id, episode.season_number, episode.episode_number);
+
+      // Update local state
+      if (onSeriesUpdate) {
+        const updatedSeasons = series.seasons.map((season) => {
+          if (season.seasonNumber === episode.season_number) {
+            return {
+              ...season,
+              episodes: season.episodes.map((ep) => {
+                if (ep.id === episode.id) {
+                  return { ...ep, isWatched };
+                }
+                return ep;
+              }),
+            };
+          }
+          return season;
+        });
+
+        onSeriesUpdate({
+          ...series,
+          seasons: updatedSeasons,
+        });
+      }
+
+      console.log(
+        `${isWatched ? "✅" : "❌"} Episode ${episode.season_number}x${episode.episode_number} watch status toggled`,
+      );
+    } catch (error) {
+      console.error("Error toggling episode watch status:", error);
+      alert("Erro ao atualizar status do episódio");
+    }
+  };
+
+  const handleEditEpisode = (episode: Episode) => {
+    setEditingEpisode(episode);
+  };
+
+  const handleSaveEpisode = async (updatedEpisode: Episode) => {
+    try {
+      // Update the episode in the series data
+      const updatedSeasons = series.seasons.map((season) => ({
+        ...season,
+        episodes: season.episodes.map((ep) => (ep.id === updatedEpisode.id ? updatedEpisode : ep)),
+      }));
+
+      const updatedSeries = {
+        ...series,
+        seasons: updatedSeasons,
+      };
+
+      // Save to database
+      const allSeries = await getSeries();
+      const updatedAllSeries = allSeries.map((s) =>
+        s.id === updatedSeries.id && s.folderId === updatedSeries.folderId ? updatedSeries : s,
+      );
+      await saveSeries(updatedAllSeries);
+
+      // Update local state
+      if (onSeriesUpdate) {
+        onSeriesUpdate(updatedSeries);
+      }
+
+      console.log(`✅ Episode updated: ${updatedEpisode.name}`);
+    } catch (error) {
+      console.error("Failed to save episode:", error);
+      throw error;
+    }
+  };
+
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
@@ -256,9 +380,20 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-on-primary-crx  z-50 overflow-auto">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className="fixed inset-0 bg-on-primary-crx  z-50 overflow-auto"
+    >
       {/* Backdrop Section */}
-      <div className="relative h-[60vh] overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="relative h-[60vh] overflow-hidden"
+      >
         {/* Backdrop Image */}
         {series.backdrop && !backdropError ? (
           <img
@@ -352,101 +487,145 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 flex-wrap">
-                {series.videos && series.videos.length > 0 && (
-                  <TrailerModal videos={series.videos} title={series.title} />
-                )}
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setIsEditModalOpen(true)}
-                  disabled={isRematching}
-                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                >
-                  {isRematching ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Edit className="w-5 h-5 mr-2" />}
-                  Editar Série
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={handleOpenFolder}
-                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                >
-                  <FolderOpen className="w-5 h-5 mr-2" />
-                  Abrir Pasta
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setIsAdvancedEditOpen(true)}
-                  className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                >
-                  <Edit className="w-5 h-5 mr-2" />
-                  Edição Avançada
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
-                >
-                  <Trash2 className="w-5 h-5 mr-2" />
-                  Excluir
-                </Button>
-                {rematchStatus && (
-                  <div className="flex items-center px-4 py-2 bg-slate-800/80 border border-slate-700 rounded-lg backdrop-blur-sm">
-                    <span className="text-sm text-white">{rematchStatus}</span>
-                  </div>
-                )}
-              </div>
+              {!demoMode && (
+                <div className="flex gap-3 flex-wrap">
+                  {series.videos && series.videos.length > 0 && (
+                    <TrailerModal videos={series.videos} title={series.title} />
+                  )}
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setIsEditModalOpen(true)}
+                    disabled={isRematching}
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                  >
+                    {isRematching ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Edit className="w-5 h-5 mr-2" />
+                    )}
+                    Editar Série
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={handleOpenFolder}
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                  >
+                    <FolderOpen className="w-5 h-5 mr-2" />
+                    Abrir Pasta
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setIsAdvancedEditOpen(true)}
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                  >
+                    <Edit className="w-5 h-5 mr-2" />
+                    Edição Avançada
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
+                  >
+                    <Trash2 className="w-5 h-5 mr-2" />
+                    Excluir
+                  </Button>
+                  {rematchStatus && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className="flex items-center px-4 py-2 bg-slate-800/80 border border-slate-700 rounded-lg backdrop-blur-sm"
+                    >
+                      <span className="text-sm text-white">{rematchStatus}</span>
+                    </motion.div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
       {/* Details Section */}
-      <div className="max-w-7xl mx-auto px-8 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="max-w-7xl mx-auto px-8 py-12"
+      >
         {/* Overview */}
-        <div className="mb-12">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="mb-12"
+        >
           <h2 className="text-2xl font-bold text-white mb-4">Overview</h2>
           {series.overview ? (
             <p className="text-slate-300 leading-relaxed text-lg max-w-4xl">{series.overview}</p>
           ) : (
             <p className="text-slate-500 italic">No overview available</p>
           )}
-        </div>
+        </motion.div>
 
         {/* Cast Section */}
         {series.cast && series.cast.length > 0 && (
-          <div className="mb-12">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
+            className="mb-12"
+          >
             <CastSection cast={series.cast} />
-          </div>
+          </motion.div>
         )}
 
         {/* Image Gallery */}
         {series.images && series.images.length > 0 && (
-          <div className="mb-12">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+            className="mb-12"
+          >
             <ImageGallery images={series.images} title={series.title} />
-          </div>
+          </motion.div>
         )}
 
         {/* Seasons & Episodes */}
-        <div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.6 }}
+        >
           <h2 className="text-2xl font-bold text-white mb-6">Seasons & Episodes</h2>
           <div className="space-y-4">
             {series.seasons
               .sort((a, b) => a.seasonNumber - b.seasonNumber)
-              .map((season) => (
-                <SeasonCard
+              .map((season, index) => (
+                <motion.div
                   key={season.id}
-                  season={season}
-                  isExpanded={expandedSeasons.has(season.id)}
-                  onToggle={() => toggleSeason(season.id)}
-                  onPlayEpisode={onPlayEpisode}
-                />
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.7 + index * 0.1 }}
+                >
+                  <SeasonCard
+                    season={season}
+                    seriesId={series.id}
+                    isExpanded={expandedSeasons.has(season.id)}
+                    onToggle={() => toggleSeason(season.id)}
+                    onPlayEpisode={onPlayEpisode}
+                    onEditEpisode={handleEditEpisode}
+                    onEpisodeWatchToggle={handleEpisodeWatchToggle}
+                  />
+                </motion.div>
               ))}
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
       {/* Edit Media Modal */}
       <EditMediaModal
         isOpen={isEditModalOpen}
@@ -472,7 +651,14 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
         media={series}
         isDeleting={isDeleting}
       />
-      ;
-    </div>
+      {/* Episode Edit Dialog */}
+      <EpisodeEditDialog
+        open={editingEpisode !== null}
+        onOpenChange={(open) => !open && setEditingEpisode(null)}
+        episode={editingEpisode}
+        seriesId={series.id}
+        onSave={handleSaveEpisode}
+      />
+    </motion.div>
   );
 }

@@ -3,7 +3,7 @@
  * Handles all HTTP communication with Critix API
  */
 
-import { ApiStatus, ScanResult } from "@/types";
+import { ApiStatus, ScanResult } from "@/types/utils";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_CRITIX_API_URL || "http://localhost:8080/";
 

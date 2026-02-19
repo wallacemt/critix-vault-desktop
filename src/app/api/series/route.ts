@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import type { Series } from "@/types";
+import type { Series } from "@/types/serie";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +54,18 @@ export async function GET(request: NextRequest) {
       numberOfEpisodes: series.numberOfEpisodes,
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
+      // TMDB Extended Fields
+      genres: series.genres ? JSON.parse(series.genres) : undefined,
+      imdbId: series.imdbId || undefined,
+      tagline: series.tagline || undefined,
+      voteCount: series.voteCount || undefined,
+      popularity: series.popularity || undefined,
+      images: series.images ? JSON.parse(series.images) : undefined,
+      videos: series.videos ? JSON.parse(series.videos) : undefined,
+      cast: series.cast ? JSON.parse(series.cast) : undefined,
+      crew: series.crew ? JSON.parse(series.crew) : undefined,
+      networks: series.networks ? JSON.parse(series.networks) : undefined,
+      productionCompanies: series.productionCompanies ? JSON.parse(series.productionCompanies) : undefined,
       seasons: series.seasons.map((season) => ({
         id: season.id,
         seasonNumber: season.seasonNumber,
@@ -65,15 +77,14 @@ export async function GET(request: NextRequest) {
         downloadedEpisodes: season.downloadedEpisodes,
         episodes: season.episodes.map((ep) => ({
           id: ep.id,
-          episodeNumber: ep.episodeNumber,
-          seasonNumber: ep.seasonNumber,
-          title: ep.title,
-          overview: ep.overview || undefined,
-          stillPath: ep.stillPath || undefined,
-          airDate: ep.airDate || undefined,
-          duration: ep.duration || undefined,
-          filePath: ep.filePath || undefined,
-          available: ep.available,
+          name: ep.title,
+          overview: ep.overview,
+          episode_number: ep.episodeNumber,
+          season_number: ep.seasonNumber,
+          still_path: ep.stillPath,
+          air_date: ep.airDate,
+          runtime: ep.duration,
+          vote_average: 0, // Not stored in database
         })),
       })),
     }));
@@ -101,27 +112,27 @@ export async function POST(request: NextRequest) {
     const db = await prisma();
 
     // Validate that all folders exist
-    const uniqueFolderIds = [...new Set(seriesList.map(s => s.folderId))]
+    const uniqueFolderIds = [...new Set(seriesList.map((s) => s.folderId))];
     const existingFolders = await db.folder.findMany({
       where: { id: { in: uniqueFolderIds } },
-      select: { id: true }
-    })
-    const existingFolderIds = new Set(existingFolders.map(f => f.id))
-    
+      select: { id: true },
+    });
+    const existingFolderIds = new Set(existingFolders.map((f) => f.id));
+
     // Filter out series with invalid folder references
-    const validSeries = seriesList.filter(series => {
+    const validSeries = seriesList.filter((series) => {
       if (!existingFolderIds.has(series.folderId)) {
-        console.warn(`⚠️ Skipping series "${series.title}" - folder ${series.folderId} not found`)
-        return false
+        console.warn(`⚠️ Skipping series "${series.title}" - folder ${series.folderId} not found`);
+        return false;
       }
-      return true
-    })
+      return true;
+    });
 
     if (validSeries.length === 0) {
       return NextResponse.json(
-        { error: 'No valid series to save. All folder references are invalid.' },
-        { status: 400 }
-      )
+        { error: "No valid series to save. All folder references are invalid." },
+        { status: 400 },
+      );
     }
 
     // Process each series
@@ -149,6 +160,18 @@ export async function POST(request: NextRequest) {
           numberOfEpisodes: series.numberOfEpisodes,
           duration: series.duration,
           trailer: series.trailer,
+          // TMDB Extended Fields
+          genres: series.genres ? JSON.stringify(series.genres) : null,
+          imdbId: series.imdbId,
+          tagline: series.tagline,
+          voteCount: series.voteCount,
+          popularity: series.popularity,
+          images: series.images ? JSON.stringify(series.images) : null,
+          videos: series.videos ? JSON.stringify(series.videos) : null,
+          cast: series.cast ? JSON.stringify(series.cast) : null,
+          crew: series.crew ? JSON.stringify(series.crew) : null,
+          networks: series.networks ? JSON.stringify(series.networks) : null,
+          productionCompanies: series.productionCompanies ? JSON.stringify(series.productionCompanies) : null,
         },
         update: {
           title: series.title,
@@ -167,6 +190,18 @@ export async function POST(request: NextRequest) {
           numberOfEpisodes: series.numberOfEpisodes,
           duration: series.duration,
           trailer: series.trailer,
+          // TMDB Extended Fields
+          genres: series.genres ? JSON.stringify(series.genres) : null,
+          imdbId: series.imdbId,
+          tagline: series.tagline,
+          voteCount: series.voteCount,
+          popularity: series.popularity,
+          images: series.images ? JSON.stringify(series.images) : null,
+          videos: series.videos ? JSON.stringify(series.videos) : null,
+          cast: series.cast ? JSON.stringify(series.cast) : null,
+          crew: series.crew ? JSON.stringify(series.crew) : null,
+          networks: series.networks ? JSON.stringify(series.networks) : null,
+          productionCompanies: series.productionCompanies ? JSON.stringify(series.productionCompanies) : null,
         },
       });
 
@@ -208,29 +243,27 @@ export async function POST(request: NextRequest) {
                 where: {
                   seasonId_episodeNumber: {
                     seasonId: seasonData.id,
-                    episodeNumber: episode.episodeNumber,
+                    episodeNumber: episode.episode_number,
                   },
                 },
                 create: {
-                  episodeNumber: episode.episodeNumber,
-                  seasonNumber: episode.seasonNumber,
-                  title: episode.title,
+                  episodeNumber: episode.episode_number,
+                  seasonNumber: episode.season_number,
+                  title: episode.name,
                   overview: episode.overview,
-                  stillPath: episode.stillPath,
-                  airDate: episode.airDate,
-                  duration: episode.duration,
-                  filePath: episode.filePath,
-                  available: episode.available,
+                  stillPath: episode.still_path,
+                  airDate: episode.air_date,
+                  duration: episode.runtime,
+                  filePath: undefined,
+                  available: false,
                   seasonId: seasonData.id,
                 },
                 update: {
-                  title: episode.title,
+                  title: episode.name,
                   overview: episode.overview,
-                  stillPath: episode.stillPath,
-                  airDate: episode.airDate,
-                  duration: episode.duration,
-                  filePath: episode.filePath,
-                  available: episode.available,
+                  stillPath: episode.still_path,
+                  airDate: episode.air_date,
+                  duration: episode.runtime,
                 },
               });
             }

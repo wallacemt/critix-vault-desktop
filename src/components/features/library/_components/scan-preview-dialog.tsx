@@ -15,15 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Folder, Film, Tv, FileVideo } from "lucide-react";
-import React, { useState } from "react";
+import  { useState } from "react";
+import { FolderPreview } from "@/types/folder";
 
-export interface FolderPreview {
-  path: string;
-  name: string;
-  fileCount: number;
-  estimatedMovies: number;
-  estimatedSeries: number;
-}
+
 
 interface ScanPreviewDialogProps {
   isOpen: boolean;

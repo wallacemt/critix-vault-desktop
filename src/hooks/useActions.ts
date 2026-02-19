@@ -1,4 +1,4 @@
-import { Episode, Media, Movie, Series } from "@/types";
+import { Episode,  Series } from "@/types/serie";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
@@ -6,9 +6,11 @@ import { folderScanService } from "@/services/folderScanService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useFoldersContext } from "@/context/foldersContext";
 import { getMovies, getSeries, saveMovies, saveSeries } from "@/services/databaseService";
+import { Media } from "@/types/media";
+import { Movie } from "@/types/movie";
 
 export function useActions() {
-  const { folders, addFolder, } = useFoldersContext();
+  const { folders, addFolder } = useFoldersContext();
   const { setCurrentMovie, setCurrentSerie } = useMediaContext();
   const router = useRouter();
   const [scanning, setScanning] = useState(false);

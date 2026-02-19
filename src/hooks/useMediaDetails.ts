@@ -1,5 +1,7 @@
 import { apiService } from "@/services/api";
-import { AsyncState, Movie, Series } from "@/types";
+import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
+import { AsyncState } from "@/types/utils";
 import { useEffect, useState } from "react";
 
 /**

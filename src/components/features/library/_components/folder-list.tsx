@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Folder } from "@/types";
+import { Folder } from "@/types/utils";
 import { motion } from "framer-motion";
 import { Folder as FolderIcon, X } from "lucide-react";
 import { getMovies, getSeries } from "@/services/databaseService";

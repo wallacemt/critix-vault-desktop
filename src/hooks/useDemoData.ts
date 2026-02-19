@@ -1,4 +1,7 @@
-import { AsyncState, Movie, Series } from "@/types";
+
+import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
+import { AsyncState } from "@/types/utils";
 import { useCallback, useState } from "react";
 
 /**

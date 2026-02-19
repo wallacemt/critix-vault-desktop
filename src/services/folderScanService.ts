@@ -5,7 +5,8 @@
 
 import { tauriService } from "./tauri";
 import { apiService } from "./api";
-import { Movie, Series, MediaType, Episode, Season } from "@/types";
+import { Movie } from "@/types/movie";
+import { Episode, Season, Series } from "@/types/serie";
 
 const MEDIA_EXTENSIONS = [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"];
 
@@ -436,8 +437,14 @@ class FolderScanService {
 
       const episodes: Episode[] = localSeasonEpisodes.map((localEp) => ({
         id: `${apiData.id}-s${localEp.seasonNumber}e${localEp.episodeNumber}`,
-        episodeNumber: localEp.episodeNumber,
-        seasonNumber: localEp.seasonNumber,
+        name: `Episódio ${localEp.episodeNumber}`,
+        overview: "",
+        episode_number: localEp.episodeNumber,
+        season_number: localEp.seasonNumber,
+        still_path: "",
+        air_date: "",
+        runtime: 0,
+        vote_average: 0,
         title: `Episódio ${localEp.episodeNumber}`,
         filePath: localEp.filePath,
         available: true,

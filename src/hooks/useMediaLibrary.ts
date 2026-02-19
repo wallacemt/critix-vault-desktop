@@ -9,7 +9,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { folderScanService } from "@/services/folderScanService";
 import { apiService } from "@/services/api";
-import { Movie, Series, Media } from "@/types";
 import { useFoldersContext } from "@/context/foldersContext";
 import {
   getMovies,
@@ -20,6 +19,9 @@ import {
   saveSeries,
   getAllWatchedMediaIds,
 } from "@/services/databaseService";
+import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
+import { Media } from "@/types/media";
 
 /**
  * Hook to manage media library for a specific folder
@@ -64,16 +66,45 @@ export function useMediaLibrary(folderId: string | null) {
           isWatched: watchedIds.has(movie.id),
         }));
 
-      const filteredSeries = allSeries
+      // For series, we need to check if ALL episodes are watched, not just ANY episode
+      const { getWatchHistory } = await import("@/services/databaseService");
+
+      const filteredSeriesPromises = allSeries
         .filter((s) => {
           const match = s.folderId === folderId;
           if (match) console.log("✅ Series matched:", s.title);
           return match;
         })
-        .map((series) => ({
-          ...series,
-          isWatched: watchedIds.has(series.id),
-        }));
+        .map(async (seriesItem) => {
+          // Calculate total episodes in the series
+          const totalEpisodes = seriesItem.seasons.reduce((sum, season) => sum + (season.episodes?.length || 0), 0);
+
+          // If no episodes, can't be watched
+          if (totalEpisodes === 0) {
+            return {
+              ...seriesItem,
+              isWatched: false,
+            };
+          }
+
+          // Get watch history for this series
+          const watchHistory = await getWatchHistory(seriesItem.id);
+
+          // Count unique watched episodes
+          const watchedEpisodes = new Set(
+            watchHistory.filter((h) => h.completed && h.episodeId).map((h) => `${h.seasonNumber}-${h.episodeNumber}`),
+          );
+
+          // Series is watched only if ALL episodes are watched
+          const isWatched = watchedEpisodes.size === totalEpisodes && totalEpisodes > 0;
+
+          return {
+            ...seriesItem,
+            isWatched,
+          };
+        });
+
+      const filteredSeries = await Promise.all(filteredSeriesPromises);
 
       console.log("🎬 Loaded movies for folder:", filteredMovies.length);
       console.log("📺 Loaded series for folder:", filteredSeries.length);

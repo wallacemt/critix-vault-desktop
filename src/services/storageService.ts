@@ -2,7 +2,7 @@
  * Storage Service for Critix Vault
  *
  * ⚠️ DEPRECATED - Use databaseService.ts instead
- * 
+ *
  * This service is now deprecated and will be removed in a future version.
  * All storage operations have been migrated to SQLite via databaseService.ts
  *
@@ -14,7 +14,7 @@
  * @deprecated Use databaseService.ts for all storage operations
  */
 
-import { Folder, Movie, Series } from "@/types";
+import { Folder, Movie, Series } from "@/types/utils";
 import { tauriService, AppSettings, CacheInfo } from "./tauri";
 
 // Legacy storage keys (for migration purposes)

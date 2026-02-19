@@ -1,7 +1,7 @@
 "use client";
 import { DemoLibrary } from "@/components/features/demo/DemoLibrary";
 import { useActions } from "@/hooks/useActions";
-import { Movie, Series } from "@/types";
+import { Movie, Series } from "@/types/utils";
 export default function DemoPage() {
   const { handleBack, handleMediaClick, handlePlayMovie, handlePlayEpisode } = useActions();
   return (

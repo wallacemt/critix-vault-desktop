@@ -5,7 +5,7 @@
 
 "use client";
 
-import { TMDBCast } from "@/types";
+import { TMDBCast } from "@/types/tmdb";
 import { Card } from "@/components/ui/card";
 import { User } from "lucide-react";
 import { motion } from "framer-motion";
@@ -45,9 +45,9 @@ function CastCard({ actor, index }: { actor: TMDBCast; index: number }) {
       <Card className="bg-[var(--bg-surface)] border-[var(--border-color)] overflow-hidden hover:border-[var(--color-primary)]/50 transition-all duration-300">
         {/* Profile Photo */}
         <div className="aspect-[2/3] relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900">
-          {actor.profilePath && !imageError ? (
+          {actor.profile_path && !imageError ? (
             <img
-              src={actor.profilePath}
+              src={actor.profile_path}
               alt={actor.name}
               className="w-full h-full object-cover"
               onError={() => setImageError(true)}

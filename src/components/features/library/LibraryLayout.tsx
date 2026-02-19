@@ -4,18 +4,14 @@
  */
 
 "use client";
-
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Folder, FolderPlus, X, Film, Tv, AlertCircle, Scan, Grid3x3, List, Search, Settings } from "lucide-react";
-import { Media, Movie, Series } from "@/types";
-import { useMediaLibrary } from "@/hooks/useMediaLibrary";
-import { useFoldersContext } from "@/context/foldersContext";
+import { Folder, FolderPlus, Scan, Settings } from "lucide-react";
+import { Media } from "@/types/media";
 import { StreamingGrid } from "./_components/streaming-grid";
 import { MediaGridSkeleton } from "@/components/ui/media-skeleton";
 import { InlineError } from "@/components/ui/error-state";
 import { motion, AnimatePresence } from "framer-motion";
-import gsap from "gsap";
+
 import { FolderList } from "./_components/folder-list";
 import { FolderMediaHeader } from "./_components/folder-media-header";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
@@ -33,10 +29,9 @@ import {
   SidebarProvider,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { folderScanService, type FolderPreview } from "@/services/folderScanService";
 import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
 import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
-import { watchHistoryService } from "@/services/watchHistoryService";
+import { useLibraryLeyout } from "@/hooks/useLibraryLeyout";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -45,181 +40,47 @@ interface LibraryLayoutProps {
 }
 
 export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: LibraryLayoutProps) {
-  const { folders, selectedFolder, selectFolder, removeFolder } = useFoldersContext();
-  const [activeTab, setActiveTab] = useState<"all" | "movies" | "series" | "watched">("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"title" | "rating" | "duration" | "year">("title");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [editingMedia, setEditingMedia] = useState<Media | null>(null);
-  const [newMediaNotification, setNewMediaNotification] = useState<{ movies: Movie[]; series: Series[] } | null>(null);
-  const [isAutoScanning, setIsAutoScanning] = useState(false);
-  const [showScanPreview, setShowScanPreview] = useState(false);
-  const [folderPreviews, setFolderPreviews] = useState<FolderPreview[]>([]);
-  const [showManualEntry, setShowManualEntry] = useState(false);
-
-  const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia, refreshMedia } =
-    useMediaLibrary(selectedFolder?.id || null);
-
-  useEffect(() => {
-    const runAutoScan = async () => {
-      if (folders.length === 0) return;
-
-      // Check if auto-scan was already done in this session
-      const autoScanDone = sessionStorage.getItem("autoScanDone");
-      if (autoScanDone) return;
-
-      setIsAutoScanning(true);
-      console.log("🚀 Starting auto-scan on startup...");
-
-      try {
-        // const stats = await folderScanService.autoScanFolders(undefined, (newMedia) => {
-        //   // Show notification when new media is found
-        //   setNewMediaNotification(newMedia);
-        // });
-        // console.log("✅ Auto-scan complete:", stats);
-        // sessionStorage.setItem("autoScanDone", "true");
-      } catch (error) {
-        console.error("Auto-scan failed:", error);
-      } finally {
-        setIsAutoScanning(false);
-      }
-    };
-
-    runAutoScan();
-  }, [folders]);
-
-  // Debug log
-  useEffect(() => {
-    console.log("📚 LibraryLayout - Folders:", folders);
-    console.log("📚 LibraryLayout - Selected Folder:", selectedFolder);
-  }, [folders, selectedFolder]);
-
-  useEffect(() => {
-    gsap.from(".folder-item", {
-      x: -30,
-      opacity: 0,
-      stagger: 0.1,
-      duration: 0.5,
-      ease: "power2.out",
-    });
-  }, [folders]);
-
-  const handleFolderSelect = (folder: typeof selectedFolder) => {
-    selectFolder(folder);
-    setActiveTab("all");
-    setSearchQuery("");
-  };
-
-  const handleEditMedia = (media: Media) => {
-    setEditingMedia(media);
-  };
-
-  const handleUpdateMedia = async (mediaId: string, mediaType: "movie" | "tv") => {
-    if (!editingMedia) return;
-
-    await updateMedia(editingMedia, mediaId, mediaType);
-    setEditingMedia(null);
-  };
-
-  const handleScanWithPreview = async () => {
-    if (!folders.length) return;
-
-    // Generate preview for all folders
-    const previews = await Promise.all(
-      folders.map(async (folder) => {
-        const preview = await folderScanService.previewFolder(folder.path);
-        return {
-          path: folder.path,
-          name: folder.name,
-          ...preview,
-        };
-      }),
-    );
-
-    setFolderPreviews(previews);
-    setShowScanPreview(true);
-  };
-
-  const handleConfirmScan = async (selectedPaths: string[]) => {
-    // Scan only selected folders
-    for (const path of selectedPaths) {
-      const folder = folders.find((f) => f.path === path);
-      if (folder) {
-        await scanFolder(folder.path);
-      }
-    }
-    refreshMedia();
-  };
-
-  const handleManualEntrySuccess = () => {
-    refreshMedia();
-  };
-
-  const filteredMedia = () => {
-    let allMedia: Media[] = [];
-
-    switch (activeTab) {
-      case "movies":
-        allMedia = movies.filter((media) => !media.isWatched);
-        break;
-      case "series":
-        allMedia = series;
-        break;
-      case "watched":
-        allMedia = movies.filter((media) => media.isWatched);
-        break;
-      default:
-        allMedia = [...movies, ...series].filter((media) => !media.isWatched);
-    }
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      allMedia = allMedia.filter(
-        (media) => media.title.toLowerCase().includes(query) || media.originalTitle?.toLowerCase().includes(query),
-      );
-    }
-
-    // Apply sorting
-    allMedia.sort((a, b) => {
-      let compareA: any;
-      let compareB: any;
-
-      switch (sortBy) {
-        case "title":
-          compareA = a.title.toLowerCase();
-          compareB = b.title.toLowerCase();
-          break;
-        case "rating":
-          compareA = a.rating || 0;
-          compareB = b.rating || 0;
-          break;
-        case "duration":
-          compareA = a.duration || 0;
-          compareB = b.duration || 0;
-          break;
-        case "year":
-          compareA = a.year || 0;
-          compareB = b.year || 0;
-          break;
-        default:
-          return 0;
-      }
-
-      if (compareA < compareB) return sortOrder === "asc" ? -1 : 1;
-      if (compareA > compareB) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return allMedia;
-  };
-
-  // Count unwatched media
-  const unwatchedMovies = movies.filter((movie) => !movie.isWatched);
-  const watchedMovies = movies.filter((movie) => movie.isWatched);
-  const totalCount = unwatchedMovies.length + series.length;
-
+  const {
+    folders,
+    selectedFolder,
+    activeTab,
+    setActiveTab,
+    searchQuery,
+    setSearchQuery,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
+    filteredMedia,
+    handleFolderSelect,
+    handleEditMedia,
+    handleUpdateMedia,
+    handleScanWithPreview,
+    handleConfirmScan,
+    handleManualEntrySuccess,
+    isAutoScanning,
+    viewMode,
+    setViewMode,
+    scanFolder,
+    scanning,
+    scanProgress,
+    totalCount,
+    watchedMovies,
+    setShowManualEntry,
+    removeFolder,
+    unwatchedMovies,
+    series,
+    loading,
+    error,
+    newMediaNotification,
+    editingMedia,
+    setEditingMedia,
+    showScanPreview,
+    setShowScanPreview,
+    folderPreviews,
+    showManualEntry,
+    setNewMediaNotification,
+  } = useLibraryLeyout();
   return (
     <SidebarProvider defaultOpen={true}>
       {/* ShadCN Sidebar */}

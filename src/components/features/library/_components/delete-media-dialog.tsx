@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Media } from "@/types";
+import { Media } from "@/types/utils";
 import { Trash2 } from "lucide-react";
 
 interface DeleteMediaDialogProps {

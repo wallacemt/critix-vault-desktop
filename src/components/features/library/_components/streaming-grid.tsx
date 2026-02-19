@@ -5,7 +5,7 @@
 
 "use client";
 
-import { Media } from "@/types";
+import { Media } from "@/types/utils";
 import { StreamingCard } from "./streaming-card";
 import { motion } from "framer-motion";
 import { Film, Tv } from "lucide-react";

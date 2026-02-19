@@ -18,7 +18,7 @@ interface SplashScreenProps {
 
 export function SplashScreen({ onReady }: SplashScreenProps) {
   const { data: status, loading, error, retry } = useApiStatus();
-  const { folders, isLoading: foldersLoading } = useFoldersContext();
+  const {  isLoading: foldersLoading } = useFoldersContext();
   const [autoRetryCount, setAutoRetryCount] = useState(0);
 
   useEffect(() => {

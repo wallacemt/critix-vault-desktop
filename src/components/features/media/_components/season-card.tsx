@@ -1,18 +1,29 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Episode, Season } from "@/types";
+import { Episode, Season } from "@/types/serie";
 import { CheckCircle2, ChevronDown, ChevronUp, Play, XCircle } from "lucide-react";
 import { useState } from "react";
 import { EpisodeCard } from "./episode-card";
 
 interface SeasonCardProps {
   season: Season;
+  seriesId: string;
   isExpanded: boolean;
   onToggle: () => void;
   onPlayEpisode: (episode: Episode) => void;
+  onEditEpisode?: (episode: Episode) => void;
+  onEpisodeWatchToggle?: (episode: Episode, isWatched: boolean) => void;
 }
 
-export function SeasonCard({ season, isExpanded, onToggle, onPlayEpisode }: SeasonCardProps) {
+export function SeasonCard({
+  season,
+  seriesId,
+  isExpanded,
+  onToggle,
+  onPlayEpisode,
+  onEditEpisode,
+  onEpisodeWatchToggle,
+}: SeasonCardProps) {
   const [posterError, setPosterError] = useState(false);
 
   return (
@@ -68,11 +79,20 @@ export function SeasonCard({ season, isExpanded, onToggle, onPlayEpisode }: Seas
         <div className="border-t border-slate-800">
           <div className="p-4 space-y-2">
             {season.episodes.length === 0 ? (
-              <p className="text-center text-slate-500 py-8">No episodes available</p>
+              <p className="text-center text-slate-500 py-8">Nenhum Episodio Disponivel</p>
             ) : (
               season.episodes
-                .sort((a, b) => a.episodeNumber - b.episodeNumber)
-                .map((episode) => <EpisodeCard key={episode.id} episode={episode} onPlay={onPlayEpisode} />)
+                .sort((a, b) => a.episode_number - b.episode_number)
+                .map((episode) => (
+                  <EpisodeCard
+                    key={episode.id}
+                    episode={episode}
+                    seriesId={seriesId}
+                    onPlay={onPlayEpisode}
+                    onEdit={onEditEpisode}
+                    onWatchToggle={onEpisodeWatchToggle}
+                  />
+                ))
             )}
           </div>
         </div>

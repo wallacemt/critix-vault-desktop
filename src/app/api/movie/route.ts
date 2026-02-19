@@ -48,6 +48,18 @@ export async function GET(request: NextRequest) {
       duration: movie.duration || undefined,
       trailer: movie.trailer || undefined,
       isWatched: isWatched !== null,
+      // TMDB Extended Fields
+      genres: movie.genres ? JSON.parse(movie.genres) : undefined,
+      imdbId: movie.imdbId || undefined,
+      tagline: movie.tagline || undefined,
+      budget: movie.budget || undefined,
+      revenue: movie.revenue || undefined,
+      voteCount: movie.voteCount || undefined,
+      popularity: movie.popularity || undefined,
+      images: movie.images ? JSON.parse(movie.images) : undefined,
+      videos: movie.videos ? JSON.parse(movie.videos) : undefined,
+      cast: movie.cast ? JSON.parse(movie.cast) : undefined,
+      crew: movie.crew ? JSON.parse(movie.crew) : undefined,
     };
 
     return NextResponse.json(transformed, { status: 200 });

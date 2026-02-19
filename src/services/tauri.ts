@@ -10,7 +10,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { Folder, Movie, Series } from "@/types";
+import { Folder, Movie, Series } from "@/types/utils";
 import { folderScanService } from "./folderScanService";
 
 // Types for Rust backend communication

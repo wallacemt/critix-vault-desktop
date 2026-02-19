@@ -9,19 +9,28 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/watch-history?mediaId={optional}&limit={optional}
- * Get watch history for specific media or recent watches
+ * GET /api/watch-history?mediaId={optional}&episodeId={optional}&limit={optional}
+ * Get watch history for specific media, episode, or recent watches
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const mediaId = searchParams.get("mediaId");
+    const episodeId = searchParams.get("episodeId");
     const limit = parseInt(searchParams.get("limit") || "100");
 
     const db = await prisma();
 
+    // Build where clause based on parameters
+    const where: any = {};
+    if (episodeId) {
+      where.episodeId = episodeId;
+    } else if (mediaId) {
+      where.mediaId = mediaId;
+    }
+
     const history = await db.watchHistory.findMany({
-      where: mediaId ? { mediaId } : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: { watchedAt: "desc" },
       take: limit,
     });
@@ -30,6 +39,9 @@ export async function GET(request: NextRequest) {
       id: h.id,
       mediaId: h.mediaId,
       mediaType: h.mediaType,
+      episodeId: h.episodeId,
+      seasonNumber: h.seasonNumber,
+      episodeNumber: h.episodeNumber,
       watchedAt: h.watchedAt,
       progress: h.progress,
       completed: h.completed,
@@ -45,23 +57,27 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/watch-history
  * Add or update watch history
- * Body: { mediaId: string, mediaType: 'MOVIE' | 'SERIES', progress?: number, completed?: boolean }
+ * Body: { mediaId: string, mediaType: 'MOVIE' | 'SERIES', episodeId?: string, seasonNumber?: number, episodeNumber?: number, progress?: number, completed?: boolean }
  */
 export async function POST(request: NextRequest) {
   try {
-    const { mediaId, mediaType, progress, completed } = await request.json();
+    const { mediaId, mediaType, episodeId, seasonNumber, episodeNumber, progress, completed } = await request.json();
 
     if (!mediaId || !mediaType) {
       return NextResponse.json({ error: "mediaId and mediaType are required" }, { status: 400 });
     }
 
-
-    console.log(`data: ${JSON.stringify({ mediaId, mediaType, progress, completed })}`);
+    console.log(
+      `data: ${JSON.stringify({ mediaId, mediaType, episodeId, seasonNumber, episodeNumber, progress, completed })}`,
+    );
     const db = await prisma();
 
     // Find existing entry
+    // For episodes, match by episodeId; for movies/series, match by mediaId
+    const whereClause = episodeId ? { episodeId } : { mediaId, episodeId: null };
+
     const existing = await db.watchHistory.findFirst({
-      where: { mediaId },
+      where: whereClause,
       orderBy: { watchedAt: "desc" },
     });
 
@@ -83,6 +99,9 @@ export async function POST(request: NextRequest) {
         data: {
           mediaId,
           mediaType,
+          episodeId: episodeId || null,
+          seasonNumber: seasonNumber || null,
+          episodeNumber: episodeNumber || null,
           progress: progress || null,
           completed: completed || false,
           watchedAt: new Date(),
@@ -98,23 +117,31 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE /api/watch-history?mediaId={mediaId}
- * Clear watch history for a media
+ * DELETE /api/watch-history?mediaId={mediaId}&episodeId={optional}
+ * Clear watch history for a media or specific episode
  */
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const mediaId = searchParams.get("mediaId");
+    const episodeId = searchParams.get("episodeId");
 
-    if (!mediaId) {
-      return NextResponse.json({ error: "Media ID is required" }, { status: 400 });
+    if (!mediaId && !episodeId) {
+      return NextResponse.json({ error: "mediaId or episodeId is required" }, { status: 400 });
     }
 
     const db = await prisma();
 
-    await db.watchHistory.deleteMany({
-      where: { mediaId },
-    });
+    // Delete by episodeId if provided, otherwise by mediaId
+    if (episodeId) {
+      await db.watchHistory.deleteMany({
+        where: { episodeId },
+      });
+    } else if (mediaId) {
+      await db.watchHistory.deleteMany({
+        where: { mediaId },
+      });
+    }
 
     return NextResponse.json({ message: "Watch history cleared successfully" }, { status: 200 });
   } catch (error) {

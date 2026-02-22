@@ -54,7 +54,6 @@ model Movie {
     folderId String
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
-
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
@@ -100,7 +99,7 @@ model Series {
     folderId String
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
-    seasons      Season[]
+    seasons Season[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -167,4 +166,18 @@ model WatchHistory {
     @@index([mediaId])
     @@index([watchedAt])
     @@map("watch_history")
+}
+
+// User Action History Model
+model UserActionHistory {
+    id         String   @id @default(uuid())
+    actionType String // FOLDER_VIEW, MOVIE_VIEW, SERIES_VIEW , TAB_VIEW
+    folderId   String?
+    mediaId    String?
+    mediaType  String? // MOVIE, SERIES
+    timestamp  DateTime @default(now())
+
+    @@index([actionType])
+    @@index([timestamp])
+    @@map("user_action_history")
 }

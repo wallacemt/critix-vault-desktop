@@ -4,6 +4,7 @@ import { Play, Check, X, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getImageUrl } from "@/utils/mediaUtils";
 
 interface EpisodeCardProps {
   episode: Episode;
@@ -46,7 +47,7 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
       >
         {episode.still_path && !stillError ? (
           <img
-            src={episode.still_path}
+            src={getImageUrl(episode.still_path)}
             alt={episode.title}
             className="w-full h-full object-cover"
             onError={() => setStillError(true)}

@@ -1,9 +1,13 @@
+"use client";
 /**
  * Cast Section Component
  * Displays movie/series cast with photos and character names
  */
-
-"use client";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Navigation, FreeMode, Autoplay } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/navigation";
+import "swiper/css/free-mode";
 
 import { TMDBCast } from "@/types/tmdb";
 import { Card } from "@/components/ui/card";
@@ -23,12 +27,26 @@ export function CastSection({ cast, maxDisplay = 12 }: CastSectionProps) {
 
   return (
     <section className="py-8">
-      <h2 className="text-2xl font-bold text-white mb-6">Elenco Principal</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <h2 className="text-2xl font-bold font-[moonjelly-bold] text-white mb-6">Elenco Principal</h2>
+      <Swiper
+        modules={[Navigation, FreeMode, Autoplay]}
+        navigation
+        autoplay={{ delay: 3000 }}
+        freeMode
+        spaceBetween={16}
+        slidesPerView={4}
+        breakpoints={{
+          640: { slidesPerView: 3 },
+          768: { slidesPerView: 4 },
+          1024: { slidesPerView: 5 },
+        }}
+      >
         {displayCast.map((actor, index) => (
-          <CastCard key={actor.id || index} actor={actor} index={index} />
+          <SwiperSlide key={actor.id || index}>
+            <CastCard actor={actor} index={index} />
+          </SwiperSlide>
         ))}
-      </div>
+      </Swiper>
     </section>
   );
 }
@@ -42,7 +60,7 @@ function CastCard({ actor, index }: { actor: TMDBCast; index: number }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
     >
-      <Card className="bg-[var(--bg-surface)] border-[var(--border-color)] overflow-hidden hover:border-[var(--color-primary)]/50 transition-all duration-300">
+      <Card className="bg-[var(--bg-surface)] border-[var(--border-color)] overflow-hidden hover:border-[var(--color-primary)]/50 transition-all duration-300 rounded-2xl">
         {/* Profile Photo */}
         <div className="aspect-[2/3] relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900">
           {actor.profile_path && !imageError ? (
@@ -51,7 +69,6 @@ function CastCard({ actor, index }: { actor: TMDBCast; index: number }) {
               alt={actor.name}
               className="w-full h-full object-cover"
               onError={() => setImageError(true)}
-              loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

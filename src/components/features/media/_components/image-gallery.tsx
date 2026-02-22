@@ -37,10 +37,10 @@ export function ImageGallery({ images, title }: ImageGalleryProps) {
   return (
     <>
       <section className="py-8">
-        <h2 className="text-2xl font-bold text-white mb-6">Galeria de Imagens</h2>
+        <h2 className="text-2xl font-[moonjelly-bold] text-white mb-6">Galeria de Imagens</h2>
 
         {/* Main Carousel */}
-        <div className="relative aspect-video rounded-lg overflow-hidden bg-slate-900">
+        <div className="relative aspect-video mx-auto max-h-[30em] rounded-lg overflow-hidden bg-slate-900">
           <AnimatePresence mode="wait">
             <motion.img
               key={currentIndex}
@@ -114,7 +114,7 @@ export function ImageGallery({ images, title }: ImageGalleryProps) {
 
       {/* Fullscreen Modal */}
       <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black border-0">
+        <DialogContent showCloseButton={false} className=" bg-black border-0 inset-0 w-full h-full max-w-none translate-x-0 translate-y-0 rounded-none lg:top-[50%] lg:left-[50%] lg:max-w-6xl lg:translate-x-[-50%] lg:translate-y-[-50%] lg:max-h-[90vh] lg:rounded-lg p-0 overflow-hidden flex flex-col overflow-y-auto">
           <div className="relative w-full h-[95vh] flex items-center justify-center">
             <img
               src={images[currentIndex]}

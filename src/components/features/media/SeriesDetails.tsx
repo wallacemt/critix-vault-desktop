@@ -15,7 +15,7 @@ import { rematchSeriesEpisodes, fetchSeasonDetails } from "@/services/mediaServi
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { tauriService } from "@/services/tauri";
 import { SeriesEditDialog, SeriesEditState } from "./_components/series-edit-dialog";
-import { storageService } from "@/services/storageService";
+
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { EpisodeEditDialog } from "./_components/episode-edit-dialog";
 import { SeasonCard } from "./_components/season-card";
@@ -277,7 +277,6 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
 
   const handleSaveSeriesEdits = async (edits: SeriesEditState) => {
     try {
-      storageService.saveSeriesEdits(series.id, edits);
       alert("Alterações salvas com sucesso!");
     } catch (error) {
       console.error("Error saving edits:", error);
@@ -452,9 +451,19 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                 >
                   {series.type === "ANIME" ? "Anime" : "Series"}
                 </Badge>
-                <h1 className="text-5xl font-bold text-white mb-2">{series.title}</h1>
+                <h1 className="text-5xl font-[moonjelly-bold] text-white mb-2 ">{series.title}</h1>
                 {series.originalTitle && series.originalTitle !== series.title && (
                   <p className="text-lg text-slate-400 mb-3">{series.originalTitle}</p>
+                )}
+                {series.tagline && <p className="text-md text-slate-300 italic mb-3">{series.tagline}</p>}
+                {series.genres && series.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {series.genres.map((genre, index) => (
+                      <Badge key={index} variant="outline" className="bg-slate-800/50 border-slate-600 text-slate-300">
+                        {genre.name}
+                      </Badge>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -554,47 +563,35 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="max-w-7xl mx-auto px-8 py-12"
+        className="max-w-7xl mx-auto px-8 py-12 "
       >
-        {/* Overview */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-          className="mb-12"
-        >
-          <h2 className="text-2xl font-bold text-white mb-4">Overview</h2>
-          {series.overview ? (
-            <p className="text-slate-300 leading-relaxed text-lg max-w-4xl">{series.overview}</p>
-          ) : (
-            <p className="text-slate-500 italic">No overview available</p>
+        <div className="grid grid-cols-2 gap-12">
+          {/* Overview */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            className="mb-12"
+          >
+            <h2 className="text-2xl font-[moonjelly-bold] text-white mb-4">Overview</h2>
+            {series.overview ? (
+              <p className="text-slate-300 font-sans leading-relaxed text-lg max-w-4xl">{series.overview}</p>
+            ) : (
+              <p className="text-slate-500 italic">Sem resumo disponivel</p>
+            )}
+          </motion.div>
+          {/* Cast Section */}
+          {series.cast && series.cast.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.4 }}
+              className="mb-12"
+            >
+              <CastSection cast={series.cast} />
+            </motion.div>
           )}
-        </motion.div>
-
-        {/* Cast Section */}
-        {series.cast && series.cast.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-            className="mb-12"
-          >
-            <CastSection cast={series.cast} />
-          </motion.div>
-        )}
-
-        {/* Image Gallery */}
-        {series.images && series.images.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.5 }}
-            className="mb-12"
-          >
-            <ImageGallery images={series.images} title={series.title} />
-          </motion.div>
-        )}
-
+        </div>
         {/* Seasons & Episodes */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -625,6 +622,17 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
               ))}
           </div>
         </motion.div>
+        {/* Image Gallery */}
+        {series.images && series.images.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+            className="mb-12"
+          >
+            <ImageGallery images={series.images} title={series.title} />
+          </motion.div>
+        )}
       </motion.div>
       {/* Edit Media Modal */}
       <EditMediaModal

@@ -57,7 +57,8 @@ export async function GET(request: NextRequest) {
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
       // TMDB Extended Fields
-      genres: series.genres ? JSON.parse(series.genres) : undefined,
+      genres: series.genres ? JSON.parse(series.genres).map(({ name }: { name: string }) => ({ name })) : undefined,
+
       imdbId: series.imdbId || undefined,
       tagline: series.tagline || undefined,
       voteCount: series.voteCount || undefined,

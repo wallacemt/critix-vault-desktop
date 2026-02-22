@@ -4,6 +4,7 @@ import { Episode, Season } from "@/types/serie";
 import { CheckCircle2, ChevronDown, ChevronUp, Play, XCircle } from "lucide-react";
 import { useState } from "react";
 import { EpisodeCard } from "./episode-card";
+import { getImageUrl } from "@/utils/mediaUtils";
 
 interface SeasonCardProps {
   season: Season;
@@ -34,7 +35,7 @@ export function SeasonCard({
         <div className="w-24 aspect-[2/3] rounded overflow-hidden flex-shrink-0 bg-slate-800">
           {season.poster && !posterError ? (
             <img
-              src={season.poster}
+              src={getImageUrl(season.poster)}
               alt={season.name}
               className="w-full h-full object-cover"
               onError={() => setPosterError(true)}

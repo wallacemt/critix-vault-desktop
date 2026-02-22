@@ -5,7 +5,7 @@
 
 "use client";
 
-import { TMDBVideo } from "@/types/utils";
+import { TMDBVideo } from "@/types/tmdb";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Play, Youtube } from "lucide-react";
@@ -53,7 +53,7 @@ export function TrailerModal({ videos, title }: TrailerModalProps) {
 
       {/* Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl bg-[var(--bg-surface)] border-[var(--border-color)]">
+        <DialogContent className="bg-[var(--bg-surface)] border-[var(--border-color)] inset-0 w-full h-full max-w-none translate-x-0 translate-y-0 rounded-none lg:top-[50%] lg:left-[50%] lg:max-w-2xl lg:translate-x-[-50%] lg:translate-y-[-50%] lg:max-h-[72vh] lg:rounded-lg p-4 overflow-hidden flex flex-col overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Youtube className="w-5 h-5 text-red-500" />

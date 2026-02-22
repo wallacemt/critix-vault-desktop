@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Folder } from "@/types/utils";
+import { Folder } from "@/types/folder";
 import { motion } from "framer-motion";
 import { Folder as FolderIcon, X } from "lucide-react";
 import { getMovies, getSeries } from "@/services/databaseService";
@@ -50,8 +50,8 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
             <p className="text-sm text-[var(--text-muted)] font-sans">Nenhuma pasta adicionada</p>
           </motion.div>
         ) : (
-          folders.map((folder, index) => (
-            <div>
+          folders.map((folder) => (
+            <div key={folder.id}>
               <div
                 className={cn(
                   "group flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300 relative overflow-hidden",

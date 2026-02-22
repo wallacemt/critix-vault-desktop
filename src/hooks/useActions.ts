@@ -1,4 +1,3 @@
-import { Episode,  Series } from "@/types/serie";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
@@ -8,10 +7,11 @@ import { useFoldersContext } from "@/context/foldersContext";
 import { getMovies, getSeries, saveMovies, saveSeries } from "@/services/databaseService";
 import { Media } from "@/types/media";
 import { Movie } from "@/types/movie";
+import { Episode, Series } from "@/types/serie";
 
 export function useActions() {
-  const { folders, addFolder } = useFoldersContext();
-  const { setCurrentMovie, setCurrentSerie } = useMediaContext();
+  const { folders, addFolder, selectedFolder } = useFoldersContext();
+  const { setCurrentMovie: setMovie, setCurrentSerie: setSerie, setCurrentSerie } = useMediaContext();
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -77,10 +77,10 @@ export function useActions() {
   };
   const handleMediaClick = (media: Media) => {
     if (media.type === "MOVIE") {
-      setCurrentMovie(media as Movie);
+      setMovie(media as Movie);
       router.push("/movie-details");
     } else {
-      setCurrentSerie(media as Series);
+      setSerie(media as Series);
       router.push("/series-details");
     }
   };

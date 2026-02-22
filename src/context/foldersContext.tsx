@@ -8,13 +8,9 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
-import { Folder } from "@/types/folder";
+import { Folder } from "@/types";
 import { tauriService } from "@/services/tauri";
-import {
-  getFolders as getDBFolders,
-  addFolder as addDBFolder,
-  removeFolder as removeDBFolder,
-} from "@/services/databaseService";
+import { getFolders as getDBFolders, addFolder as addDBFolder, removeFolder as removeDBFolder } from "@/services/databaseService";
 
 interface FoldersContextType {
   folders: Folder[];
@@ -80,7 +76,7 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
     try {
       // Extract folder name from path
       const folderName = path.split(/[\\\/]/).pop() || path;
-
+      
       // Save to database
       const newFolder = await addDBFolder(path, folderName);
       console.log("📂 New folder created and saved to database:", newFolder);

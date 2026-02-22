@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       trailer: movie.trailer || undefined,
       isWatched: isWatched !== null,
       // TMDB Extended Fields
-      genres: movie.genres ? JSON.parse(movie.genres) : undefined,
+      genres: movie.genres ? JSON.parse(movie.genres).map((genre: string) => ({ name: genre })) : undefined,
       imdbId: movie.imdbId || undefined,
       tagline: movie.tagline || undefined,
       budget: movie.budget || undefined,

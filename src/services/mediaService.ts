@@ -1,6 +1,7 @@
-import type { TMDBMedia, TMDBTrendingPostersResponse } from "@/types/tmdb";
+import type { TMDBImages, TMDBMedia, TMDBTrendingPostersResponse } from "@/types/tmdb";
 import { apiService } from "./api";
-import type { SeasonDetailsDTO, SeriesDetailsDTO, EpisodeInfo, RematchResult, EpisodeFileBinding } from "@/types/api";
+import { EpisodeFileBinding, EpisodeInfo, SeasonDetailsDTO, SeriesDetailsDTO } from "@/types/serie";
+import { RematchResult } from "@/types/api";
 
 const getTrendingMedia = async (): Promise<TMDBMedia[]> => {
   try {
@@ -115,6 +116,18 @@ export async function fetchSeasonDetails(seriesId: string, seasonNumber: number)
   } catch (error) {
     console.error(`Error fetching season details: ${error}`);
     return null;
+  }
+}
+/**
+ * Fetch season details from API
+ */
+export async function fetchMediaImages(mediaId: string, mediaType: string): Promise<TMDBImages> {
+  try {
+    const response = await apiService.request(`/media/v1/${mediaType}/${mediaId}/images`);
+    return response as TMDBImages;
+  } catch (error) {
+    console.error(`Error fetching season details: ${error}`);
+    return {} as TMDBImages;
   }
 }
 

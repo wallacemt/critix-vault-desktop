@@ -337,3 +337,67 @@ export async function getSeriesEpisodeWatchStatus(seriesId: string): Promise<Map
 
   return watchedEpisodes;
 }
+
+/**
+ * Check if all episodes in a season are watched
+ */
+export async function isSeasonWatched(
+  seriesId: string,
+  seasonNumber: number,
+  episodes: { episode_number: number }[],
+): Promise<boolean> {
+  if (episodes.length === 0) return false;
+  const watchStatus = await getSeriesEpisodeWatchStatus(seriesId);
+  return episodes.every((ep) => watchStatus.get(`${seasonNumber}-${ep.episode_number}`) === true);
+}
+
+/**
+ * Mark all episodes in a season as watched
+ */
+export async function markSeasonAsWatched(
+  seriesId: string,
+  seasonNumber: number,
+  episodes: { id: string; episode_number: number }[],
+): Promise<void> {
+  for (const ep of episodes) {
+    const watched = await isEpisodeWatched(seriesId, seasonNumber, ep.episode_number);
+    if (!watched) {
+      await markEpisodeAsWatched(seriesId, ep.id, seasonNumber, ep.episode_number);
+    }
+  }
+}
+
+/**
+ * Unmark all episodes in a season as watched
+ */
+export async function unmarkSeasonAsWatched(
+  seriesId: string,
+  seasonNumber: number,
+  episodes: { id: string; episode_number: number }[],
+): Promise<void> {
+  for (const ep of episodes) {
+    const watched = await isEpisodeWatched(seriesId, seasonNumber, ep.episode_number);
+    if (watched) {
+      await fetch(`${API_BASE}/watch-history?episodeId=${ep.id}`, { method: "DELETE" });
+    }
+  }
+}
+
+/**
+ * Toggle watched status for all episodes in a season
+ * Returns true if season is now watched, false if now unwatched
+ */
+export async function toggleSeasonWatchStatus(
+  seriesId: string,
+  seasonNumber: number,
+  episodes: { id: string; episode_number: number }[],
+): Promise<boolean> {
+  const currentlyWatched = await isSeasonWatched(seriesId, seasonNumber, episodes);
+  if (currentlyWatched) {
+    await unmarkSeasonAsWatched(seriesId, seasonNumber, episodes);
+    return false;
+  } else {
+    await markSeasonAsWatched(seriesId, seasonNumber, episodes);
+    return true;
+  }
+}

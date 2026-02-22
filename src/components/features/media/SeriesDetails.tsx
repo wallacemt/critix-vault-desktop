@@ -8,18 +8,27 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Play, Calendar, Star, Edit, Loader2, FolderOpen, Trash2 } from "lucide-react";
-import { Season, Episode } from "@/types/serie";
+import { ArrowLeft, Play, Calendar, Star, Edit, Loader2, FolderOpen, Trash2, CheckCircle2, Eye } from "lucide-react";
+import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
-import { rematchSeriesEpisodes, fetchSeasonDetails } from "@/services/mediaService";
+import { rematchSeriesEpisodes, fetchSeasonDetails, fetchMediaImages } from "@/services/mediaService";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { tauriService } from "@/services/tauri";
-import { SeriesEditDialog, SeriesEditState } from "./_components/series-edit-dialog";
-
+import { SeriesEditDialog } from "./_components/series-edit-dialog";
+import { apiService } from "@/services/api";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { EpisodeEditDialog } from "./_components/episode-edit-dialog";
 import { SeasonCard } from "./_components/season-card";
-import { getSeries, saveSeries, removeSeries, toggleEpisodeWatchStatus } from "@/services/databaseService";
+import {
+  getSeries,
+  saveSeries,
+  removeSeries,
+  toggleEpisodeWatchStatus,
+  markAsWatched,
+  toggleSeasonWatchStatus,
+  isMediaWatched,
+  toggleWatchStatus,
+} from "@/services/databaseService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useActions } from "@/hooks/useActions";
 import { useRouter } from "next/navigation";
@@ -44,65 +53,110 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [isSeriesWatched, setIsSeriesWatched] = useState(false);
+  const [isTogglingWatched, setIsTogglingWatched] = useState(false);
   const router = useRouter();
   const { serie: series, setCurrentSerie: onSeriesUpdate } = useMediaContext();
   const { handlePlayEpisode: onPlayEpisode } = useActions();
 
   // All hooks must be before early return
-  // Task 4: Auto-fetch and save season details when series page opens
+  // Auto-fetch ALL season + episode details from TMDB (including seasons not in local folder)
   useEffect(() => {
     if (!series) return;
 
     const loadSeasonDetails = async () => {
-      // Check if seasons are already populated with episode details
-      const hasEpisodeDetails = series.seasons.some((season) => season.episodes && season.episodes.length > 0);
+      // Only skip if all seasons already have episode details loaded
+      const allSeasonsHaveDetails =
+        series.numberOfSeasons > 0 &&
+        series.seasons.length >= series.numberOfSeasons &&
+        series.seasons.every((s) => s.episodes && s.episodes.length > 0);
 
-      if (hasEpisodeDetails) {
-        console.log("✅ Series already has season details");
+      if (allSeasonsHaveDetails) {
+        console.log("✅ Series already has complete season details");
         return;
       }
 
       setIsLoadingSeasons(true);
-      console.log(`🔄 Loading season details for: ${series.title}`);
+      console.log(`🔄 Loading all season details for: ${series.title} (${series.numberOfSeasons} seasons)`);
 
       try {
         const updatedSeasons: Season[] = [];
 
-        for (const season of series.seasons) {
+        // Build map of existing seasons for file path / watch status preservation
+        const existingSeasonMap = new Map<number, Season>();
+        series.seasons.forEach((s) => existingSeasonMap.set(s.seasonNumber, s));
+
+        // Iterate over ALL seasons from TMDB (1..numberOfSeasons)
+        const totalSeasons = series.numberOfSeasons || series.seasons.length;
+        for (let seasonNum = 1; seasonNum <= totalSeasons; seasonNum++) {
           try {
-            const seasonDetails = await fetchSeasonDetails(series.id, season.seasonNumber);
+            const existingSeason = existingSeasonMap.get(seasonNum);
+            const seasonDetails = await fetchSeasonDetails(series.id, seasonNum);
 
             if (seasonDetails) {
-              updatedSeasons.push({
-                ...season,
-                episodes: seasonDetails.episodes as Episode[],
-                overview: seasonDetails.overview || season.overview,
-                poster: seasonDetails.poster_path || season.poster,
+              // Preserve existing filePaths and watch status by episode number
+              const existingEpFilePaths = new Map<number, string>();
+              const existingEpWatched = new Map<number, boolean>();
+              if (existingSeason) {
+                existingSeason.episodes.forEach((ep) => {
+                  if (ep.filePath) existingEpFilePaths.set(ep.episode_number, ep.filePath);
+                  if (ep.isWatched) existingEpWatched.set(ep.episode_number, true);
+                });
+              }
+
+              const episodes: Episode[] = seasonDetails.episodes.map((ep) => {
+                const filePath = existingEpFilePaths.get(ep.episode_number);
+                return {
+                  id: ep.id,
+                  name: ep.name,
+                  title: ep.name,
+                  overview: ep.overview,
+                  episode_number: ep.episode_number,
+                  season_number: ep.season_number,
+                  still_path: ep.still_path,
+                  air_date: ep.air_date,
+                  runtime: ep.runtime,
+                  vote_average: ep.vote_average,
+                  duration: ep.runtime,
+                  filePath,
+                  available: !!filePath,
+                  isWatched: existingEpWatched.get(ep.episode_number) ?? false,
+                } as Episode;
               });
-              console.log(`✅ Loaded Season ${season.seasonNumber}: ${seasonDetails.episodes.length} episodes`);
-            } else {
-              updatedSeasons.push(season);
+
+              updatedSeasons.push({
+                id: existingSeason?.id ?? `${series.id}-s${seasonNum}`,
+                seasonNumber: seasonNum,
+                name: seasonDetails.name,
+                overview: seasonDetails.overview ?? existingSeason?.overview,
+                poster: seasonDetails.poster_path ?? existingSeason?.poster,
+                episodeCount: seasonDetails.episodes.length,
+                episodes,
+                available: existingSeason?.available ?? episodes.some((ep) => ep.available),
+                downloadedEpisodes: episodes.filter((ep) => ep.available).length,
+              });
+              console.log(`✅ Loaded Season ${seasonNum}: ${episodes.length} episodes`);
+            } else if (existingSeason) {
+              updatedSeasons.push(existingSeason);
             }
           } catch (error) {
-            console.error(`Failed to load Season ${season.seasonNumber}:`, error);
-            updatedSeasons.push(season);
+            console.error(`Failed to load Season ${seasonNum}:`, error);
+            const existingSeason = existingSeasonMap.get(seasonNum);
+            if (existingSeason) updatedSeasons.push(existingSeason);
           }
         }
 
-        const updatedSeries = {
-          ...series,
-          seasons: updatedSeasons,
-        };
+        const updatedSeries = { ...series, seasons: updatedSeasons };
 
-        // Save updated series to database (update the existing series, don't overwrite all)
+        // Save updated series to database
         const allSeries = await getSeries();
         const updatedAllSeries = allSeries.map((s) =>
           s.id === updatedSeries.id && s.folderId === updatedSeries.folderId ? updatedSeries : s,
         );
         await saveSeries(updatedAllSeries);
-        console.log(`✅ Saved updated series with season details: ${series.title}`);
+        console.log(`✅ Saved all season details for: ${series.title}`);
 
-        // Notify parent component
         if (onSeriesUpdate) {
           onSeriesUpdate(updatedSeries);
         }
@@ -115,6 +169,28 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
 
     loadSeasonDetails();
   }, [series?.id]); // Only run when series ID changes
+
+  // Fetch gallery images from API
+  useEffect(() => {
+    if (!series) return;
+    const loadImages = async () => {
+      try {
+        const imagesData = await fetchMediaImages(series.id, "tv");
+        const images: string[] = [
+          ...(imagesData.backdrop
+            ?.slice(0, 12)
+            .map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ?? []),
+          ...(imagesData.poster?.slice(0, 6).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ??
+            []),
+        ];
+        if (images.length > 0) setGalleryImages(images);
+        else if (series.images && series.images.length > 0) setGalleryImages(series.images);
+      } catch {
+        if (series.images && series.images.length > 0) setGalleryImages(series.images);
+      }
+    };
+    loadImages();
+  }, [series?.id]);
 
   // Load episode watch status on mount
   useEffect(() => {
@@ -159,7 +235,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   }, [series?.id, series?.seasons?.length]); // Re-run when series or seasons change
 
-  // Save series view action
+  // Save series view action + load watch status
   useEffect(() => {
     if (!series) return;
 
@@ -172,7 +248,17 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
       }
     };
 
+    const loadWatchStatus = async () => {
+      try {
+        const watched = await isMediaWatched(series.id);
+        setIsSeriesWatched(watched);
+      } catch (error) {
+        console.error("Failed to load watch status:", error);
+      }
+    };
+
     saveView();
+    loadWatchStatus();
   }, [series?.id]);
 
   if (!series) return null;
@@ -200,47 +286,111 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     if (mediaType !== "tv") return;
 
     setIsRematching(true);
-    setRematchStatus("Coletando arquivos locais...");
+    setRematchStatus("Buscando dados da nova série...");
 
     try {
-      // Collect all local episode files from current series
-      const localFiles: string[] = [];
+      const details = (await apiService.getMediaDetailsById(newSeriesId, "tv")) as any;
+      if (!details) throw new Error("Não foi possível buscar os detalhes da série");
+
+      const newId = details.id?.toString() || newSeriesId;
+
+      // Build episode file path mapping from existing series
+      const existingEpMap = new Map<string, string>(); // "S{s}E{e}" -> filePath
       series.seasons.forEach((season) => {
-        season.episodes.forEach((episode) => {
-          if (episode.filePath) {
-            localFiles.push(episode.filePath);
-          }
+        season.episodes.forEach((ep) => {
+          if (ep.filePath) existingEpMap.set(`S${ep.season_number}E${ep.episode_number}`, ep.filePath);
         });
       });
 
-      setRematchStatus(`Re-mapeando ${localFiles.length} episódios...`);
+      const genres = details.genres?.map((g: any) => ({ name: g.name })) ?? [];
+      const cast =
+        details.credits?.cast?.slice(0, 20).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+        })) ?? [];
+      const crew =
+        details.credits?.crew
+          ?.filter((c: any) => ["Director", "Producer", "Screenplay"].includes(c.job))
+          .slice(0, 10)
+          .map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            job: c.job,
+            department: c.department,
+            profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+          })) ?? [];
+      const videos =
+        details.videos?.results
+          ?.filter((v: any) => v.type === "Trailer" || v.type === "Teaser")
+          .slice(0, 5)
+          .map((v: any) => ({ id: v.id, key: v.key, name: v.name, site: v.site, type: v.type })) ?? [];
 
-      // Perform re-matching
-      const result = await rematchSeriesEpisodes(series.id, newSeriesId, localFiles);
+      const updatedSeries: Series = {
+        id: newId,
+        type: series.type,
+        title: details.name || "Unknown",
+        originalTitle: details.original_name,
+        overview: details.overview,
+        poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : undefined,
+        backdrop: details.backdrop_path ? `https://image.tmdb.org/t/p/original${details.backdrop_path}` : undefined,
+        rating: details.vote_average,
+        year: parseInt(details.first_air_date?.split("-")[0] || "0"),
+        status: "MATCHED",
+        folderId: series.folderId,
+        filePath: series.filePath,
+        numberOfSeasons: details.number_of_seasons || 0,
+        numberOfEpisodes: details.number_of_episodes || 0,
+        firstAirDate: details.first_air_date,
+        lastAirDate: details.last_air_date,
+        tagline: details.tagline,
+        genres,
+        cast: cast.length > 0 ? cast : undefined,
+        crew: crew.length > 0 ? crew : undefined,
+        videos: videos.length > 0 ? videos : undefined,
+        trailer: videos[0] ? `https://www.youtube.com/watch?v=${videos[0].key}` : undefined,
+        seasons:
+          details.seasons?.map((season: any) => ({
+            id: `${newId}-s${season.season_number}`,
+            seasonNumber: season.season_number,
+            name: season.name,
+            overview: season.overview,
+            poster: season.poster_path ? `https://image.tmdb.org/t/p/w500${season.poster_path}` : undefined,
+            episodeCount: season.episode_count,
+            episodes: [],
+            available: false,
+            downloadedEpisodes: 0,
+          })) ?? [],
+      };
 
-      if (result.success) {
-        setRematchStatus(`✓ ${result.matched} episódios mapeados, ${result.unmatched} não mapeados`);
-
-        // Notify parent component to update series
-        if (onSeriesUpdate != null) {
-          // Here you would fetch the full updated series details and update
-          // For now, we'll just show success message
-          setTimeout(() => {
-            setRematchStatus("");
-            setIsRematching(false);
-            setIsEditModalOpen(false);
-          }, 2000);
-        }
-      } else {
-        setRematchStatus(`✗ Erro: ${result.errors?.join(", ")}`);
-        setTimeout(() => {
-          setRematchStatus("");
-          setIsRematching(false);
-        }, 3000);
+      // Remove old series if ID changed
+      if (series.id !== newId) {
+        await removeSeries(series.id);
       }
+
+      // Save new/updated series
+      const allSeries = await getSeries();
+      const existingIdx = allSeries.findIndex((s) => s.id === newId && s.folderId === series.folderId);
+      if (existingIdx >= 0) {
+        allSeries[existingIdx] = updatedSeries;
+        await saveSeries(allSeries);
+      } else {
+        const without = allSeries.filter((s) => !(s.id === series.id && s.folderId === series.folderId));
+        await saveSeries([...without, updatedSeries]);
+      }
+
+      if (onSeriesUpdate) onSeriesUpdate(updatedSeries);
+
+      setRematchStatus("✓ Série atualizada com sucesso!");
+      setTimeout(() => {
+        setRematchStatus("");
+        setIsRematching(false);
+        setIsEditModalOpen(false);
+      }, 2000);
     } catch (error) {
-      console.error("Error during re-matching:", error);
-      setRematchStatus(`✗ Erro ao re-mapear episódios`);
+      console.error("Error updating series:", error);
+      setRematchStatus(`✗ Erro: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
       setTimeout(() => {
         setRematchStatus("");
         setIsRematching(false);
@@ -275,12 +425,49 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   };
 
-  const handleSaveSeriesEdits = async (edits: SeriesEditState) => {
+  const handleSaveSeriesEdits = async (updatedSeries: Series) => {
     try {
-      alert("Alterações salvas com sucesso!");
+      if (onSeriesUpdate) onSeriesUpdate(updatedSeries);
     } catch (error) {
       console.error("Error saving edits:", error);
-      alert("Erro ao salvar alterações");
+    }
+  };
+
+  const handleToggleSeriesWatched = async () => {
+    setIsTogglingWatched(true);
+    try {
+      const newWatched = await toggleWatchStatus(series.id, series.type);
+      setIsSeriesWatched(newWatched);
+    } catch (error) {
+      console.error("Error toggling series watch status:", error);
+      alert("Erro ao atualizar status de assistido");
+    } finally {
+      setIsTogglingWatched(false);
+    }
+  };
+
+  const handleSeasonWatchToggle = async (season: Season, isWatched: boolean) => {
+    try {
+      const episodes = season.episodes.map((ep) => ({ id: ep.id, episode_number: ep.episode_number }));
+      const newStatus = await toggleSeasonWatchStatus(series.id, season.seasonNumber, episodes);
+
+      if (onSeriesUpdate) {
+        const updatedSeasons = series.seasons.map((s) => {
+          if (s.seasonNumber !== season.seasonNumber) return s;
+          return { ...s, episodes: s.episodes.map((ep) => ({ ...ep, isWatched: newStatus })) };
+        });
+
+        // Auto-mark whole series if all seasons watched
+        const allWatched = updatedSeasons.every((s) => s.episodes.length > 0 && s.episodes.every((ep) => ep.isWatched));
+        if (allWatched) {
+          await markAsWatched(series.id, "SERIES");
+        }
+
+        onSeriesUpdate({ ...series, seasons: updatedSeasons });
+      }
+    } catch (error) {
+      console.error("Error toggling season watch status:", error);
+      alert("Erro ao atualizar status da temporada");
     }
   };
 
@@ -504,6 +691,26 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                   <Button
                     size="lg"
                     variant="outline"
+                    onClick={handleToggleSeriesWatched}
+                    disabled={isTogglingWatched}
+                    className={`backdrop-blur-sm ${
+                      isSeriesWatched
+                        ? "bg-green-900/30 border-green-600 text-green-400 hover:bg-green-900/50"
+                        : "bg-slate-800/80 border-slate-700 hover:bg-slate-800"
+                    }`}
+                  >
+                    {isTogglingWatched ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : isSeriesWatched ? (
+                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                    ) : (
+                      <Eye className="w-5 h-5 mr-2" />
+                    )}
+                    {isSeriesWatched ? "Assistido" : "Marcar como Assistido"}
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
                     onClick={() => setIsEditModalOpen(true)}
                     disabled={isRematching}
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
@@ -617,20 +824,21 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     onPlayEpisode={onPlayEpisode}
                     onEditEpisode={handleEditEpisode}
                     onEpisodeWatchToggle={handleEpisodeWatchToggle}
+                    onSeasonWatchToggle={handleSeasonWatchToggle}
                   />
                 </motion.div>
               ))}
           </div>
         </motion.div>
         {/* Image Gallery */}
-        {series.images && series.images.length > 0 && (
+        {galleryImages.length > 0 && (
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: 0.5 }}
             className="mb-12"
           >
-            <ImageGallery images={series.images} title={series.title} />
+            <ImageGallery images={galleryImages} title={series.title} />
           </motion.div>
         )}
       </motion.div>

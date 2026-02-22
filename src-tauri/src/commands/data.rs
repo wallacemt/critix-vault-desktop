@@ -1,5 +1,6 @@
 use crate::models::CacheInfo;
 use crate::storage::get_storage;
+use std::fs;
 
 #[tauri::command]
 pub fn clear_all_data() -> Result<(), String> {
@@ -46,4 +47,9 @@ pub fn import_data(json_data: String) -> Result<(), String> {
         manager.save(&data)?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
 }

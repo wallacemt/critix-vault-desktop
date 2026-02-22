@@ -265,7 +265,7 @@ export function useMediaLibrary(folderId: string | null) {
       try {
         console.log(`🔄 Updating media: ${originalMedia.title} -> ID: ${newMediaId} (${newMediaType})`);
 
-        // Fetch detailed info from API
+        // Fetch detailed info from API (includes credits, images, videos)
         const details = await apiService.getMediaDetailsById(newMediaId, newMediaType);
 
         if (!details) {
@@ -273,45 +273,99 @@ export function useMediaLibrary(folderId: string | null) {
         }
 
         const apiData = details as any;
+        const newId = apiData.id?.toString() || newMediaId;
 
-        // Build the updated media object
+        // Build helper data
+        const poster = apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : undefined;
+        const backdrop = apiData.backdrop_path
+          ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}`
+          : undefined;
+        const genres = apiData.genres?.map((g: any) => ({ name: g.name || g })) ?? [];
+        const cast =
+          apiData.credits?.cast?.slice(0, 20).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            character: c.character,
+            profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+          })) ?? [];
+        const crew =
+          apiData.credits?.crew
+            ?.filter((c: any) => ["Director", "Producer", "Screenplay", "Writer"].includes(c.job))
+            .slice(0, 10)
+            .map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              job: c.job,
+              department: c.department,
+              profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+            })) ?? [];
+        const images: string[] = [
+          ...(apiData.images?.backdrops
+            ?.slice(0, 10)
+            .map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ?? []),
+          ...(apiData.images?.posters
+            ?.slice(0, 5)
+            .map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ?? []),
+        ];
+        const videos =
+          apiData.videos?.results
+            ?.filter((v: any) => v.type === "Trailer" || v.type === "Teaser")
+            .slice(0, 5)
+            .map((v: any) => ({ id: v.id, key: v.key, name: v.name, site: v.site, type: v.type })) ?? [];
+        const firstVideo = videos[0];
+        const trailer = firstVideo ? `https://www.youtube.com/watch?v=${firstVideo.key}` : undefined;
+
+        // Always delete old record when:
+        // - ID changed (different TMDB match)
+        // - Type changed (movie → series or vice-versa)
+        const idChanged = originalMedia.id !== newId;
+        const typeChanged =
+          (originalMedia.type === "MOVIE" && newMediaType === "tv") ||
+          (originalMedia.type !== "MOVIE" && newMediaType === "movie");
+
+        if (idChanged || typeChanged) {
+          if (originalMedia.type === "MOVIE") {
+            await removeMovie(originalMedia.id);
+          } else {
+            await removeSeries(originalMedia.id);
+          }
+        }
+
         const baseInfo = {
-          id: apiData.id?.toString() || newMediaId,
+          id: newId,
           title: apiData.title || apiData.name || "Unknown",
           originalTitle: apiData.original_title || apiData.original_name,
           overview: apiData.overview,
-          poster: apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : undefined,
-          backdrop: apiData.backdrop_path ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}` : undefined,
+          poster,
+          backdrop,
           rating: apiData.vote_average,
           year: parseInt(apiData.release_date?.split("-")[0] || apiData.first_air_date?.split("-")[0] || "0"),
           status: "MATCHED" as const,
           folderId: originalMedia.folderId,
           filePath: originalMedia.filePath,
+          genres,
+          tagline: apiData.tagline,
+          imdbId: apiData.imdb_id,
+          voteCount: apiData.vote_count,
+          popularity: apiData.popularity,
+          images: images.length > 0 ? images : undefined,
+          videos: videos.length > 0 ? videos : undefined,
+          cast: cast.length > 0 ? cast : undefined,
+          crew: crew.length > 0 ? crew : undefined,
+          trailer,
         };
 
         if (newMediaType === "movie") {
-          // Remove from series if it was there, then add/update as movie
-          if (originalMedia.type === "SERIES") {
-            await removeSeries(originalMedia.id);
-          }
-
           const updatedMovie: Movie = {
             ...baseInfo,
             type: "MOVIE",
             duration: apiData.runtime,
             releaseDate: apiData.release_date,
-            trailer: apiData.videos?.results?.[0]?.key
-              ? `https://www.youtube.com/watch?v=${apiData.videos.results[0].key}`
-              : undefined,
+            budget: apiData.budget,
+            revenue: apiData.revenue,
           };
-
           await saveMovies([updatedMovie]);
         } else {
-          // Remove from movies if it was there, then add/update as series
-          if (originalMedia.type === "MOVIE") {
-            await removeMovie(originalMedia.id);
-          }
-
           const updatedSeries: Series = {
             ...baseInfo,
             type: "SERIES",
@@ -319,9 +373,11 @@ export function useMediaLibrary(folderId: string | null) {
             numberOfEpisodes: apiData.number_of_episodes || 0,
             firstAirDate: apiData.first_air_date,
             lastAirDate: apiData.last_air_date,
+            networks: apiData.networks?.map((n: any) => n.name) ?? [],
+            productionCompanies: apiData.production_companies?.map((p: any) => p.name) ?? [],
             seasons:
               apiData.seasons?.map((season: any) => ({
-                id: `${apiData.id}-s${season.season_number}`,
+                id: `${newId}-s${season.season_number}`,
                 seasonNumber: season.season_number,
                 name: season.name,
                 overview: season.overview,
@@ -330,12 +386,8 @@ export function useMediaLibrary(folderId: string | null) {
                 episodes: [],
                 available: false,
                 downloadedEpisodes: 0,
-              })) || [],
-            trailer: apiData.videos?.results?.[0]?.key
-              ? `https://www.youtube.com/watch?v=${apiData.videos.results[0].key}`
-              : undefined,
+              })) ?? [],
           };
-
           await saveSeries([updatedSeries]);
         }
 
@@ -351,6 +403,15 @@ export function useMediaLibrary(folderId: string | null) {
     [folderId, loadMediaFromStorage],
   );
 
+  const deleteMedia = async (media: Media): Promise<void> => {
+    if (media.type === "MOVIE") {
+      await removeMovie(media.id);
+    } else {
+      await removeSeries(media.id);
+    }
+    await loadMediaFromStorage();
+  };
+
   return {
     movies,
     series,
@@ -360,6 +421,7 @@ export function useMediaLibrary(folderId: string | null) {
     error,
     scanFolder,
     updateMedia,
+    deleteMedia,
     refreshMedia: loadMediaFromStorage, // Expose reload function
   };
 }

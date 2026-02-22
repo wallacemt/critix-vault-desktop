@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
 import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
+import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { useLibraryLeyout } from "@/hooks/useLibraryLeyout";
 
 interface LibraryLayoutProps {
@@ -69,6 +70,8 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     setShowManualEntry,
     removeFolder,
     unwatchedMovies,
+    watchedSeries,
+    unwatchedSeries,
     series,
     loading,
     error,
@@ -80,6 +83,11 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     folderPreviews,
     showManualEntry,
     setNewMediaNotification,
+    handleDeleteMedia,
+    handleConfirmDelete,
+    handleCancelDelete,
+    deletingMedia,
+    isDeletingMedia,
   } = useLibraryLeyout();
   return (
     <SidebarProvider defaultOpen={true}>
@@ -117,7 +125,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
 
         <SidebarFooter>
           {/* Footer Stats */}
-          {unwatchedMovies.length + series.length > 0 && (
+          {unwatchedMovies.length + unwatchedSeries.length > 0 && (
             <motion.div
               className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-surface-light)]/50"
               initial={{ opacity: 0, y: 20 }}
@@ -130,7 +138,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                   <p className="text-xs text-[var(--text-secondary)] font-sans">Filmes</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{series.length}</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{unwatchedSeries.length}</p>
                   <p className="text-xs text-[var(--text-secondary)] font-sans">Séries</p>
                 </div>
               </div>
@@ -181,9 +189,20 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 totalCount,
                 unwatchedMoviesCount: unwatchedMovies.length,
                 watchedMoviesCount: watchedMovies.length,
-                seriesCount: series.length,
+                seriesCount: unwatchedSeries.length,
+                watchedSeriesCount: watchedSeries.length,
                 onScanWithPreview: handleScanWithPreview,
                 onManualEntry: () => setShowManualEntry(true),
+                onOpenFolder: async () => {
+                  if (selectedFolder) {
+                    try {
+                      const { openPath } = await import("@tauri-apps/plugin-opener");
+                      await openPath(selectedFolder.path);
+                    } catch (e) {
+                      console.error("Failed to open folder:", e);
+                    }
+                  }
+                },
               }}
             />
             {/* Content Area */}
@@ -239,6 +258,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                         onMediaClick={onMediaClick}
                         onMediaPlay={onMediaPlay}
                         onMediaEdit={handleEditMedia}
+                        onMediaDelete={handleDeleteMedia}
                         viewMode={viewMode}
                         emptyMessage={
                           searchQuery
@@ -336,6 +356,15 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             folderPath={selectedFolder.path}
           />
         )}
+
+        {/* Delete Media Confirmation Dialog */}
+        <DeleteMediaDialog
+          isOpen={!!deletingMedia}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+          media={deletingMedia}
+          isDeleting={isDeletingMedia}
+        />
       </SidebarInset>
 
       {/* Custom scrollbar styles */}

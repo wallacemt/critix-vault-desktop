@@ -23,6 +23,7 @@ import {
 import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
+import { fetchMediaImages } from "@/services/mediaService";
 import { watchHistoryService } from "@/services/watchHistoryService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { removeMovie, saveMovies } from "@/services/databaseService";
@@ -46,6 +47,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
   const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
   const { handlePlayMovie: onPlay } = useActions();
@@ -53,6 +55,27 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const router = useRouter();
 
   // Save movie view action - must be before early return
+  useEffect(() => {
+    if (!currentMovie) return;
+    const loadImages = async () => {
+      try {
+        const imagesData = await fetchMediaImages(currentMovie.id, "movie");
+        const images: string[] = [
+          ...(imagesData.backdrop
+            ?.slice(0, 12)
+            .map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ?? []),
+          ...(imagesData.poster?.slice(0, 6).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ??
+            []),
+        ];
+        if (images.length > 0) setGalleryImages(images);
+        else if (currentMovie.images && currentMovie.images.length > 0) setGalleryImages(currentMovie.images);
+      } catch {
+        if (currentMovie.images && currentMovie.images.length > 0) setGalleryImages(currentMovie.images);
+      }
+    };
+    loadImages();
+  }, [currentMovie?.id]);
+
   useEffect(() => {
     if (!currentMovie) return;
 
@@ -422,13 +445,13 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
         )}
 
         {/* Image Gallery */}
-        {currentMovie.images && currentMovie.images.length > 1 && (
+        {galleryImages.length > 1 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.6 }}
           >
-            <ImageGallery images={currentMovie.images} title={currentMovie.title} />
+            <ImageGallery images={galleryImages} title={currentMovie.title} />
           </motion.div>
         )}
       </motion.div>

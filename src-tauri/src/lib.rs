@@ -40,6 +40,7 @@ pub fn run() {
             commands::data::get_data_directory,
             commands::data::export_data,
             commands::data::import_data,
+            commands::data::write_text_file,
             // File operations (system access)
             commands::files::scan_folder,
             commands::files::open_media,

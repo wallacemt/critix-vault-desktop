@@ -55,7 +55,9 @@ export async function GET(request: NextRequest) {
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
       // TMDB Extended Fields
-      genres: series.genres ? JSON.parse(series.genres).map(({ name }: { name: string }) => ({ name })) : undefined,
+      genres: series.genres
+        ? JSON.parse(series.genres).map((g: any) => (typeof g === "string" ? { name: g } : { name: g.name }))
+        : undefined,
       imdbId: series.imdbId || undefined,
       tagline: series.tagline || undefined,
       voteCount: series.voteCount || undefined,
@@ -78,13 +80,17 @@ export async function GET(request: NextRequest) {
         episodes: season.episodes.map((ep) => ({
           id: ep.id,
           name: ep.title,
+          title: ep.title,
           overview: ep.overview,
           episode_number: ep.episodeNumber,
           season_number: ep.seasonNumber,
           still_path: ep.stillPath,
           air_date: ep.airDate,
           runtime: ep.duration,
+          duration: ep.duration,
           vote_average: 0, // Not stored in database
+          filePath: ep.filePath || undefined,
+          available: ep.available,
         })),
       })),
     }));
@@ -160,6 +166,19 @@ export async function POST(request: NextRequest) {
           numberOfEpisodes: series.numberOfEpisodes,
           duration: series.duration,
           trailer: series.trailer,
+          genres: series.genres
+            ? JSON.stringify(series.genres.map((g: any) => (typeof g === "string" ? g : g.name)))
+            : undefined,
+          cast: series.cast ? JSON.stringify(series.cast) : undefined,
+          crew: series.crew ? JSON.stringify(series.crew) : undefined,
+          images: series.images ? JSON.stringify(series.images) : undefined,
+          videos: series.videos ? JSON.stringify(series.videos) : undefined,
+          tagline: series.tagline,
+          imdbId: series.imdbId,
+          voteCount: series.voteCount,
+          popularity: series.popularity,
+          networks: series.networks ? JSON.stringify(series.networks) : undefined,
+          productionCompanies: series.productionCompanies ? JSON.stringify(series.productionCompanies) : undefined,
         },
         update: {
           title: series.title,
@@ -178,6 +197,19 @@ export async function POST(request: NextRequest) {
           numberOfEpisodes: series.numberOfEpisodes,
           duration: series.duration,
           trailer: series.trailer,
+          genres: series.genres
+            ? JSON.stringify(series.genres.map((g: any) => (typeof g === "string" ? g : g.name)))
+            : undefined,
+          cast: series.cast ? JSON.stringify(series.cast) : undefined,
+          crew: series.crew ? JSON.stringify(series.crew) : undefined,
+          images: series.images ? JSON.stringify(series.images) : undefined,
+          videos: series.videos ? JSON.stringify(series.videos) : undefined,
+          tagline: series.tagline,
+          imdbId: series.imdbId,
+          voteCount: series.voteCount,
+          popularity: series.popularity,
+          networks: series.networks ? JSON.stringify(series.networks) : undefined,
+          productionCompanies: series.productionCompanies ? JSON.stringify(series.productionCompanies) : undefined,
         },
       });
 
@@ -225,23 +257,23 @@ export async function POST(request: NextRequest) {
                 create: {
                   episodeNumber: episode.episode_number,
                   seasonNumber: episode.season_number,
-                  title: episode.title,
+                  title: episode.title || episode.name || "Unknown",
                   overview: episode.overview,
                   stillPath: episode.still_path,
                   airDate: episode.air_date,
-                  duration: episode.duration,
+                  duration: episode.duration ?? episode.runtime ?? null,
                   filePath: episode.filePath,
-                  available: episode.available,
+                  available: episode.available ?? !!episode.filePath,
                   seasonId: seasonData.id,
                 },
                 update: {
-                  title: episode.title,
+                  title: episode.title || episode.name || "Unknown",
                   overview: episode.overview,
                   stillPath: episode.still_path,
                   airDate: episode.air_date,
-                  duration: episode.duration,
+                  duration: episode.duration ?? episode.runtime ?? null,
                   filePath: episode.filePath,
-                  available: episode.available,
+                  available: episode.available ?? !!episode.filePath,
                 },
               });
             }

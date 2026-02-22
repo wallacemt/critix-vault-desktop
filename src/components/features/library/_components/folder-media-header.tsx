@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { Folder } from "@/types/folder";
 import { motion } from "framer-motion";
-import { Film, Grid3x3, List, Scan, Search, Tv, Plus, CheckCircleIcon, ArrowUpDown } from "lucide-react";
+import { Film, Grid3x3, List, Scan, Search, Tv, Plus, CheckCircleIcon, ArrowUpDown, FolderOpen } from "lucide-react";
 import { Dispatch, SetStateAction } from "react";
 import { userActionService } from "@/services/userActionService";
 
@@ -30,6 +30,8 @@ interface FolderMediaHeaderProps {
   scanFolder: (folderPath: string) => Promise<void>;
   onScanWithPreview?: () => void;
   onManualEntry?: () => void;
+  onOpenFolder?: () => void;
+  watchedSeriesCount?: number;
 }
 export function FolderMediaHeader({
   selectedFolder,
@@ -52,6 +54,8 @@ export function FolderMediaHeader({
   seriesCount,
   onScanWithPreview,
   onManualEntry,
+  onOpenFolder,
+  watchedSeriesCount = 0,
 }: FolderMediaHeaderProps) {
   return (
     <div className="fixed backdrop-blur-lg z-5  w-full bg-gradient-to-b from-[var(--bg-surface)] to-transparent border-b border-[var(--border-color)] p-6">
@@ -71,23 +75,55 @@ export function FolderMediaHeader({
       </div>
 
       <div className="flex items-center justify-between mb-6">
-        <div className="flex flex-col">
-          <motion.h1
-            className="text-3xl font-bold text-[var(--text-primary)] mb-2 font-display"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {"/" + selectedFolder.name}
-          </motion.h1>
-          <motion.p
-            className="text-sm text-[var(--text-secondary)] font-sans"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+        <div className="flex items-center gap-3">
+          {/* Folder icon */}
+          <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[var(--color-primary)]/15 border border-[var(--color-primary)]/30 flex items-center justify-center">
+            <FolderOpen className="w-5 h-5 text-[var(--color-primary)]" />
+          </div>
+          <div className="flex flex-col">
+            <motion.h1
+              className="text-xl font-bold text-[var(--text-primary)] leading-tight font-display"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              {selectedFolder.name}
+            </motion.h1>
+            <motion.p
+              className="text-xs text-[var(--text-muted)] font-sans truncate max-w-xs"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              title={selectedFolder.path}
+            >
+              {selectedFolder.path}
+            </motion.p>
+          </div>
+          {/* Media count badge */}
+          <motion.span
+            className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
           >
-            {selectedFolder.path}
-          </motion.p>
+            {totalCount} mídias
+          </motion.span>
         </div>
+
+        {/* Open Folder — right side of header row */}
+        {onOpenFolder && (
+          <motion.div className="ml-auto" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              onClick={onOpenFolder}
+              variant="outline"
+              size="sm"
+              className="bg-[var(--bg-surface-light)] border-[var(--border-color)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] text-[var(--text-secondary)]"
+              title="Abrir pasta no explorador de arquivos"
+            >
+              <FolderOpen className="w-4 h-4 mr-2" />
+              Abrir Pasta
+            </Button>
+          </motion.div>
+        )}
       </div>
 
       {/* Search Bar and Filters */}
@@ -208,9 +244,9 @@ export function FolderMediaHeader({
           { key: "series", label: "Séries", icon: Tv, count: seriesCount },
           {
             key: "watched",
-            label: "Assitidos",
+            label: "Assistidos",
             icon: CheckCircleIcon,
-            count: watchedMoviesCount,
+            count: watchedMoviesCount + watchedSeriesCount,
           },
         ].map((tab) => (
           <motion.div key={tab.key} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>

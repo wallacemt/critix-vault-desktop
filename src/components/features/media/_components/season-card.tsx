@@ -1,7 +1,10 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Episode, Season } from "@/types/serie";
-import { CheckCircle2, ChevronDown, ChevronUp, Play, XCircle } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Loader2, Play, X, XCircle } from "lucide-react";
 import { useState } from "react";
 import { EpisodeCard } from "./episode-card";
 import { getImageUrl } from "@/utils/mediaUtils";
@@ -14,6 +17,7 @@ interface SeasonCardProps {
   onPlayEpisode: (episode: Episode) => void;
   onEditEpisode?: (episode: Episode) => void;
   onEpisodeWatchToggle?: (episode: Episode, isWatched: boolean) => void;
+  onSeasonWatchToggle?: (season: Season, isWatched: boolean) => void;
 }
 
 export function SeasonCard({
@@ -24,63 +28,126 @@ export function SeasonCard({
   onPlayEpisode,
   onEditEpisode,
   onEpisodeWatchToggle,
+  onSeasonWatchToggle,
 }: SeasonCardProps) {
   const [posterError, setPosterError] = useState(false);
+  const [isTogglingWatched, setIsTogglingWatched] = useState(false);
+
+  // Season is watched if it has episodes and all are watched
+  const hasEpisodes = season.episodes && season.episodes.length > 0;
+  const isSeasonWatched = hasEpisodes && season.episodes.every((ep) => ep.isWatched);
+
+  const handleSeasonWatchToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onSeasonWatchToggle || !hasEpisodes) return;
+    setIsTogglingWatched(true);
+    try {
+      await onSeasonWatchToggle(season, !isSeasonWatched);
+    } finally {
+      setIsTogglingWatched(false);
+    }
+  };
 
   return (
     <Card className="bg-slate-900 border-slate-800 overflow-hidden">
       {/* Season Header */}
-      <button onClick={onToggle} className="w-full p-6 flex items-center gap-6 hover:bg-slate-800/50 transition-colors">
-        {/* Season Poster */}
-        <div className="w-24 aspect-[2/3] rounded overflow-hidden flex-shrink-0 bg-slate-800">
-          {season.poster && !posterError ? (
-            <img
-              src={getImageUrl(season.poster)}
-              alt={season.name}
-              className="w-full h-full object-cover"
-              onError={() => setPosterError(true)}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Play className="w-8 h-8 text-slate-600" />
-            </div>
-          )}
-        </div>
-
-        {/* Season Info */}
-        <div className="flex-1 text-left">
-          <h3 className="text-xl font-bold text-white mb-2">{season.name}</h3>
-          {season.overview && <p className="text-sm text-slate-400 line-clamp-2 mb-2">{season.overview}</p>}
-          <div className="flex items-center gap-4 text-sm text-slate-500">
-            <span>{season.episodeCount} episodes</span>
-            {season.available ? (
-              <Badge variant="outline" className="bg-green-600/10 text-green-400 border-green-600">
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                {season.downloadedEpisodes} Downloaded
-              </Badge>
+      <div className="w-full flex items-center hover:bg-slate-800/50 transition-colors">
+        {/* Clickable area for expand/collapse */}
+        <button onClick={onToggle} className="flex-1 flex items-center gap-6 p-6 text-left">
+          {/* Season Poster */}
+          <div className="w-24 aspect-[2/3] rounded overflow-hidden flex-shrink-0 bg-slate-800">
+            {season.poster && !posterError ? (
+              <img
+                src={getImageUrl(season.poster)}
+                alt={season.name}
+                className="w-full h-full object-cover"
+                onError={() => setPosterError(true)}
+              />
             ) : (
-              <Badge variant="outline" className="bg-red-600/10 text-red-400 border-red-600">
-                <XCircle className="w-3 h-3 mr-1" />
-                Not Downloaded
-              </Badge>
+              <div className="w-full h-full flex items-center justify-center">
+                <Play className="w-8 h-8 text-slate-600" />
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Expand Icon */}
-        {isExpanded ? (
-          <ChevronUp className="w-6 h-6 text-slate-400" />
-        ) : (
-          <ChevronDown className="w-6 h-6 text-slate-400" />
+          {/* Season Info */}
+          <div className="flex-1 text-left">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-xl font-bold text-white">{season.name}</h3>
+              {isSeasonWatched && (
+                <Badge className="bg-green-600/20 text-green-400 border-green-600 text-xs">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Assistida
+                </Badge>
+              )}
+            </div>
+            {season.overview && <p className="text-sm text-slate-400 line-clamp-2 mb-2">{season.overview}</p>}
+            <div className="flex items-center gap-4 text-sm text-slate-500">
+              <span>{season.episodeCount} episódios</span>
+              {season.available ? (
+                <Badge variant="outline" className="bg-green-600/10 text-green-400 border-green-600">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {season.downloadedEpisodes} Baixados
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-slate-700/30 text-slate-400 border-slate-600">
+                  <XCircle className="w-3 h-3 mr-1" />
+                  Não baixada
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Expand Icon */}
+          {isExpanded ? (
+            <ChevronUp className="w-6 h-6 text-slate-400 flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-6 h-6 text-slate-400 flex-shrink-0" />
+          )}
+        </button>
+
+        {/* Season watch toggle button (outside expand button) */}
+        {hasEpisodes && onSeasonWatchToggle && (
+          <div className="pr-6">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSeasonWatchToggle}
+              disabled={isTogglingWatched}
+              className={
+                isSeasonWatched
+                  ? "bg-green-600/20 border-green-600 text-green-400 hover:bg-red-600/20 hover:border-red-600 hover:text-red-400"
+                  : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-green-600/20 hover:border-green-600 hover:text-green-400"
+              }
+              title={isSeasonWatched ? "Desmarcar temporada como assistida" : "Marcar temporada como assistida"}
+            >
+              {isTogglingWatched ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isSeasonWatched ? (
+                <>
+                  <X className="w-4 h-4 mr-1" />
+                  Desmarcar
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-1" />
+                  Marcar Assistida
+                </>
+              )}
+            </Button>
+          </div>
         )}
-      </button>
+      </div>
 
       {/* Episodes List */}
       {isExpanded && (
         <div className="border-t border-slate-800">
           <div className="p-4 space-y-2">
             {season.episodes.length === 0 ? (
-              <p className="text-center text-slate-500 py-8">Nenhum Episodio Disponivel</p>
+              <p className="text-center text-slate-500 py-8 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Carregando episódios...
+              </p>
             ) : (
               season.episodes
                 .sort((a, b) => a.episode_number - b.episode_number)

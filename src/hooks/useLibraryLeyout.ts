@@ -16,6 +16,8 @@ export const useLibraryLeyout = () => {
   const [sortBy, setSortBy] = useState<"title" | "rating" | "duration" | "year">("title");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
+  const [deletingMedia, setDeletingMedia] = useState<Media | null>(null);
+  const [isDeletingMedia, setIsDeletingMedia] = useState(false);
   const [newMediaNotification, setNewMediaNotification] = useState<{ movies: Movie[]; series: Series[] } | null>(null);
   const [isAutoScanning, setIsAutoScanning] = useState(false);
   const [showScanPreview, setShowScanPreview] = useState(false);
@@ -23,7 +25,7 @@ export const useLibraryLeyout = () => {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [historyRestored, setHistoryRestored] = useState(false);
 
-  const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia, refreshMedia } =
+  const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia, deleteMedia, refreshMedia } =
     useMediaLibrary(selectedFolder?.id || null);
 
   // Restore last viewed folder on mount
@@ -42,7 +44,7 @@ export const useLibraryLeyout = () => {
             selectFolder(folder);
           }
         }
-        if(lastTab){
+        if (lastTab) {
           setActiveTab(lastTab as AppTabs);
         }
       } catch (error) {
@@ -89,6 +91,27 @@ export const useLibraryLeyout = () => {
 
   const handleEditMedia = (media: Media) => {
     setEditingMedia(media);
+  };
+
+  const handleDeleteMedia = (media: Media) => {
+    setDeletingMedia(media);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingMedia) return;
+    setIsDeletingMedia(true);
+    try {
+      await deleteMedia(deletingMedia);
+      setDeletingMedia(null);
+    } catch (error) {
+      console.error("Failed to delete media:", error);
+    } finally {
+      setIsDeletingMedia(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeletingMedia(null);
   };
 
   const handleUpdateMedia = async (mediaId: string, mediaType: "movie" | "tv") => {
@@ -140,13 +163,13 @@ export const useLibraryLeyout = () => {
         allMedia = movies.filter((media) => !media.isWatched);
         break;
       case "series":
-        allMedia = series;
+        allMedia = series.filter((s) => !s.isWatched);
         break;
       case "watched":
-        allMedia = movies.filter((media) => media.isWatched);
+        allMedia = [...movies.filter((media) => media.isWatched), ...series.filter((s) => s.isWatched)];
         break;
       default:
-        allMedia = [...movies, ...series].filter((media) => !media.isWatched);
+        allMedia = [...movies.filter((media) => !media.isWatched), ...series.filter((s) => !s.isWatched)];
     }
 
     // Apply search filter
@@ -194,7 +217,9 @@ export const useLibraryLeyout = () => {
   // Count unwatched media
   const unwatchedMovies = movies.filter((movie) => !movie.isWatched);
   const watchedMovies = movies.filter((movie) => movie.isWatched);
-  const totalCount = unwatchedMovies.length + series.length;
+  const unwatchedSeries = series.filter((s) => !s.isWatched);
+  const watchedSeries = series.filter((s) => s.isWatched);
+  const totalCount = unwatchedMovies.length + unwatchedSeries.length;
 
   return {
     folders,
@@ -210,6 +235,11 @@ export const useLibraryLeyout = () => {
     filteredMedia,
     handleFolderSelect,
     handleEditMedia,
+    handleDeleteMedia,
+    handleConfirmDelete,
+    handleCancelDelete,
+    deletingMedia,
+    isDeletingMedia,
     handleUpdateMedia,
     handleScanWithPreview,
     handleConfirmScan,
@@ -218,6 +248,9 @@ export const useLibraryLeyout = () => {
     setIsAutoScanning,
     removeFolder,
     unwatchedMovies,
+    watchedMovies,
+    unwatchedSeries,
+    watchedSeries,
     series,
     viewMode,
     setViewMode,
@@ -225,7 +258,6 @@ export const useLibraryLeyout = () => {
     scanning,
     scanProgress,
     totalCount,
-    watchedMovies,
     setShowManualEntry,
     loading,
     error,

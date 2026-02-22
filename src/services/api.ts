@@ -3,7 +3,7 @@
  * Handles all HTTP communication with Critix API
  */
 
-import { ApiStatus, ScanResult } from "@/types/utils";
+import { ApiStatus } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_CRITIX_API_URL || "http://localhost:8080/";
 
@@ -66,12 +66,12 @@ class ApiService {
    * Returns generic response with media_type to identify movie or series
    */
   async searchMediaByTitle(query: string, returnMulti: boolean = false, normalizeText = true) {
-    const params = new URLSearchParams({ query });
+    const params = new URLSearchParams();
+    params.append("query", query);
     params.append("normalizeText", String(normalizeText));
     if (returnMulti) {
       params.append("returnMode", "multi");
     }
-
     return this.request(`/media/v1/search/title?${params.toString()}`);
   }
 

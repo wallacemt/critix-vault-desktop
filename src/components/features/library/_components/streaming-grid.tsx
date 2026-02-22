@@ -15,6 +15,7 @@ interface StreamingGridProps {
   onMediaClick?: (media: Media) => void;
   onMediaPlay?: (media: Media) => void;
   onMediaEdit?: (media: Media) => void;
+  onMediaDelete?: (media: Media) => void;
   viewMode?: "grid" | "list";
   emptyMessage?: string;
   demoMode?: boolean;
@@ -25,6 +26,7 @@ export function StreamingGrid({
   onMediaClick,
   onMediaPlay,
   onMediaEdit,
+  onMediaDelete,
   viewMode = "grid",
   emptyMessage = "No media found",
   demoMode = false,
@@ -68,6 +70,7 @@ export function StreamingGrid({
             onClick={onMediaClick}
             onPlay={onMediaPlay}
             onEdit={onMediaEdit}
+            onDelete={onMediaDelete}
             viewMode={viewMode}
             demoMode={demoMode}
           />

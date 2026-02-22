@@ -14,7 +14,8 @@ import { Search, Film, Tv, Loader2, FolderOpen, FileVideo } from "lucide-react";
 import { useState } from "react";
 import { apiService } from "@/services/api";
 import { getMovies, saveMovies, getSeries, saveSeries } from "@/services/databaseService";
-import { Movie, Series } from "@/types";
+import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
 import { open } from "@tauri-apps/plugin-dialog";
 import { MediaSearchResult } from "@/types/api";
 
@@ -114,63 +115,134 @@ export function ManualMediaEntryDialog({
     setIsSaving(true);
 
     try {
+      // Fetch full media details from API (includes genres, cast, crew, images, videos, etc.)
+      const details = (await apiService.getMediaDetailsById(selectedMedia.id, selectedMedia.mediaType)) as any;
+
+      if (!details) {
+        throw new Error("Não foi possível buscar os detalhes da mídia");
+      }
+
+      // Build shared helper data from full API response
+      const poster = details.poster_path
+        ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+        : selectedMedia.poster;
+      const backdrop = details.backdrop_path
+        ? `https://image.tmdb.org/t/p/original${details.backdrop_path}`
+        : undefined;
+      const genres = details.genres?.map((g: any) => ({ name: g.name })) ?? [];
+      const cast =
+        details.credits?.cast?.slice(0, 20).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+        })) ?? [];
+      const crew =
+        details.credits?.crew
+          ?.filter((c: any) => ["Director", "Producer", "Screenplay", "Writer"].includes(c.job))
+          .slice(0, 10)
+          .map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            job: c.job,
+            department: c.department,
+            profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : null,
+          })) ?? [];
+      const images: string[] = [
+        ...(details.images?.backdrops
+          ?.slice(0, 10)
+          .map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ?? []),
+        ...(details.images?.posters?.slice(0, 5).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ??
+          []),
+      ];
+      const videos =
+        details.videos?.results
+          ?.filter((v: any) => v.type === "Trailer" || v.type === "Teaser")
+          .slice(0, 5)
+          .map((v: any) => ({ id: v.id, key: v.key, name: v.name, site: v.site, type: v.type })) ?? [];
+      const trailer = videos[0] ? `https://www.youtube.com/watch?v=${videos[0].key}` : undefined;
+
       if (selectedMedia.mediaType === "movie") {
         const movie: Movie = {
-          id: selectedMedia.id,
+          id: details.id?.toString() || selectedMedia.id,
           type: "MOVIE",
-          title: selectedMedia.title,
-          originalTitle: selectedMedia.originalTitle,
-          year: selectedMedia.year,
-          poster: selectedMedia.poster,
-          backdrop: selectedMedia.details.backdrop_path
-            ? `https://image.tmdb.org/t/p/original${selectedMedia.details.backdrop_path}`
-            : undefined,
-          overview: selectedMedia.overview,
-          rating: selectedMedia.details.vote_average,
+          title: details.title || selectedMedia.title,
+          originalTitle: details.original_title || selectedMedia.originalTitle,
+          year: parseInt(details.release_date?.split("-")[0] || "0") || selectedMedia.year,
+          poster,
+          backdrop,
+          overview: details.overview || selectedMedia.overview,
+          rating: details.vote_average,
           status: "MATCHED",
           filePath: selectedFile,
           folderId: folderId,
-          duration: selectedMedia.details.runtime,
-          releaseDate: selectedMedia.details.release_date,
-          trailer: selectedMedia.details.videos?.results?.[0]?.key
-            ? `https://www.youtube.com/watch?v=${selectedMedia.details.videos.results[0].key}`
-            : undefined,
+          duration: details.runtime,
+          releaseDate: details.release_date,
+          tagline: details.tagline,
+          imdbId: details.imdb_id,
+          budget: details.budget,
+          revenue: details.revenue,
+          voteCount: details.vote_count,
+          popularity: details.popularity,
+          genres,
+          cast: cast.length > 0 ? cast : undefined,
+          crew: crew.length > 0 ? crew : undefined,
+          images: images.length > 0 ? images : undefined,
+          videos: videos.length > 0 ? videos : undefined,
+          trailer,
         };
 
-        // Load existing movies and add the new one
         const existingMovies = await getMovies();
-        await saveMovies([...existingMovies, movie]);
+        const filteredExisting = existingMovies.filter((m) => m.id !== movie.id || m.folderId !== folderId);
+        await saveMovies([...filteredExisting, movie]);
         console.log("✅ Movie added manually:", movie.title);
       } else {
-        // For series, we need to get season details
         const series: Series = {
-          id: selectedMedia.id,
+          id: details.id?.toString() || selectedMedia.id,
           type: "SERIES",
-          title: selectedMedia.title,
-          originalTitle: selectedMedia.originalTitle,
-          year: selectedMedia.year,
-          poster: selectedMedia.poster,
-          backdrop: selectedMedia.details.backdrop_path
-            ? `https://image.tmdb.org/t/p/original${selectedMedia.details.backdrop_path}`
-            : undefined,
-          overview: selectedMedia.overview,
-          rating: selectedMedia.details.vote_average,
+          title: details.name || selectedMedia.title,
+          originalTitle: details.original_name || selectedMedia.originalTitle,
+          year: parseInt(details.first_air_date?.split("-")[0] || "0") || selectedMedia.year,
+          poster,
+          backdrop,
+          overview: details.overview || selectedMedia.overview,
+          rating: details.vote_average,
           status: "MATCHED",
           filePath: selectedFile,
           folderId: folderId,
-          numberOfSeasons: selectedMedia.details.number_of_seasons || 0,
-          numberOfEpisodes: selectedMedia.details.number_of_episodes || 0,
-          seasons: [], // Will be populated when user views series details
-          firstAirDate: selectedMedia.details.first_air_date,
-          lastAirDate: selectedMedia.details.last_air_date,
-          trailer: selectedMedia.details.videos?.results?.[0]?.key
-            ? `https://www.youtube.com/watch?v=${selectedMedia.details.videos.results[0].key}`
-            : undefined,
+          numberOfSeasons: details.number_of_seasons || 0,
+          numberOfEpisodes: details.number_of_episodes || 0,
+          firstAirDate: details.first_air_date,
+          lastAirDate: details.last_air_date,
+          tagline: details.tagline,
+          imdbId: details.imdb_id,
+          voteCount: details.vote_count,
+          popularity: details.popularity,
+          networks: details.networks?.map((n: any) => n.name) ?? [],
+          productionCompanies: details.production_companies?.map((p: any) => p.name) ?? [],
+          genres,
+          cast: cast.length > 0 ? cast : undefined,
+          crew: crew.length > 0 ? crew : undefined,
+          images: images.length > 0 ? images : undefined,
+          videos: videos.length > 0 ? videos : undefined,
+          trailer,
+          seasons:
+            details.seasons?.map((season: any) => ({
+              id: `${details.id}-s${season.season_number}`,
+              seasonNumber: season.season_number,
+              name: season.name,
+              overview: season.overview,
+              poster: season.poster_path ? `https://image.tmdb.org/t/p/w500${season.poster_path}` : undefined,
+              episodeCount: season.episode_count,
+              episodes: [],
+              available: false,
+              downloadedEpisodes: 0,
+            })) ?? [],
         };
 
-        // Load existing series and add the new one
         const existingSeries = await getSeries();
-        await saveSeries([...existingSeries, series]);
+        const filteredExisting = existingSeries.filter((s) => s.id !== series.id || s.folderId !== folderId);
+        await saveSeries([...filteredExisting, series]);
         console.log("✅ Series added manually:", series.title);
       }
 

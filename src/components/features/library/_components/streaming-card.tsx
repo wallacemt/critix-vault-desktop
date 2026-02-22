@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X } from "lucide-react";
+import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { toggleWatchStatus } from "@/services/databaseService";
@@ -21,6 +21,7 @@ interface StreamingCardProps {
   onClick?: (media: Media) => void;
   onPlay?: (media: Media) => void;
   onEdit?: (media: Media) => void;
+  onDelete?: (media: Media) => void;
   viewMode?: "grid" | "list";
   demoMode?: boolean;
 }
@@ -30,6 +31,7 @@ export function StreamingCard({
   onClick,
   onPlay,
   onEdit,
+  onDelete,
   viewMode = "grid",
   demoMode = false,
 }: StreamingCardProps) {
@@ -222,6 +224,20 @@ export function StreamingCard({
                     Editar
                   </Button>
                 )}
+                {!demoMode && onDelete && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(media);
+                    }}
+                    className="border-red-700/50 text-red-400 hover:bg-red-900/20 hover:border-red-600 bg-[var(--bg-surface-light)]"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Excluir
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -343,7 +359,6 @@ export function StreamingCard({
                     onClick={async (e) => {
                       e.stopPropagation();
                       const newStatus = await toggleWatchStatus(media.id, media.type);
-                    
 
                       refreshFolders();
                       setIsWatched(newStatus);
@@ -365,6 +380,22 @@ export function StreamingCard({
                       }}
                     >
                       <Pencil className="w-4 h-4" />
+                    </Button>
+                  </motion.div>
+                )}
+                {!demoMode && onDelete && (
+                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.25 }}>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="w-10 h-10 rounded-full bg-red-900/30 hover:bg-red-700 border-red-700 text-red-400 hover:text-white backdrop-blur-sm transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(media);
+                      }}
+                      title="Excluir da biblioteca"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </motion.div>
                 )}

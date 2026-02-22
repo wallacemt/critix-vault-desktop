@@ -43,7 +43,9 @@ export async function GET(request: NextRequest) {
       duration: movie.duration || undefined,
       trailer: movie.trailer || undefined,
       // TMDB Extended Fields
-      genres: movie.genres ? JSON.parse(movie.genres).map((genre: string) => ({ name: genre })) : undefined,
+      genres: movie.genres
+        ? JSON.parse(movie.genres).map((g: any) => (typeof g === "string" ? { name: g } : { name: g.name }))
+        : undefined,
       imdbId: movie.imdbId || undefined,
       tagline: movie.tagline || undefined,
       budget: movie.budget || undefined,
@@ -79,27 +81,27 @@ export async function POST(request: NextRequest) {
     const db = await prisma();
 
     // Validate that all folders exist
-    const uniqueFolderIds = [...new Set(movies.map(m => m.folderId))]
+    const uniqueFolderIds = [...new Set(movies.map((m) => m.folderId))];
     const existingFolders = await db.folder.findMany({
       where: { id: { in: uniqueFolderIds } },
-      select: { id: true }
-    })
-    const existingFolderIds = new Set(existingFolders.map(f => f.id))
-    
+      select: { id: true },
+    });
+    const existingFolderIds = new Set(existingFolders.map((f) => f.id));
+
     // Filter out movies with invalid folder references
-    const validMovies = movies.filter(movie => {
+    const validMovies = movies.filter((movie) => {
       if (!existingFolderIds.has(movie.folderId)) {
-        console.warn(`⚠️ Skipping movie "${movie.title}" - folder ${movie.folderId} not found`)
-        return false
+        console.warn(`⚠️ Skipping movie "${movie.title}" - folder ${movie.folderId} not found`);
+        return false;
       }
-      return true
-    })
+      return true;
+    });
 
     if (validMovies.length === 0) {
       return NextResponse.json(
-        { error: 'No valid movies to save. All folder references are invalid.' },
-        { status: 400 }
-      )
+        { error: "No valid movies to save. All folder references are invalid." },
+        { status: 400 },
+      );
     }
 
     // Upsert each movie
@@ -123,6 +125,19 @@ export async function POST(request: NextRequest) {
             folderId: movie.folderId,
             duration: movie.duration,
             trailer: movie.trailer,
+            genres: movie.genres
+              ? JSON.stringify(movie.genres.map((g: any) => (typeof g === "string" ? g : g.name)))
+              : undefined,
+            cast: movie.cast ? JSON.stringify(movie.cast) : undefined,
+            crew: movie.crew ? JSON.stringify(movie.crew) : undefined,
+            images: movie.images ? JSON.stringify(movie.images) : undefined,
+            videos: movie.videos ? JSON.stringify(movie.videos) : undefined,
+            tagline: movie.tagline,
+            imdbId: movie.imdbId,
+            budget: movie.budget,
+            revenue: movie.revenue,
+            voteCount: movie.voteCount,
+            popularity: movie.popularity,
           },
           update: {
             title: movie.title,
@@ -137,6 +152,19 @@ export async function POST(request: NextRequest) {
             filePath: movie.filePath,
             duration: movie.duration,
             trailer: movie.trailer,
+            genres: movie.genres
+              ? JSON.stringify(movie.genres.map((g: any) => (typeof g === "string" ? g : g.name)))
+              : undefined,
+            cast: movie.cast ? JSON.stringify(movie.cast) : undefined,
+            crew: movie.crew ? JSON.stringify(movie.crew) : undefined,
+            images: movie.images ? JSON.stringify(movie.images) : undefined,
+            videos: movie.videos ? JSON.stringify(movie.videos) : undefined,
+            tagline: movie.tagline,
+            imdbId: movie.imdbId,
+            budget: movie.budget,
+            revenue: movie.revenue,
+            voteCount: movie.voteCount,
+            popularity: movie.popularity,
           },
         }),
       ),

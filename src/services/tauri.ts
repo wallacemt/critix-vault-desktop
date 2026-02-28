@@ -9,9 +9,10 @@
  * - Settings management
  */
 
+import { Folder } from "@/types/folder";
+import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
 import { invoke } from "@tauri-apps/api/core";
-import { Folder, Movie, Series } from "@/types/utils";
-import { folderScanService } from "./folderScanService";
 
 // Types for Rust backend communication
 interface RustMovie {
@@ -76,6 +77,7 @@ interface RustEpisode {
   duration?: number;
   file_path?: string;
   available: boolean;
+  vote_average?: number;
 }
 
 interface RustFolder {
@@ -181,20 +183,23 @@ function rustSeriesToSeries(rs: RustSeries): Series {
       id: s.id,
       seasonNumber: s.season_number,
       name: s.name,
-      overview: s.overview,
+      overview: s.overview || "",
       poster: s.poster,
       episodeCount: s.episode_count,
       episodes: s.episodes.map((e) => ({
         id: e.id,
-        episodeNumber: e.episode_number,
-        seasonNumber: e.season_number,
+        name: e.title,
+        overview: e.overview || "",
+        episode_number: e.episode_number,
+        season_number: e.season_number,
+        still_path: e.still_path || "",
+        air_date: e.air_date || "",
         title: e.title,
-        overview: e.overview,
-        stillPath: e.still_path,
-        airDate: e.air_date,
-        duration: e.duration,
+        runtime: e.duration || 0,
         filePath: e.file_path,
+        duration: e.duration,
         available: e.available,
+        vote_average: e.vote_average || 0,
       })),
       available: s.available,
       downloadedEpisodes: s.downloaded_episodes,
@@ -230,12 +235,12 @@ function seriesToRustSeries(s: Series): RustSeries {
       episode_count: season.episodeCount || 0,
       episodes: (season.episodes || []).map((ep) => ({
         id: ep.id,
-        episode_number: ep.episodeNumber || 0,
-        season_number: ep.seasonNumber || 0,
+        episode_number: ep.episode_number || 0,
+        season_number: ep.season_number || 0,
         title: ep.title || "",
         overview: ep.overview,
-        still_path: ep.stillPath,
-        air_date: ep.airDate,
+        still_path: ep.still_path,
+        air_date: ep.air_date,
         duration: ep.duration,
         file_path: ep.filePath,
         available: ep.available ?? false,

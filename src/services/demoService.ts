@@ -3,8 +3,11 @@
  * Converts TMDB trending data to app format for demo mode
  */
 
+import { Movie } from "@/types/movie";
 import { getTrendingMedia } from "./mediaService";
-import { Media, Movie, Series } from "@/types/utils";
+
+import { Season, Series } from "@/types/serie";
+import { TMDBMedia } from "@/types/tmdb";
 
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original";
 
@@ -32,12 +35,12 @@ function convertToMovie(tmdbMedia: any): Movie {
 /**
  * Convert TMDB media to app Series format
  */
-function convertToSeries(tmdbMedia: any): Series {
+function convertToSeries(tmdbMedia: TMDBMedia): Series {
   return {
     id: `demo-series-${tmdbMedia.id}`,
     type: "SERIES",
     title: tmdbMedia.name || tmdbMedia.original_name || "Unknown",
-    originalTitle: tmdbMedia.original_name,
+    originalTitle: tmdbMedia.original_title || "",
     year: tmdbMedia.first_air_date ? new Date(tmdbMedia.first_air_date).getFullYear() : undefined,
     poster: tmdbMedia.poster_path ? `${TMDB_IMAGE_BASE}${tmdbMedia.poster_path}` : undefined,
     backdrop: tmdbMedia.backdrop_path ? `${TMDB_IMAGE_BASE}${tmdbMedia.backdrop_path}` : undefined,
@@ -49,7 +52,7 @@ function convertToSeries(tmdbMedia: any): Series {
     seasons: [],
     numberOfSeasons: 1,
     numberOfEpisodes: 10,
-    firstAirDate: tmdbMedia.first_air_date,
+    firstAirDate: tmdbMedia.first_air_date || "",
   };
 }
 

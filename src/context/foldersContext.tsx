@@ -8,7 +8,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
-import { Folder } from "@/types";
+import { Folder } from "@/types/folder";
 import { tauriService } from "@/services/tauri";
 import { getFolders as getDBFolders, addFolder as addDBFolder, removeFolder as removeDBFolder } from "@/services/databaseService";
 

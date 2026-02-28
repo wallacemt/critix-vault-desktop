@@ -15,6 +15,7 @@ mod commands;
  * - Metadados de mídia (agora na API /api/movies e /api/series)
  */
 mod models;
+mod server;
 mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -22,6 +23,28 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // Em modo de produção, inicia o servidor Next.js standalone
+            #[cfg(not(debug_assertions))]
+            {
+                std::thread::spawn(move || {
+                    if let Err(e) = server::start_nextjs_server_internal() {
+                        eprintln!("[critix] Erro ao iniciar servidor: {e}");
+                    } else {
+                        println!(
+                            "[critix] Servidor Next.js iniciado na porta {}",
+                            server::SERVER_PORT
+                        );
+                    }
+                });
+            }
+            Ok(())
+        })
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                server::stop_server();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             // Folder dialogs (UI only - storage moved to SQLite)
             commands::folders::select_folder_dialog,

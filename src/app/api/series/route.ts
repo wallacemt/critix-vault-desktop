@@ -55,9 +55,7 @@ export async function GET(request: NextRequest) {
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
       // TMDB Extended Fields
-      genres: series.genres
-        ? JSON.parse(series.genres).map((g: any) => (typeof g === "string" ? { name: g } : { name: g.name }))
-        : undefined,
+      genres: series.genres ? JSON.parse(series.genres).map((g: string) => ({ name: g })) : undefined,
       imdbId: series.imdbId || undefined,
       tagline: series.tagline || undefined,
       voteCount: series.voteCount || undefined,
@@ -167,7 +165,7 @@ export async function POST(request: NextRequest) {
           duration: series.duration,
           trailer: series.trailer,
           genres: series.genres
-            ? JSON.stringify(series.genres.map((g: any) => (typeof g === "string" ? g : g.name)))
+            ? JSON.stringify(series.genres.map((g: any) => (typeof g === "string" ? g : null)))
             : undefined,
           cast: series.cast ? JSON.stringify(series.cast) : undefined,
           crew: series.crew ? JSON.stringify(series.crew) : undefined,
@@ -247,6 +245,15 @@ export async function POST(request: NextRequest) {
           // Handle episodes if provided
           if (season.episodes && season.episodes.length > 0) {
             for (const episode of season.episodes) {
+              // Skip episodes with invalid/null episode numbers to avoid Prisma validation errors
+              const epNum = episode.episode_number;
+              if (epNum == null || isNaN(epNum)) {
+                console.warn(
+                  `⚠️ Skipping episode with invalid episode_number in season ${season.seasonNumber}:`,
+                  episode.filePath,
+                );
+                continue;
+              }
               await db.episode.upsert({
                 where: {
                   seasonId_episodeNumber: {

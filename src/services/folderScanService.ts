@@ -290,8 +290,16 @@ class FolderScanService {
       const match = fileName.match(pattern);
 
       if (match) {
-        const seasonNumber = parseInt(match[1], 10);
-        const episodeNumber = parseInt(match[2], 10);
+        // Some patterns have 2 capture groups (season, episode);
+        // others (anime/ep/episode) have only 1 (episode number only).
+        const hasTwoGroups = match[2] !== undefined;
+        const seasonNumber = hasTwoGroups ? parseInt(match[1], 10) : 1;
+        const episodeNumber = hasTwoGroups ? parseInt(match[2], 10) : parseInt(match[1], 10);
+
+        // Skip if parsed numbers are not valid integers
+        if (isNaN(seasonNumber) || isNaN(episodeNumber)) {
+          continue;
+        }
 
         // Extract series name (everything before the episode pattern)
         let seriesName = fileName

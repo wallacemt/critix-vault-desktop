@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { X, Save, Info } from "lucide-react";
-import { Movie } from "@/types/utils";
+import { Movie } from "@/types/movie";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface MovieEditDialogProps {

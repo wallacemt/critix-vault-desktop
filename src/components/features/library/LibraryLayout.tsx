@@ -5,7 +5,7 @@
 
 "use client";
 import { Button } from "@/components/ui/button";
-import { Folder, FolderPlus, Scan, Settings } from "lucide-react";
+import { Folder, FolderPlus, Scan, Settings, Home } from "lucide-react";
 import { Media } from "@/types/media";
 import { StreamingGrid } from "./_components/streaming-grid";
 import { MediaGridSkeleton } from "@/components/ui/media-skeleton";
@@ -147,7 +147,16 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
 
           {/* Settings Link */}
           <SidebarSeparator />
-          <div className="p-4">
+          <div className="p-4 space-y-1">
+            <Link href="/landing?home=true">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
+              >
+                <Home className="w-4 h-4 mr-2" />
+                Início
+              </Button>
+            </Link>
             <Link href="/settings">
               <Button
                 variant="ghost"

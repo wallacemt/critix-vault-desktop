@@ -6,14 +6,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+resources
 node_modules
 dist
 dist-ssr
 /.next
 /out
 *.local
-
 # Servidor Next.js gerado pelo prepare-build (pode chegar a centenas de MB)
 # Apenas as pastas pesadas são ignoradas — server.js e README.md são commitados
 /resources/server/node_modules

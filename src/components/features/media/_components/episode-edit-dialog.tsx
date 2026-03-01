@@ -48,23 +48,23 @@ export function EpisodeEditDialog({ open, onOpenChange, episode, seriesId, onSav
 
   const handleSelectFile = async () => {
     try {
-      // For browser environment, use file picker
-      // Note: This won't give us the full path for security reasons
-      // In production, you'd use Tauri's file dialog API
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "video/*";
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          // In browser, we can only get the filename
-          // In Tauri, you'd use the dialog API to get the full path
-          setFilePath(file.name);
-        }
-      };
-      input.click();
-    } catch (error) {
-      console.error("Error selecting file:", error);
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Vídeo",
+            extensions: ["mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts"],
+          },
+        ],
+      });
+      if (selected && typeof selected === "string") {
+        setFilePath(selected);
+      }
+    } catch {
+      // Fallback: prompt for path if Tauri dialog is not available
+      const val = prompt("Caminho do arquivo:", filePath);
+      if (val !== null) setFilePath(val);
     }
   };
 

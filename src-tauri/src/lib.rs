@@ -18,23 +18,39 @@ mod models;
 mod server;
 mod storage;
 
+#[cfg(not(debug_assertions))]
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Em modo de produção, inicia o servidor Next.js standalone
+            // Em modo de produção, inicia o servidor Next.js e navega para ele assim que estiver pronto
             #[cfg(not(debug_assertions))]
             {
+                let app_handle = app.handle().clone();
                 std::thread::spawn(move || {
                     if let Err(e) = server::start_nextjs_server_internal() {
                         eprintln!("[critix] Erro ao iniciar servidor: {e}");
-                    } else {
-                        println!(
-                            "[critix] Servidor Next.js iniciado na porta {}",
-                            server::SERVER_PORT
+                        return;
+                    }
+                    println!(
+                        "[critix] Servidor Next.js iniciado na porta {}",
+                        server::SERVER_PORT
+                    );
+                    // Aguarda a porta aceitar conexões antes de redirecionar
+                    if !server::wait_for_server() {
+                        eprintln!(
+                            "[critix] Servidor não ficou disponível. Abortando redirecionamento."
                         );
+                        return;
+                    }
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let url = format!("http://127.0.0.1:{}", server::SERVER_PORT);
+                        let _: Result<(), _> =
+                            window.eval(&format!("window.location.replace('{}')", url));
                     }
                 });
             }

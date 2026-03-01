@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "critix-vault",
+  "productName": "Critix Vault",
   "version": "0.1.0",
   "identifier": "com.walla.critix-vault",
   "build": {
     "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "bun run build && node scripts/prepare-build.mjs",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
   },
@@ -31,10 +31,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "resources": {
-      "resources/server/**/*": "server/"
-    },
+    "targets": ["nsis"],
+    "resources": ["resources/server"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "linux": {
       "appimage": {
@@ -44,7 +42,11 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "nsis": {
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico"
+      }
     }
   }
 }

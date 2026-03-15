@@ -31,6 +31,8 @@ const getDbPath = () => {
   return path.join(process.cwd(), "prisma", "critix.db");
 };
 
+export const getDatabaseFilePath = () => getDbPath();
+
 // Run migration SQL files to initialize the database schema
 const initializeDatabase = (dbFilePath: string) => {
   try {

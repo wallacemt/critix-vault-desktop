@@ -6,6 +6,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import type { Movie } from "@/types/movie";
+import { errorResponse, successResponse } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -58,10 +60,10 @@ export async function GET(request: NextRequest) {
       crew: movie.crew ? JSON.parse(movie.crew) : undefined,
     }));
 
-    return NextResponse.json(transformed, { status: 200 });
+    return successResponse(transformed, 200);
   } catch (error) {
-    console.error("Failed to get movies:", error);
-    return NextResponse.json({ error: `Failed to get movies: ${error}` }, { status: 500 });
+    logger.error("Failed to get movies", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to get movies");
   }
 }
 
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
     const movies: Movie[] = await request.json();
 
     if (!Array.isArray(movies)) {
-      return NextResponse.json({ error: "Request body must be an array of movies" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "Request body must be an array of movies");
     }
 
     const db = await prisma();
@@ -98,10 +100,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (validMovies.length === 0) {
-      return NextResponse.json(
-        { error: "No valid movies to save. All folder references are invalid." },
-        { status: 400 },
-      );
+      return errorResponse(400, "BAD_REQUEST", "No valid movies to save. All folder references are invalid.");
     }
 
     // Upsert each movie
@@ -170,10 +169,10 @@ export async function POST(request: NextRequest) {
       ),
     );
 
-    return NextResponse.json({ message: "Movies saved successfully", count: results.length }, { status: 200 });
+    return successResponse({ message: "Movies saved successfully", count: results.length }, 200);
   } catch (error) {
-    console.error("Failed to save movies:", error);
-    return NextResponse.json({ error: `"Failed to save movies": ${error}` }, { status: 500 });
+    logger.error("Failed to save movies", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to save movies");
   }
 }
 
@@ -187,7 +186,7 @@ export async function DELETE(request: NextRequest) {
     const movieId = searchParams.get("id");
 
     if (!movieId) {
-      return NextResponse.json({ error: "Movie ID is required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "Movie ID is required");
     }
 
     const db = await prisma();
@@ -196,9 +195,9 @@ export async function DELETE(request: NextRequest) {
       where: { id: movieId },
     });
 
-    return NextResponse.json({ message: "Movie deleted successfully" }, { status: 200 });
+    return successResponse({ message: "Movie deleted successfully" }, 200);
   } catch (error) {
-    console.error("Failed to delete movie:", error);
-    return NextResponse.json({ error: "Failed to delete movie" }, { status: 500 });
+    logger.error("Failed to delete movie", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to delete movie");
   }
 }

@@ -7,12 +7,15 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
+import { getDatabaseFilePath } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+import { errorResponse, successResponse } from "@/lib/api-response";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const dbPath = path.join(process.cwd(), "prisma", "critix.db");
+    const dbPath = getDatabaseFilePath();
 
     // Get DB file size
     let dbSize = 0;
@@ -33,7 +36,7 @@ export async function GET() {
       db.episode.count(),
     ]);
 
-    return NextResponse.json({
+    return successResponse({
       dbPath,
       dbSize,
       dataDirectory: path.dirname(dbPath),
@@ -46,7 +49,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Failed to get settings info:", error);
-    return NextResponse.json({ error: "Failed to get settings info" }, { status: 500 });
+    logger.error("Failed to get settings info", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to get settings info");
   }
 }

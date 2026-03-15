@@ -5,6 +5,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { errorResponse, successResponse } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +21,10 @@ export async function GET() {
       orderBy: { addedAt: "desc" },
     });
 
-    return NextResponse.json(folders, { status: 200 });
+    return successResponse(folders, 200);
   } catch (error) {
-    console.error("Failed to get folders:", error);
-    return NextResponse.json({ error: `Failed to get folders: ${error}"` }, { status: 500 });
+    logger.error("Failed to get folders", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to get folders");
   }
 }
 
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { path, name } = await request.json();
 
     if (!path || !name) {
-      return NextResponse.json({ error: "Path and name are required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "Path and name are required");
     }
 
     const db = await prisma();
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json({ error: "Folder already exists" }, { status: 409 });
+      return errorResponse(409, "CONFLICT", "Folder already exists");
     }
 
     // Create new folder
@@ -61,10 +63,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(folder, { status: 201 });
+    return successResponse(folder, 201);
   } catch (error) {
-    console.error("Failed to add folder:", error);
-    return NextResponse.json({ error: "Failed to add folder" }, { status: 500 });
+    logger.error("Failed to add folder", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to add folder");
   }
 }
 
@@ -78,7 +80,7 @@ export async function DELETE(request: NextRequest) {
     const folderId = searchParams.get("id");
 
     if (!folderId) {
-      return NextResponse.json({ error: "Folder ID is required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "Folder ID is required");
     }
 
     const db = await prisma();
@@ -88,10 +90,10 @@ export async function DELETE(request: NextRequest) {
       where: { id: folderId },
     });
 
-    return NextResponse.json({ message: "Folder deleted successfully" }, { status: 200 });
+    return successResponse({ message: "Folder deleted successfully" }, 200);
   } catch (error) {
-    console.error("Failed to delete folder:", error);
-    return NextResponse.json({ error: "Failed to delete folder" }, { status: 500 });
+    logger.error("Failed to delete folder", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to delete folder");
   }
 }
 
@@ -105,7 +107,7 @@ export async function PATCH(request: NextRequest) {
     const { folderId } = await request.json();
 
     if (!folderId) {
-      return NextResponse.json({ error: "Folder ID is required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "Folder ID is required");
     }
 
     const db = await prisma();
@@ -127,9 +129,9 @@ export async function PATCH(request: NextRequest) {
       data: { mediaCount: totalCount },
     });
 
-    return NextResponse.json(folder, { status: 200 });
+    return successResponse(folder, 200);
   } catch (error) {
-    console.error("Failed to update folder:", error);
-    return NextResponse.json({ error: "Failed to update folder" }, { status: 500 });
+    logger.error("Failed to update folder", error);
+    return errorResponse(500, "DATABASE_ERROR", "Failed to update folder");
   }
 }

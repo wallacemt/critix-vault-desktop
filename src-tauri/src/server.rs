@@ -133,12 +133,15 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
     }
 
     let db_path = data_dir.join("critix.db");
+    let external_api_url = std::env::var("CRITIX_EXTERNAL_API_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
 
     let mut cmd = Command::new("node");
     cmd.arg(&server_js)
         .env("PORT", SERVER_PORT.to_string())
         .env("NODE_ENV", "production")
         .env("HOSTNAME", "127.0.0.1")
+        .env("CRITIX_EXTERNAL_API_URL", external_api_url)
         .env("DATABASE_URL", format!("file:{}", db_path.display()))
         .env("CRITIX_DATA_DIR", data_dir.to_string_lossy().to_string())
         .current_dir(&server_dir)

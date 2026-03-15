@@ -58,6 +58,27 @@ interface DbInfo {
   };
 }
 
+type ApiEnvelope<T> =
+  | T
+  | {
+      success: boolean;
+      data?: T;
+      error?: {
+        message?: string;
+      };
+    };
+
+function unwrapApiResponse<T>(payload: ApiEnvelope<T>): T {
+  if (payload && typeof payload === "object" && "success" in payload && typeof payload.success === "boolean") {
+    if (!payload.success || !payload.data) {
+      throw new Error(payload.error?.message || "Invalid API response");
+    }
+    return payload.data;
+  }
+
+  return payload as T;
+}
+
 export default function SettingsPage() {
   const [info, setInfo] = useState<DbInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +97,8 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/settings/info", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load info");
-      const data: DbInfo = await res.json();
+      const payload = (await res.json()) as ApiEnvelope<DbInfo>;
+      const data = unwrapApiResponse(payload);
       setInfo(data);
     } catch (error) {
       console.error("Failed to load settings info:", error);

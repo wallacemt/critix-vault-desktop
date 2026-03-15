@@ -5,7 +5,7 @@ import { useActions } from "@/hooks/useActions";
 import { useFoldersContext } from "@/context/foldersContext";
 import { Movie } from "@/types/movie";
 import { LoaderIcon } from "lucide-react";
-import { useEffect } from "react";import { useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 export default function LibraryPage() {
   const { folders, isLoading } = useFoldersContext();

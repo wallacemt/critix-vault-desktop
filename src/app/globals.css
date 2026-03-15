@@ -11,7 +11,6 @@
   src: url("./assets/fonts/Moonjelly-Light.otf");
 }
 :root {
-
   /* --- Cores de Marca (Brand Colors) --- */
 
   /* Um Dourado mais "elétrico" e moderno, menos "ouro velho" */
@@ -108,8 +107,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-}
 
+  --font-moonjelly: "moonjelly-bold";
+  --font-moonjellyL: "moonjelly-light";
+}
 
 @theme inline {
   --color-background: var(--background);

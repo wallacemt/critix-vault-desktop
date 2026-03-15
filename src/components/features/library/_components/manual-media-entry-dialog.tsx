@@ -16,7 +16,6 @@ import { apiService } from "@/services/api";
 import { getMovies, saveMovies, getSeries, saveSeries } from "@/services/databaseService";
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
-import { open } from "@tauri-apps/plugin-dialog";
 import { MediaSearchResult } from "@/types/api";
 
 interface SearchResult {
@@ -90,6 +89,8 @@ export function ManualMediaEntryDialog({
 
   const handleSelectFile = async () => {
     try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+
       // Use Tauri dialog plugin directly
       const selected = await open({
         directory: selectedMedia?.mediaType === "tv",

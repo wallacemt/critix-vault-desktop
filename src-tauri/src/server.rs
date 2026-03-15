@@ -28,6 +28,57 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
 
 static SERVER_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 
+fn validate_server_bundle(server_dir: &std::path::Path) -> Result<(), String> {
+    let server_js = server_dir.join("server.js");
+    if !server_js.exists() {
+        return Err(format!(
+            "Arquivo do servidor não encontrado: {}",
+            server_js.display()
+        ));
+    }
+
+    let chunks_dir = server_dir.join("_next_build").join("server").join("chunks");
+    if !chunks_dir.is_dir() {
+        return Err(format!(
+            "Diretório de chunks não encontrado: {}",
+            chunks_dir.display()
+        ));
+    }
+
+    let js_chunk_count = fs::read_dir(&chunks_dir)
+        .map_err(|e| {
+            format!(
+                "Falha ao ler diretório de chunks {}: {}",
+                chunks_dir.display(),
+                e
+            )
+        })?
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .map(|ext| ext.eq_ignore_ascii_case("js"))
+                .unwrap_or(false)
+        })
+        .count();
+
+    if js_chunk_count == 0 {
+        return Err(format!(
+            "Nenhum chunk .js encontrado em {}",
+            chunks_dir.display()
+        ));
+    }
+
+    println!(
+        "[critix] Bundle validado: {} chunk(s) encontrados em {}",
+        js_chunk_count,
+        chunks_dir.display()
+    );
+
+    Ok(())
+}
+
 /// Porta em que o servidor Next.js vai rodar em produção
 #[allow(dead_code)]
 pub const SERVER_PORT: u16 = 1422;
@@ -98,6 +149,7 @@ fn find_server_dir() -> Result<std::path::PathBuf, String> {
 #[allow(dead_code)]
 pub fn start_nextjs_server_internal() -> Result<(), String> {
     let server_dir = find_server_dir()?;
+    validate_server_bundle(&server_dir)?;
     let server_js = server_dir.join("server.js");
 
     if !server_js.exists() {
@@ -134,7 +186,10 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
 
     let db_path = data_dir.join("critix.db");
     let external_api_url = std::env::var("CRITIX_EXTERNAL_API_URL")
+        .or_else(|_| std::env::var("NEXT_PUBLIC_CRITIX_API_URL"))
         .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
+
+    println!("[critix] External API base: {}", external_api_url);
 
     let mut cmd = Command::new("node");
     cmd.arg(&server_js)

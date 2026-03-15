@@ -4,13 +4,16 @@
  */
 
 import { ApiStatus } from "@/types/api";
+import { logger } from "@/lib/logger";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_CRITIX_API_URL || "http://localhost:8080/";
+const API_BASE_URL = "/api/external";
 
 class ApiService {
   async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
         ...options,
         headers: {
           "Content-Type": "application/json",
@@ -19,12 +22,13 @@ class ApiService {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        const details = await response.text();
+        throw new Error(`API Error: ${response.status} ${response.statusText} - ${details}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.error("API Request failed:", error);
+      logger.error("API request failed", error, { endpoint: normalizedEndpoint, method: options?.method ?? "GET" });
       throw error;
     }
   }
@@ -37,7 +41,7 @@ class ApiService {
       const response = await this.request<ApiStatus>("/status");
       return { ...response, online: true };
     } catch (error) {
-      console.error(`Erro ao consultar status: ${error}`);
+      logger.error("Erro ao consultar status da API", error);
       return {
         online: false,
         message: error instanceof Error ? error.message : "API is offline",

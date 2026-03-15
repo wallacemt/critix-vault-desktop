@@ -98,7 +98,7 @@ export function StreamingCard({
             <div className="flex-1 flex flex-col justify-between min-w-0">
               <div>
                 <div className="flex items-start gap-2 mb-2">
-                  <h3 className="font-bold truncate text-[var(--text-primary)] text-lg line-clamp-1 font-display flex-1">
+                  <h3 className="font-display truncate text-[var(--text-primary)] text-xl line-clamp-1  flex-1">
                     {media.title}
                   </h3>
                   <Badge
@@ -406,7 +406,7 @@ export function StreamingCard({
 
         {/* Info Section */}
         <div className="p-4">
-          <h3 className="font-bold truncate text-[var(--text-primary)] text-sm line-clamp-2 mb-2 font-display leading-tight">
+          <h3 className="font-bold truncate text-[var(--text-primary)] text-lg line-clamp-2 mb-2 font-display leading-tight">
             {media.title}
           </h3>
 

@@ -26,6 +26,27 @@ const invoke: typeof import("@tauri-apps/api/core").invoke = async (cmd, args?, 
   return _invoke(cmd as string, args, opts) as any;
 };
 
+function normalizeFolderPath(selected: string): string {
+  const trimmed = selected.trim();
+  if (!trimmed.startsWith("file://")) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    let pathname = decodeURIComponent(url.pathname);
+
+    // Convert URL-style path (/C:/Users/...) to Windows path (C:/Users/...)
+    if (/^\/[A-Za-z]:\//.test(pathname)) {
+      pathname = pathname.slice(1);
+    }
+
+    return pathname;
+  } catch {
+    return trimmed;
+  }
+}
+
 // Types for Rust backend communication
 interface RustMovie {
   id: string;
@@ -279,7 +300,7 @@ class TauriService {
   async selectFolder(): Promise<string | null> {
     try {
       const selected = await invoke<string | null>("select_folder_dialog");
-      return selected;
+      return selected ? normalizeFolderPath(selected) : null;
     } catch (error) {
       console.error("Failed to open folder picker:", error);
       return null;

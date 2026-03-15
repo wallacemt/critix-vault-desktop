@@ -100,7 +100,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "C:\\WorkSpace\\PESONAL_PROJECTS\\CRITIX\\critix_vault_desktop",
+    "outputFileTracingRoot": "E:\\WorkSpace\\PESONAL_PROJECTS\\CRITIX\\critix_vault_desktop",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -299,11 +299,11 @@
       "@tauri-apps/api"
     ],
     "turbopack": {
-      "root": "C:\\WorkSpace\\PESONAL_PROJECTS\\CRITIX\\critix_vault_desktop"
+      "root": "E:\\WorkSpace\\PESONAL_PROJECTS\\CRITIX\\critix_vault_desktop"
     },
     "distDirRoot": "_next_build"
   },
-  "appDir": "C:\\WorkSpace\\PESONAL_PROJECTS\\CRITIX\\critix_vault_desktop",
+  "appDir": "E:\\WorkSpace\\PESONAL_PROJECTS\\CRITIX\\critix_vault_desktop",
   "relativeAppDir": "",
   "files": [
     "_next_build\\routes-manifest.json",

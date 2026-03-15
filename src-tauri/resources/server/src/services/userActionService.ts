@@ -4,6 +4,8 @@
  * Now uses API routes instead of direct Prisma access
  */
 
+import { logger } from "@/lib/logger";
+
 const API_BASE = "/api/user-actions";
 
 export interface UserAction {
@@ -18,12 +20,19 @@ export interface UserAction {
 export type ActionType = "FOLDER_VIEW" | "MOVIE_VIEW" | "SERIES_VIEW";
 
 class UserActionService {
+  private async assertOk(response: Response, operation: string): Promise<void> {
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(`${operation} failed: ${response.status} ${response.statusText} - ${details}`);
+    }
+  }
+
   /**
    * Save Tab view action
    */
   async saveTabView(tab: string): Promise<void> {
     try {
-      await fetch(API_BASE, {
+      const response = await fetch(API_BASE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -31,9 +40,11 @@ class UserActionService {
           mediaType: tab,
         }),
       });
-      console.log(`📺 Saved tab view: ${tab}`);
+      await this.assertOk(response, "Save tab view");
+      logger.info("Saved tab view", { tab });
     } catch (error) {
-      console.error("Error saving tab view:", error);
+      logger.error("Error saving tab view", error, { tab });
+      throw error;
     }
   }
 
@@ -42,7 +53,7 @@ class UserActionService {
    */
   async saveFolderView(folderId: string): Promise<void> {
     try {
-      await fetch(API_BASE, {
+      const response = await fetch(API_BASE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -50,9 +61,11 @@ class UserActionService {
           folderId,
         }),
       });
-      console.log(`📁 Saved folder view: ${folderId}`);
+      await this.assertOk(response, "Save folder view");
+      logger.info("Saved folder view", { folderId });
     } catch (error) {
-      console.error("Error saving folder view:", error);
+      logger.error("Error saving folder view", error, { folderId });
+      throw error;
     }
   }
 
@@ -61,7 +74,7 @@ class UserActionService {
    */
   async saveMovieView(movieId: string): Promise<void> {
     try {
-      await fetch(API_BASE, {
+      const response = await fetch(API_BASE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -70,9 +83,11 @@ class UserActionService {
           mediaType: "MOVIE",
         }),
       });
-      console.log(`🎬 Saved movie view: ${movieId}`);
+      await this.assertOk(response, "Save movie view");
+      logger.info("Saved movie view", { movieId });
     } catch (error) {
-      console.error("Error saving movie view:", error);
+      logger.error("Error saving movie view", error, { movieId });
+      throw error;
     }
   }
 
@@ -81,7 +96,7 @@ class UserActionService {
    */
   async saveSeriesView(seriesId: string): Promise<void> {
     try {
-      await fetch(API_BASE, {
+      const response = await fetch(API_BASE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -90,9 +105,11 @@ class UserActionService {
           mediaType: "SERIES",
         }),
       });
-      console.log(`📺 Saved series view: ${seriesId}`);
+      await this.assertOk(response, "Save series view");
+      logger.info("Saved series view", { seriesId });
     } catch (error) {
-      console.error("Error saving series view:", error);
+      logger.error("Error saving series view", error, { seriesId });
+      throw error;
     }
   }
 
@@ -107,7 +124,7 @@ class UserActionService {
       const data = await response.json();
       return data?.mediaType || null;
     } catch (error) {
-      console.error("Error getting last viewed tab:", error);
+      logger.error("Error getting last viewed tab", error);
       return null;
     }
   }
@@ -122,7 +139,7 @@ class UserActionService {
       const data = await response.json();
       return data?.folderId || null;
     } catch (error) {
-      console.error("Error getting last viewed folder:", error);
+      logger.error("Error getting last viewed folder", error);
       return null;
     }
   }
@@ -138,7 +155,7 @@ class UserActionService {
       const data = await response.json();
       return data?.mediaId || null;
     } catch (error) {
-      console.error("Error getting last viewed movie:", error);
+      logger.error("Error getting last viewed movie", error);
       return null;
     }
   }
@@ -154,7 +171,7 @@ class UserActionService {
       const data = await response.json();
       return data?.mediaId || null;
     } catch (error) {
-      console.error("Error getting last viewed series:", error);
+      logger.error("Error getting last viewed series", error);
       return null;
     }
   }
@@ -183,7 +200,7 @@ class UserActionService {
         ? { mediaId: movieData.mediaId, mediaType: "MOVIE" }
         : { mediaId: seriesData.mediaId, mediaType: "SERIES" };
     } catch (error) {
-      console.error("Error getting last viewed media:", error);
+      logger.error("Error getting last viewed media", error);
       return null;
     }
   }
@@ -193,12 +210,14 @@ class UserActionService {
    */
   async cleanupOldEntries(): Promise<void> {
     try {
-      await fetch(API_BASE, {
+      const response = await fetch(API_BASE, {
         method: "DELETE",
       });
-      console.log(`🧹 Cleaned up old action entries`);
+      await this.assertOk(response, "Cleanup old entries");
+      logger.info("Cleaned up old action entries");
     } catch (error) {
-      console.error("Error cleaning up old entries:", error);
+      logger.error("Error cleaning up old entries", error);
+      throw error;
     }
   }
 }

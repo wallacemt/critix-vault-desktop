@@ -17,7 +17,7 @@
 
 **Critix Vault** é uma aplicação desktop moderna que transforma suas pastas de filmes e séries em uma biblioteca visual organizada, semelhante aos serviços de streaming como Netflix e Prime Video.
 
-Utilizando a poderosa API do [Critix](https://github.com/Walaff/critix_api) integrada ao **TMDB**, o app identifica automaticamente suas mídias, busca metadados completos (capas, sinopses, avaliações) e apresenta tudo em uma interface elegante e responsiva.
+Utilizando a poderosa API do [Critix](https://github.com/wallacemt/critix-backend) integrada ao **TMDB**, o app identifica automaticamente suas mídias, busca metadados completos (capas, sinopses, avaliações) e apresenta tudo em uma interface elegante e responsiva.
 
 ### ✨ Características Principais
 
@@ -107,7 +107,7 @@ O executável estará em `src-tauri/target/release/bundle/`
 
 ### API Externa
 
-- **[Critix API](https://github.com/Walaff/critix_api)** - Backend Java para metadados
+- **[Critix API](https://github.com/wallacemt/critix-backend)** - Backend Java para metadados
 - **[TMDB](https://www.themoviedb.org/)** - The Movie Database
 
 ---
@@ -191,11 +191,11 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ### Criador
 
-- **Walafe Alencar** - Desenvolvimento do Critix Vault Desktop
+- **Wallace Santana** - Desenvolvimento do Critix Vault Desktop
 
 ### Integração e Serviços
 
-- **[Critix API](https://github.com/Walaff/critix_api)** - Backend Java para busca de metadados
+- **[Critix API](https://github.com/wallacemt/critix-backend)** - Backend Java para busca de metadados
 - **[TMDB](https://www.themoviedb.org/)** - The Movie Database - Fonte de dados de filmes e séries
 
 ### Tecnologias
@@ -209,7 +209,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 ## 🔗 Links
 
 - **Repositório**: [GitHub](https://github.com/seu-usuario/critix_vault_desktop)
-- **Critix API**: [GitHub](https://github.com/Walaff/critix_api)
+- **Critix API**: [GitHub](https://github.com/wallacemt/critix-backend)
 - **Documentação**: [docs/](./docs/)
 
 ---

@@ -94,7 +94,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
       {/* ShadCN Sidebar */}
       <Sidebar variant="floating" collapsible="offcanvas" className="border-r border-[var(--border-color)]">
         <SidebarHeader className="p-6 border-b border-[var(--border-color)]">
-          <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4 font-display">Biblioteca</h2>
+          <h2 className="text-xl font-display mb-4">Biblioteca</h2>
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <Button
               onClick={onAddFolder}

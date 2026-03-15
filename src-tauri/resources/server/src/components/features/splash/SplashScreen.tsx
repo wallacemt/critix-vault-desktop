@@ -60,7 +60,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
 
         {/* Title */}
         <div className="text-center">
-          <h1 className="text-4xl font-display font-bold text-white mb-2">Critix Vault</h1>
+          <h1 className="text-4xl font-display text-white mb-2">Critix Vault</h1>
           <p className="text-slate-400">Sua Bliblioteca Local Aprimorada</p>
         </div>
 

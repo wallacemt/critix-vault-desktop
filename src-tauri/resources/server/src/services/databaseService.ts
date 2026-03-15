@@ -8,6 +8,59 @@ import { Series } from "@/types/serie";
 
 const API_BASE = "/api";
 
+type ApiEnvelope<T> =
+  | T
+  | {
+      success: boolean;
+      data?: T;
+      error?: {
+        message?: string;
+      };
+    };
+
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json()) as ApiEnvelope<T>;
+
+  if (payload && typeof payload === "object" && "success" in payload && typeof payload.success === "boolean") {
+    if (!payload.success) {
+      throw new Error(payload.error?.message || "Request failed");
+    }
+    return payload.data as T;
+  }
+
+  return payload as T;
+}
+
+async function parseApiError(response: Response, fallback: string): Promise<Error> {
+  try {
+    const payload = (await response.json()) as
+      | { error?: string }
+      | {
+          success?: boolean;
+          error?: { message?: string };
+        };
+
+    if (payload && typeof payload === "object") {
+      if ("error" in payload && typeof payload.error === "string") {
+        return new Error(payload.error);
+      }
+      if (
+        "error" in payload &&
+        payload.error &&
+        typeof payload.error === "object" &&
+        "message" in payload.error &&
+        typeof payload.error.message === "string"
+      ) {
+        return new Error(payload.error.message);
+      }
+    }
+  } catch {
+    // Ignore JSON parsing failures and return fallback message.
+  }
+
+  return new Error(fallback);
+}
+
 // ============================================================================
 // FOLDERS API
 // ============================================================================
@@ -22,7 +75,7 @@ export async function getFolders(): Promise<Folder[]> {
     throw new Error("Failed to get folders");
   }
 
-  return response.json();
+  return parseApiResponse<Folder[]>(response);
 }
 
 export async function addFolder(path: string, name: string): Promise<Folder> {
@@ -33,11 +86,10 @@ export async function addFolder(path: string, name: string): Promise<Folder> {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to add folder");
+    throw await parseApiError(response, "Failed to add folder");
   }
 
-  return response.json();
+  return parseApiResponse<Folder>(response);
 }
 
 export async function removeFolder(folderId: string): Promise<void> {
@@ -61,7 +113,7 @@ export async function updateFolderMediaCount(folderId: string): Promise<Folder> 
     throw new Error("Failed to update folder media count");
   }
 
-  return response.json();
+  return parseApiResponse<Folder>(response);
 }
 
 // ============================================================================
@@ -80,7 +132,7 @@ export async function getMovies(folderId?: string): Promise<Movie[]> {
     throw new Error("Failed to get movies");
   }
 
-  return response.json();
+  return parseApiResponse<Movie[]>(response);
 }
 
 export async function saveMovies(movies: Movie[]): Promise<void> {
@@ -121,7 +173,7 @@ export async function getSeries(folderId?: string): Promise<Series[]> {
     throw new Error("Failed to get series");
   }
 
-  return response.json();
+  return parseApiResponse<Series[]>(response);
 }
 
 export async function saveSeries(seriesList: Series[]): Promise<void> {

@@ -249,7 +249,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
             <div className="flex-1 flex flex-col justify-end">
               <div className="mb-4">
                 <Badge className="bg-blue-600 text-white border-blue-500 mb-3">Movie</Badge>
-                <h1 className="text-5xl font-bold text-white mb-2">{currentMovie.title}</h1>
+                <h1 className="text-5xl font-bold text-white mb-2 font-display">{currentMovie.title}</h1>
                 {currentMovie.originalTitle && currentMovie.originalTitle !== currentMovie.title && (
                   <p className="text-lg text-slate-400 mb-3">{currentMovie.originalTitle}</p>
                 )}
@@ -388,7 +388,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
             transition={{ duration: 0.4, delay: 0.3 }}
             className="md:col-span-2"
           >
-            <h2 className="text-2xl font-bold text-white mb-4">Overview</h2>
+            <h2 className="text-2xl font-display text-white mb-4">Resumo</h2>
             {currentMovie.overview ? (
               <p className="text-slate-300 leading-relaxed text-lg">{currentMovie.overview}</p>
             ) : (

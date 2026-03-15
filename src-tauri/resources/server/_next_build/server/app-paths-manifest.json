@@ -7,6 +7,7 @@
   "/(app)/settings/page": "app/(app)/settings/page.js",
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/external/[...path]/route": "app/api/external/[...path]/route.js",
   "/api/folders/route": "app/api/folders/route.js",
   "/api/movie/route": "app/api/movie/route.js",
   "/api/movies/route": "app/api/movies/route.js",

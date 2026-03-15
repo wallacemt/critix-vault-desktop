@@ -4,6 +4,7 @@
  */
 
 import { addWatchHistory, getWatchHistory, type WatchHistory, type WatchHistoryInput } from "./databaseService";
+import { logger } from "@/lib/logger";
 
 export interface WatchHistoryEntry {
   id: string;
@@ -31,6 +32,13 @@ export interface SeriesWatchProgress {
 }
 
 class WatchHistoryService {
+  private async assertOk(response: Response, operation: string): Promise<void> {
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(`${operation} failed: ${response.status} ${response.statusText} - ${details}`);
+    }
+  }
+
   /**
    * Mark a movie as watched
    */
@@ -43,8 +51,10 @@ class WatchHistoryService {
         progress: 100,
       };
       await addWatchHistory(data);
+      logger.info("Marked movie as watched", { movieId, title, poster, runtime });
     } catch (error) {
-      console.error("Error marking movie as watched:", error);
+      logger.error("Error marking movie as watched", error, { movieId, title });
+      throw error;
     }
   }
 
@@ -68,8 +78,18 @@ class WatchHistoryService {
         progress: 100,
       };
       await addWatchHistory(data);
+      logger.info("Marked episode as watched", {
+        seriesId,
+        seriesTitle,
+        seriesPoster,
+        seasonNumber,
+        episodeNumber,
+        episodeTitle,
+        runtime,
+      });
     } catch (error) {
-      console.error("Error marking episode as watched:", error);
+      logger.error("Error marking episode as watched", error, { seriesId, seasonNumber, episodeNumber });
+      throw error;
     }
   }
 
@@ -81,7 +101,7 @@ class WatchHistoryService {
       const history = await getWatchHistory(movieId);
       return history.some((entry) => entry.mediaType === "MOVIE" && entry.completed);
     } catch (error) {
-      console.error("Error checking movie watched status:", error);
+      logger.error("Error checking movie watched status", error, { movieId });
       return false;
     }
   }
@@ -94,7 +114,7 @@ class WatchHistoryService {
       const history = await getWatchHistory(seriesId);
       return history.some((entry) => entry.mediaType === "SERIES" && entry.completed);
     } catch (error) {
-      console.error("Error checking episode watched status:", error);
+      logger.error("Error checking episode watched status", error, { seriesId, seasonNumber, episodeNumber });
       return false;
     }
   }
@@ -131,7 +151,7 @@ class WatchHistoryService {
         lastWatched,
       };
     } catch (error) {
-      console.error("Error getting series progress:", error);
+      logger.error("Error getting series progress", error, { seriesId });
       return null;
     }
   }
@@ -141,11 +161,14 @@ class WatchHistoryService {
    */
   async unmarkMovieWatched(movieId: string): Promise<void> {
     try {
-      await fetch(`/api/watch-history?mediaId=${movieId}`, {
+      const response = await fetch(`/api/watch-history?mediaId=${movieId}`, {
         method: "DELETE",
       });
+      await this.assertOk(response, "Unmark movie watched");
+      logger.info("Unmarked movie as watched", { movieId });
     } catch (error) {
-      console.error("Error unmarking movie as watched:", error);
+      logger.error("Error unmarking movie as watched", error, { movieId });
+      throw error;
     }
   }
 
@@ -154,11 +177,14 @@ class WatchHistoryService {
    */
   async unmarkEpisodeWatched(seriesId: string, seasonNumber: number, episodeNumber: number): Promise<void> {
     try {
-      await fetch(`/api/watch-history?mediaId=${seriesId}`, {
+      const response = await fetch(`/api/watch-history?mediaId=${seriesId}`, {
         method: "DELETE",
       });
+      await this.assertOk(response, "Unmark episode watched");
+      logger.info("Unmarked episode as watched", { seriesId, seasonNumber, episodeNumber });
     } catch (error) {
-      console.error("Error unmarking episode as watched:", error);
+      logger.error("Error unmarking episode as watched", error, { seriesId, seasonNumber, episodeNumber });
+      throw error;
     }
   }
 
@@ -169,7 +195,7 @@ class WatchHistoryService {
     try {
       return await getWatchHistory();
     } catch (error) {
-      console.error("Error loading watch history:", error);
+      logger.error("Error loading watch history", error);
       return [];
     }
   }
@@ -182,7 +208,7 @@ class WatchHistoryService {
       const history = await this.getHistory();
       return history.filter((entry) => entry.mediaType === type);
     } catch (error) {
-      console.error("Error loading history by type:", error);
+      logger.error("Error loading history by type", error, { type });
       return [];
     }
   }
@@ -195,7 +221,8 @@ class WatchHistoryService {
       // This would require a new API endpoint to clear all history
       console.warn("Clear all history not implemented yet");
     } catch (error) {
-      console.error("Error clearing watch history:", error);
+      logger.error("Error clearing watch history", error);
+      throw error;
     }
   }
 
@@ -207,7 +234,8 @@ class WatchHistoryService {
       // This would require modification to the API to delete by ID
       console.warn("Remove single entry not implemented yet");
     } catch (error) {
-      console.error("Error removing history entry:", error);
+      logger.error("Error removing history entry", error, { entryId });
+      throw error;
     }
   }
 
@@ -221,12 +249,12 @@ class WatchHistoryService {
       const stored = localStorage.getItem(STORAGE_KEY);
 
       if (!stored) {
-        console.log("No localStorage data to migrate");
+        logger.info("No localStorage data to migrate");
         return;
       }
 
       const localHistory: WatchHistoryEntry[] = JSON.parse(stored);
-      console.log(`Migrating ${localHistory.length} watch history entries...`);
+      logger.info("Migrating watch history entries", { count: localHistory.length });
 
       for (const entry of localHistory) {
         const data: WatchHistoryInput = {
@@ -239,17 +267,18 @@ class WatchHistoryService {
         try {
           await addWatchHistory(data);
         } catch (error) {
-          console.error(`Failed to migrate entry ${entry.id}:`, error);
+          logger.error("Failed to migrate watch history entry", error, { entryId: entry.id });
         }
       }
 
-      console.log("Migration completed successfully");
+      logger.info("Watch history migration completed successfully");
 
       // Optionally clear localStorage after successful migration
       // localStorage.removeItem(STORAGE_KEY);
       // localStorage.removeItem("critix_series_progress");
     } catch (error) {
-      console.error("Error migrating watch history:", error);
+      logger.error("Error migrating watch history", error);
+      throw error;
     }
   }
 }

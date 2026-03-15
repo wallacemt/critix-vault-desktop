@@ -9,8 +9,7 @@ import "server-only";
  * Configured with better-sqlite3 adapter for optimal performance
  */
 
-import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { Prisma, PrismaClient } from "@prisma/client";
 import path from "path";
 import fs from "fs";
 
@@ -31,8 +30,10 @@ const getDbPath = () => {
   return path.join(process.cwd(), "prisma", "critix.db");
 };
 
+export const getDatabaseFilePath = () => getDbPath();
+
 // Run migration SQL files to initialize the database schema
-const initializeDatabase = (dbFilePath: string) => {
+const initializeDatabase = async (dbFilePath: string) => {
   try {
     // Find the prisma/migrations directory
     const possibleMigrationDirs = [
@@ -123,47 +124,72 @@ const initializeDatabase = (dbFilePath: string) => {
   }
 };
 
+const validateSchemaReady = async (db: PrismaClient) => {
+  await db.folder.count();
+};
+
 // Initialize database connection
 let prismaInstance: PrismaClient | null = null;
 let dbPath = "";
+let initializationPromise: Promise<PrismaClient> | null = null;
 
 export async function getPrismaClient() {
   if (prismaInstance && dbPath) {
     return prismaInstance;
   }
 
-  // Get database path
-  dbPath = getDbPath();
-  console.log("📦 Database path:", dbPath);
-
-  // Ensure directory exists
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+  if (initializationPromise) {
+    return initializationPromise;
   }
 
-  // Initialize schema if database is new
-  const isNewDb = !fs.existsSync(dbPath);
-  if (isNewDb) {
-    console.log("🆕 Creating new database...");
+  initializationPromise = (async () => {
+    // Get database path
+    dbPath = getDbPath();
+    console.log("📦 Database path:", dbPath);
+
+    // Ensure directory exists
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    // Initialize schema if database is new
+    const isNewDb = !fs.existsSync(dbPath);
+    if (isNewDb) {
+      console.log("🆕 Creating new database...");
+    }
+
+    const baseClientOptions: Prisma.PrismaClientOptions = {
+      log:
+        process.env.NODE_ENV === "development"
+          ? (["error", "warn"] as Prisma.LogLevel[])
+          : (["error"] as Prisma.LogLevel[]),
+      errorFormat: "minimal",
+    };
+
+    const { PrismaBetterSqlite3 } = await import("@prisma/adapter-better-sqlite3");
+    const adapter = new PrismaBetterSqlite3({ url: dbPath });
+    prismaInstance = new PrismaClient({
+      ...baseClientOptions,
+      adapter,
+    });
+
+    // Run migrations if database is new
+    if (isNewDb) {
+      await initializeDatabase(dbPath);
+    }
+
+    await validateSchemaReady(prismaInstance);
+
+    console.log("✅ Prisma Client initialized");
+    return prismaInstance;
+  })();
+
+  try {
+    return await initializationPromise;
+  } finally {
+    initializationPromise = null;
   }
-
-  const adapter = new PrismaBetterSqlite3({ url: dbPath });
-
-  // Create Prisma Client
-  prismaInstance = new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-    errorFormat: "minimal",
-  });
-
-  // Run migrations if database is new
-  if (isNewDb) {
-    initializeDatabase(dbPath);
-  }
-
-  console.log("✅ Prisma Client initialized");
-  return prismaInstance;
 }
 
 // Export singleton instance getter

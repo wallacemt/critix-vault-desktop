@@ -2,7 +2,7 @@
 // Prepara os arquivos do servidor Next.js para serem embutidos no build do Tauri.
 // Execute APÓS `next build` e ANTES de `tauri build`.
 
-import { rm, mkdir, writeFile, copyFile, readFile, readdir, lstat, rename, realpath } from "fs/promises";
+import { rm, mkdir, writeFile, copyFile, readFile, readdir, lstat, rename, realpath, stat } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -159,28 +159,46 @@ async function renameDotEntries(serverDir) {
  * para o módulo original.
  */
 async function fixTurbopackHashedModules(serverDir) {
-  const chunksDir = path.join(serverDir, "_next_build", "server", "chunks");
-  if (!existsSync(chunksDir)) return;
+  const nextServerDir = path.join(serverDir, "_next_build", "server");
+  if (!existsSync(nextServerDir)) return;
 
-  const jsFiles = await readdir(chunksDir);
+  const jsFiles = [];
+  const walk = async (dir) => {
+    if (!existsSync(dir)) return;
+    const entries = await readdir(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      let entryStat;
+      try {
+        entryStat = await stat(fullPath);
+      } catch {
+        continue;
+      }
+
+      if (entryStat.isDirectory()) {
+        await walk(fullPath);
+        continue;
+      }
+
+      if (entryStat.isFile() && entry.endsWith(".js")) {
+        jsFiles.push(fullPath);
+      }
+    }
+  };
+
+  await walk(nextServerDir);
+
   const hashedRefs = new Set();
 
-  // Regex para capturar referências como: require("@prisma/client-abc123") ou require("better-sqlite3-abc123")
-  const patterns = [
-    /(@prisma\/[\w-]+-[a-f0-9]{8,})/g, // scoped: @prisma/client-hash
-    /(?<!")(?<!\/)(?<!\w)([\w-]+-[a-f0-9]{16,})/g, // unscoped: better-sqlite3-hash (16+ hex chars)
-  ];
-
-  for (const file of jsFiles) {
-    if (!file.endsWith(".js")) continue;
-    const content = await readFile(path.join(chunksDir, file), "utf8");
+  for (const jsPath of jsFiles) {
+    const content = await readFile(jsPath, "utf8");
 
     // Scoped packages (@scope/name-hash)
-    for (const match of content.matchAll(/require\(["'](@prisma\/[\w-]+-[a-f0-9]{8,})["']\)/g)) {
+    for (const match of content.matchAll(/["'](@[\w.-]+\/[\w.-]+-[a-f0-9]{8,})["']/g)) {
       hashedRefs.add(match[1]);
     }
-    // Unscoped packages (name-hash)
-    for (const match of content.matchAll(/require\(["']((?:better-sqlite3|sharp|detect-libc)-[a-f0-9]{8,})["']\)/g)) {
+    // Known native/external packages (name-hash)
+    for (const match of content.matchAll(/["']((?:better-sqlite3|sharp|detect-libc)-[a-f0-9]{8,})["']/g)) {
       hashedRefs.add(match[1]);
     }
   }
@@ -204,6 +222,51 @@ async function fixTurbopackHashedModules(serverDir) {
     );
     console.log(`  ✅ Módulo Turbopack criado: ${hashedName} → ${baseName}`);
   }
+}
+
+async function ensurePrismaRuntimeEntries(serverDir) {
+  const runtimePackages = [
+    "@prisma/adapter-better-sqlite3",
+    "@prisma/driver-adapter-utils",
+    "@prisma/debug",
+    "@prisma/client-runtime-utils",
+  ];
+
+  for (const packageName of runtimePackages) {
+    const bundledIndexJs = path.join(serverDir, "node_modules", packageName, "dist", "index.js");
+    if (existsSync(bundledIndexJs)) {
+      continue;
+    }
+
+    const sourceIndexJs = path.join(ROOT, "node_modules", packageName, "dist", "index.js");
+    if (!existsSync(sourceIndexJs)) {
+      continue;
+    }
+
+    await mkdir(path.dirname(bundledIndexJs), { recursive: true });
+    await copyFile(sourceIndexJs, bundledIndexJs);
+    console.log(`  ✅ Runtime Prisma ajustado: ${packageName}/dist/index.js copiado`);
+  }
+}
+
+async function validateServerBundle(serverDir) {
+  const serverJs = path.join(serverDir, "server.js");
+  if (!existsSync(serverJs)) {
+    throw new Error(`Arquivo server.js não encontrado em ${serverJs}`);
+  }
+
+  const chunksDir = path.join(serverDir, "_next_build", "server", "chunks");
+  if (!existsSync(chunksDir)) {
+    throw new Error(`Diretório de chunks não encontrado em ${chunksDir}`);
+  }
+
+  const chunkEntries = await readdir(chunksDir);
+  const chunkFiles = chunkEntries.filter((file) => file.endsWith(".js"));
+  if (chunkFiles.length === 0) {
+    throw new Error(`Nenhum chunk .js encontrado em ${chunksDir}`);
+  }
+
+  console.log(`  ✅ Bundle validado: ${chunkFiles.length} chunk(s) em _next_build/server/chunks`);
 }
 
 async function main() {
@@ -258,6 +321,15 @@ async function main() {
   // -------------------------------------------------------
   console.log("🔗 Corrigindo módulos Turbopack hasheados...");
   await fixTurbopackHashedModules(SERVER_DEST);
+
+  console.log("🧩 Ajustando runtime Prisma no bundle...");
+  await ensurePrismaRuntimeEntries(SERVER_DEST);
+
+  // -------------------------------------------------------
+  // 2d. Valida o bundle final do servidor para falhar cedo
+  // -------------------------------------------------------
+  console.log("🧪 Validando bundle do servidor...");
+  await validateServerBundle(SERVER_DEST);
 
   // -------------------------------------------------------
   // 3. Cria o out/ com a tela de loading/redirect para o Tauri

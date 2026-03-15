@@ -15,11 +15,12 @@ dist-ssr
 *.local
 # Servidor Next.js gerado pelo prepare-build (pode chegar a centenas de MB)
 # Apenas as pastas pesadas são ignoradas — server.js e README.md são commitados
-/resources/server/node_modules
-/resources/server/.next
-/resources/server/public
-/resources/server/prisma/critix.db
-/resources/*
+/src-tauri/resources/server/node_modules
+/src-tauri/resources/server/.next
+/src-tauri/resources/server/public
+/src-tauri/resources/server/prisma/critix.db
+/src-tauri/resources/*
+/tmp-smoke-data
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

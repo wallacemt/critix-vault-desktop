@@ -7,6 +7,7 @@
   "/(app)/settings/page": "/settings",
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
+  "/api/external/[...path]/route": "/api/external/[...path]",
   "/api/folders/route": "/api/folders",
   "/api/movie/route": "/api/movie",
   "/api/movies/route": "/api/movies",

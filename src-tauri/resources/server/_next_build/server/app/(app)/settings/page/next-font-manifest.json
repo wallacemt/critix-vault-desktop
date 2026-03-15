@@ -1,0 +1,18 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/src/app/(app)/settings/page": [
+      "static/media/Moonjelly_Light-s.p.29ba0f3f.otf",
+      "static/media/Moonjelly_Bold-s.p.20f137d2.otf",
+      "static/media/c7d9ca68f9942779-s.p.5f8f1848.woff2",
+      "static/media/c875c6f5d3e977ac-s.p.80fc2c9e.woff2",
+      "static/media/a218039a3287bcfd-s.p.4a23d71b.woff2",
+      "static/media/8e6fa89aa22d24ec-s.p.3aec397d.woff2",
+      "static/media/e2334d715941921e-s.p.d82a9aff.woff2",
+      "static/media/47fe1b7cd6e6ed85-s.p.855a563b.woff2",
+      "static/media/829ba4228c966254-s.p.a61bc753.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

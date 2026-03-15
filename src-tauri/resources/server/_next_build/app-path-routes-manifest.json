@@ -1,0 +1,20 @@
+{
+  "/(app)/demo/page": "/demo",
+  "/(app)/landing/page": "/landing",
+  "/(app)/library/page": "/library",
+  "/(app)/movie-details/page": "/movie-details",
+  "/(app)/series-details/page": "/series-details",
+  "/(app)/settings/page": "/settings",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/folders/route": "/api/folders",
+  "/api/movie/route": "/api/movie",
+  "/api/movies/route": "/api/movies",
+  "/api/serie/route": "/api/serie",
+  "/api/series/route": "/api/series",
+  "/api/settings/backup/route": "/api/settings/backup",
+  "/api/settings/info/route": "/api/settings/info",
+  "/api/user-actions/route": "/api/user-actions",
+  "/api/watch-history/route": "/api/watch-history",
+  "/page": "/"
+}

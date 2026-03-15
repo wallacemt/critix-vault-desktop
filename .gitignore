@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-resources
+/resources
 node_modules
 dist
 dist-ssr
@@ -19,7 +19,7 @@ dist-ssr
 /resources/server/.next
 /resources/server/public
 /resources/server/prisma/critix.db
-
+/resources/*
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

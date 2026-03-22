@@ -81,6 +81,8 @@ pub fn run() {
             commands::data::import_data,
             commands::data::write_text_file,
             // File operations (system access)
+            commands::files::select_media_file_dialog,
+            commands::files::select_media_files_dialog,
             commands::files::scan_folder,
             commands::files::open_media,
             commands::files::get_file_metadata,

@@ -78,8 +78,180 @@ const PRISMA_SRC = path.join(ROOT, "prisma");
 
 const SERVER_DEST = path.join(ROOT, "src-tauri", "resources", "server");
 const OUT_DIR = path.join(ROOT, "out");
+const TAURI_CONF = path.join(ROOT, "src-tauri", "tauri.conf.json");
+const BUILD_ENV_FILES = [".env.production", ".env.local", ".env"];
 
 const SERVER_PORT = 1422;
+
+function parseCsp(cspValue) {
+  const directives = new Map();
+  const segments = String(cspValue || "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const segment of segments) {
+    const [name, ...sources] = segment.split(/\s+/).filter(Boolean);
+    if (!name) continue;
+    directives.set(name, sources);
+  }
+
+  return directives;
+}
+
+function serializeCsp(directives) {
+  return `${Array.from(directives.entries())
+    .map(([name, sources]) => `${name}${sources.length ? ` ${sources.join(" ")}` : ""}`)
+    .join("; ")};`;
+}
+
+function addCspSource(directives, directive, source) {
+  if (!source) return;
+  const existing = directives.get(directive) || [];
+  if (!existing.includes(source)) {
+    existing.push(source);
+    directives.set(directive, existing);
+  }
+}
+
+function toOrigin(urlString) {
+  if (!urlString) return null;
+  try {
+    const url = new URL(urlString);
+    if (!url.protocol || !url.host) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function parseDotEnvValue(rawValue) {
+  const trimmed = rawValue.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+async function resolveBuildEnv(name) {
+  const direct = process.env[name];
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+
+  const matcher = new RegExp(`^\\s*${name}\\s*=\\s*(.+)\\s*$`);
+  for (const envFile of BUILD_ENV_FILES) {
+    const fullPath = path.join(ROOT, envFile);
+    if (!existsSync(fullPath)) continue;
+
+    try {
+      const content = await readFile(fullPath, "utf8");
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const cleaned = line.trim();
+        if (!cleaned || cleaned.startsWith("#")) continue;
+        const match = line.match(matcher);
+        if (match && match[1]) {
+          return parseDotEnvValue(match[1]);
+        }
+      }
+    } catch {
+      // Ignore unreadable env files and try the next one.
+    }
+  }
+
+  return null;
+}
+
+async function getConfiguredApiUrls() {
+  const direct = await resolveBuildEnv("CRITIX_EXTERNAL_API_URL");
+  const publicUrl = await resolveBuildEnv("NEXT_PUBLIC_CRITIX_API_URL");
+
+  const rawValues = [direct, publicUrl]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(rawValues));
+}
+
+async function getConfiguredApiOrigins() {
+  const rawValues = await getConfiguredApiUrls();
+
+  const origins = new Set();
+  for (const raw of rawValues) {
+    const origin = toOrigin(raw);
+    if (!origin) continue;
+    origins.add(origin);
+    if (origin.startsWith("https://")) {
+      origins.add(origin.replace("https://", "wss://"));
+    }
+    if (origin.startsWith("http://")) {
+      origins.add(origin.replace("http://", "ws://"));
+    }
+  }
+
+  return Array.from(origins);
+}
+
+async function writeServerRuntimeConfig(serverDir) {
+  const apiUrls = await getConfiguredApiUrls();
+  const runtimeConfigPath = path.join(serverDir, "runtime-config.json");
+
+  if (apiUrls.length === 0) {
+    console.log("ℹ️ Runtime config: nenhuma URL externa encontrada em env/.env*.");
+    return;
+  }
+
+  const config = {
+    externalApiBase: apiUrls[0],
+    generatedAt: new Date().toISOString(),
+  };
+
+  await writeFile(runtimeConfigPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  console.log(`  ✅ Runtime config gerado: externalApiBase=${config.externalApiBase}`);
+}
+
+async function syncTauriCspFromEnv() {
+  if (!existsSync(TAURI_CONF)) {
+    console.warn("⚠️ tauri.conf.json não encontrado para atualizar CSP via env.");
+    return;
+  }
+
+  const confRaw = await readFile(TAURI_CONF, "utf8");
+  const conf = JSON.parse(confRaw);
+  const currentCsp = conf?.app?.security?.csp;
+
+  if (typeof currentCsp !== "string" || !currentCsp.trim()) {
+    console.warn("⚠️ CSP ausente em tauri.conf.json. Nenhuma atualização aplicada.");
+    return;
+  }
+
+  const apiOrigins = await getConfiguredApiOrigins();
+  if (apiOrigins.length === 0) {
+    console.log("ℹ️ Nenhuma URL de API externa encontrada em env para enriquecer CSP.");
+    return;
+  }
+
+  const directives = parseCsp(currentCsp);
+  for (const origin of apiOrigins) {
+    addCspSource(directives, "connect-src", origin);
+    if (!origin.startsWith("ws://") && !origin.startsWith("wss://")) {
+      addCspSource(directives, "img-src", origin);
+    }
+  }
+
+  const nextCsp = serializeCsp(directives);
+  if (nextCsp === currentCsp) {
+    console.log("ℹ️ CSP já contém as origens de API externa configuradas.");
+    return;
+  }
+
+  conf.app.security.csp = nextCsp;
+  await writeFile(TAURI_CONF, `${JSON.stringify(conf, null, 2)}\n`, "utf8");
+  console.log(`✅ CSP do Tauri atualizado com origens da API externa: ${apiOrigins.join(", ")}`);
+}
 
 /**
  * Renomeia diretórios e arquivos que começam com "." (dotfiles/dotdirs)
@@ -270,6 +442,8 @@ async function validateServerBundle(serverDir) {
 }
 
 async function main() {
+  await syncTauriCspFromEnv();
+
   // -------------------------------------------------------
   // 1. Valida que o next build foi executado
   // -------------------------------------------------------
@@ -309,6 +483,9 @@ async function main() {
     await cpSafe(PRISMA_SRC, path.join(SERVER_DEST, "prisma"), { skipFiles: [".db", ".db-journal", ".db-wal"] });
     console.log("  ✅ Pasta prisma copiada (sem arquivo .db)");
   }
+
+  console.log("🧾 Gerando runtime-config do servidor...");
+  await writeServerRuntimeConfig(SERVER_DEST);
 
   // -------------------------------------------------------
   // 2b. Renomeia dotfiles/dotdirs para compatibilidade com o Tauri glob

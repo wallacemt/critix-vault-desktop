@@ -81,13 +81,17 @@ export async function GET(request: NextRequest) {
         episodes: season.episodes.map((ep) => ({
           id: ep.id,
           name: ep.title,
+          title: ep.title,
           overview: ep.overview,
           episode_number: ep.episodeNumber,
           season_number: ep.seasonNumber,
           still_path: ep.stillPath,
           air_date: ep.airDate,
           runtime: ep.duration,
+          duration: ep.duration,
           vote_average: 0, // Not stored in database
+          filePath: ep.filePath || undefined,
+          available: ep.available,
         })),
       })),
     };

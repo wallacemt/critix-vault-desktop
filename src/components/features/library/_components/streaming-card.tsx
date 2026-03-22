@@ -359,8 +359,7 @@ export function StreamingCard({
                     onClick={async (e) => {
                       e.stopPropagation();
                       const newStatus = await toggleWatchStatus(media.id, media.type);
-
-                      refreshFolders();
+                      await refreshFolders();
                       setIsWatched(newStatus);
                     }}
                     title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}

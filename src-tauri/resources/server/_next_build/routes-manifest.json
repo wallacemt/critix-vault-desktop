@@ -124,6 +124,12 @@
       "namedRegex": "^/demo(?:/)?$"
     },
     {
+      "page": "/help",
+      "regex": "^/help(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/help(?:/)?$"
+    },
+    {
       "page": "/landing",
       "regex": "^/landing(?:/)?$",
       "routeKeys": {},

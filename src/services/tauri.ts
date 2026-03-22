@@ -308,6 +308,35 @@ class TauriService {
   }
 
   /**
+   * Open media file picker dialog
+   */
+  async selectMediaFile(): Promise<string | null> {
+    try {
+      const selected = await invoke<string | null>("select_media_file_dialog");
+      return selected ? normalizeFolderPath(selected) : null;
+    } catch (error) {
+      console.error("Failed to open media file picker:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Open media file picker dialog for multiple files
+   */
+  async selectMediaFiles(): Promise<string[]> {
+    try {
+      const selected = await invoke<string[] | null>("select_media_files_dialog");
+      if (!selected || selected.length === 0) {
+        return [];
+      }
+      return selected.map((path) => normalizeFolderPath(path));
+    } catch (error) {
+      console.error("Failed to open multiple media file picker:", error);
+      return [];
+    }
+  }
+
+  /**
    * Add a folder to the monitored list (persisted to disk)
    */
   async addFolder(path: string): Promise<Folder> {

@@ -26,6 +26,7 @@ import {
 import { Series, Season, Episode } from "@/types/serie";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSeries, saveSeries } from "@/services/databaseService";
+import { tauriService } from "@/services/tauri";
 
 interface SeriesEditDialogProps {
   series: Series;
@@ -199,14 +200,13 @@ export function SeriesEditDialog({ series, isOpen, onClose, onSave }: SeriesEdit
 function GeneralTab({ series, onChange }: { series: Series; onChange: (series: Series) => void }) {
   const handleSelectFolder = async () => {
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === "string") {
+      const selected = await tauriService.selectFolder();
+      if (selected) {
         onChange({ ...series, folderPath: selected, filePath: selected });
       }
-    } catch {
-      const val = prompt("Caminho da pasta da série:", series.folderPath || series.filePath || "");
-      if (val !== null) onChange({ ...series, folderPath: val, filePath: val });
+    } catch (error) {
+      console.error("Failed to open folder picker:", error);
+      alert("Não foi possível abrir o seletor de pasta no momento.");
     }
   };
 
@@ -311,6 +311,30 @@ function GeneralTab({ series, onChange }: { series: Series; onChange: (series: S
 // --- Seasons Tab ---
 
 function SeasonsTab({ series, onChange }: { series: Series; onChange: (seasons: Season[]) => void }) {
+  const handleSeasonFolderPathChange = (seasonId: string, folderPath: string) => {
+    const updatedSeasons = series.seasons.map((season) =>
+      season.id === seasonId
+        ? {
+            ...season,
+            folderPath,
+          }
+        : season,
+    );
+    onChange(updatedSeasons);
+  };
+
+  const handleSelectSeasonFolder = async (season: Season) => {
+    try {
+      const selected = await tauriService.selectFolder();
+      if (selected) {
+        handleSeasonFolderPathChange(season.id, selected);
+      }
+    } catch (error) {
+      console.error("Failed to open season folder picker:", error);
+      alert("Não foi possível abrir o seletor de pasta da temporada.");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-slate-400 text-sm">
@@ -344,6 +368,30 @@ function SeasonsTab({ series, onChange }: { series: Series; onChange: (seasons: 
                     {available > 0 ? "Disponível" : "Sem arquivos"}
                   </Badge>
                 </div>
+
+                <div className="mt-3">
+                  <label className="block text-xs text-slate-400 mb-2">
+                    Pasta da Temporada
+                    <span className="ml-2 text-slate-500">Opcional</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={season.folderPath || ""}
+                      onChange={(e) => handleSeasonFolderPathChange(season.id, e.target.value)}
+                      placeholder="Ex.: D:/Series/Nome da Série/Temporada 1"
+                      className="bg-slate-900 border-slate-700 text-white"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleSelectSeasonFolder(season)}
+                      className="border-slate-700 text-slate-300 hover:bg-slate-700"
+                    >
+                      <FolderOpen className="w-4 h-4 mr-2" />
+                      Selecionar
+                    </Button>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -372,22 +420,13 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
 
   const handleBrowseFile = async () => {
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Vídeo",
-            extensions: ["mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts"],
-          },
-        ],
-      });
-      if (selected && typeof selected === "string") {
+      const selected = await tauriService.selectMediaFile();
+      if (selected) {
         setEditFilePath(selected);
       }
-    } catch {
-      const val = prompt("Caminho do arquivo:", editFilePath);
-      if (val !== null) setEditFilePath(val);
+    } catch (error) {
+      console.error("Failed to open episode file picker:", error);
+      alert("Não foi possível abrir o seletor de arquivo no momento.");
     }
   };
 
@@ -588,14 +627,13 @@ function FilesTab({ series, onChange }: { series: Series; onChange: (series: Ser
 
   const handleSelectFolder = async () => {
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === "string") {
+      const selected = await tauriService.selectFolder();
+      if (selected) {
         onChange({ ...series, folderPath: selected, filePath: selected });
       }
-    } catch {
-      const val = prompt("Caminho da pasta:", series.folderPath || series.filePath || "");
-      if (val !== null) onChange({ ...series, folderPath: val, filePath: val });
+    } catch (error) {
+      console.error("Failed to open root series folder picker:", error);
+      alert("Não foi possível abrir o seletor de pasta no momento.");
     }
   };
 

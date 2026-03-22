@@ -144,6 +144,17 @@ fn find_server_dir() -> Result<std::path::PathBuf, String> {
     ))
 }
 
+fn load_external_api_from_runtime_config(server_dir: &std::path::Path) -> Option<String> {
+    let config_path = server_dir.join("runtime-config.json");
+    let raw = fs::read_to_string(&config_path).ok()?;
+    let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+    parsed
+        .get("externalApiBase")
+        .and_then(|v| v.as_str())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 /// Inicia o servidor Next.js standalone como processo filho.
 /// Chamado automaticamente no setup do Tauri (apenas em modo produção).
 #[allow(dead_code)]
@@ -185,9 +196,19 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
     }
 
     let db_path = data_dir.join("critix.db");
-    let external_api_url = std::env::var("CRITIX_EXTERNAL_API_URL")
-        .or_else(|_| std::env::var("NEXT_PUBLIC_CRITIX_API_URL"))
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
+    let external_api_url = if let Ok(url) = std::env::var("CRITIX_EXTERNAL_API_URL") {
+        println!("[critix] External API source: CRITIX_EXTERNAL_API_URL");
+        url
+    } else if let Ok(url) = std::env::var("NEXT_PUBLIC_CRITIX_API_URL") {
+        println!("[critix] External API source: NEXT_PUBLIC_CRITIX_API_URL");
+        url
+    } else if let Some(url) = load_external_api_from_runtime_config(&server_dir) {
+        println!("[critix] External API source: runtime-config.json");
+        url
+    } else {
+        println!("[critix] External API source: fallback default");
+        "http://127.0.0.1:8080".to_string()
+    };
 
     println!("[critix] External API base: {}", external_api_url);
 

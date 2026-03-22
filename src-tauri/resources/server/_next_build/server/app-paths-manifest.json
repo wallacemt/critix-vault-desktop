@@ -1,5 +1,6 @@
 {
   "/(app)/demo/page": "app/(app)/demo/page.js",
+  "/(app)/help/page": "app/(app)/help/page.js",
   "/(app)/landing/page": "app/(app)/landing/page.js",
   "/(app)/library/page": "app/(app)/library/page.js",
   "/(app)/movie-details/page": "app/(app)/movie-details/page.js",

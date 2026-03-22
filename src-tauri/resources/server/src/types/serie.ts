@@ -16,6 +16,7 @@ export interface Season {
   seasonNumber: number;
   name: string;
   overview?: string;
+  folderPath?: string;
   poster?: string;
   episodeCount: number;
   episodes: Episode[];

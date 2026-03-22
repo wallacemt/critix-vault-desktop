@@ -5,7 +5,7 @@
 
 "use client";
 import { Button } from "@/components/ui/button";
-import { Folder, FolderPlus, Scan, Settings, Home } from "lucide-react";
+import { Folder, FolderPlus, Scan, Settings, Home, CircleHelp } from "lucide-react";
 import { Media } from "@/types/media";
 import { StreamingGrid } from "./_components/streaming-grid";
 import { MediaGridSkeleton } from "@/components/ui/media-skeleton";
@@ -164,6 +164,15 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Configurações
+              </Button>
+            </Link>
+            <Link href="/help">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
+              >
+                <CircleHelp className="w-4 h-4 mr-2" />
+                Ajuda e FAQ
               </Button>
             </Link>
           </div>

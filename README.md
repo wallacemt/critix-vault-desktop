@@ -195,7 +195,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ### Integração e Serviços
 
-- **[Critix API](https://github.com/wallacemt/critix-backend)** - Backend Java para busca de metadados
+- **[Critix API](https://github.com/wallacemt/critix-backend)** - Backend Java da rede social **CRITIX**
 - **[TMDB](https://www.themoviedb.org/)** - The Movie Database - Fonte de dados de filmes e séries
 
 ### Tecnologias

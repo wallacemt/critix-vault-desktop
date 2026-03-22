@@ -1,5 +1,6 @@
 {
   "/(app)/demo/page": "/demo",
+  "/(app)/help/page": "/help",
   "/(app)/landing/page": "/landing",
   "/(app)/library/page": "/library",
   "/(app)/movie-details/page": "/movie-details",

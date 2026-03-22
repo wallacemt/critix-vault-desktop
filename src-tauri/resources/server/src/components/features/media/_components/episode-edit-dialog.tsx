@@ -6,6 +6,7 @@
 "use client";
 
 import { useState } from "react";
+import { useEffect } from "react";
 import { Episode } from "@/types/serie";
 import {
   Dialog,
@@ -18,8 +19,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, FolderOpen } from "lucide-react";
 import { tauriService } from "@/services/tauri";
+import { Loader2, FolderOpen } from "lucide-react";
 
 interface EpisodeEditDialogProps {
   open: boolean;
@@ -36,35 +37,25 @@ export function EpisodeEditDialog({ open, onOpenChange, episode, seriesId, onSav
   const [runtime, setRuntime] = useState(episode?.runtime?.toString() || "");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Reset form when episode changes
-  useState(() => {
+  // Reset form whenever the selected episode changes.
+  useEffect(() => {
     if (episode) {
       setEpisodeTitle(episode.name);
       setFilePath(episode.filePath || "");
       setOverview(episode.overview || "");
       setRuntime(episode.runtime?.toString() || "");
     }
-  });
+  }, [episode]);
 
   const handleSelectFile = async () => {
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Vídeo",
-            extensions: ["mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts"],
-          },
-        ],
-      });
-      if (selected && typeof selected === "string") {
+      const selected = await tauriService.selectMediaFile();
+      if (selected) {
         setFilePath(selected);
       }
-    } catch {
-      // Fallback: prompt for path if Tauri dialog is not available
-      const val = prompt("Caminho do arquivo:", filePath);
-      if (val !== null) setFilePath(val);
+    } catch (error) {
+      console.error("Failed to open episode file picker:", error);
+      alert("Não foi possível abrir o seletor de arquivo no momento.");
     }
   };
 

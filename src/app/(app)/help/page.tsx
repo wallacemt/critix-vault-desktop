@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BookOpen, Bug, MessageSquare, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getEasterEggProgress, registerEasterEggClue } from "@/lib/easter-egg";
+import { openExternalLink } from "@/lib/external-link";
 
 const issuesUrl = "https://github.com/wallacemt/critix-vault-desktop/issues/new/choose";
 const discussionsUrl = "https://github.com/wallacemt/critix-vault-desktop/wiki";
@@ -35,6 +40,41 @@ const faq = [
 ];
 
 export default function HelpPage() {
+  const [helpClicks, setHelpClicks] = useState(0);
+  const [unlocked, setUnlocked] = useState<string[]>([]);
+
+  useEffect(() => {
+    const progress = getEasterEggProgress();
+    setUnlocked(progress.unlocked);
+  }, []);
+
+  const nextHint = useMemo(() => {
+    if (!unlocked.includes("home-no-folder")) {
+      return "Pista 1: quando a biblioteca estiver vazia, o caminho aparece no início.";
+    }
+    if (!unlocked.includes("empty-scan")) {
+      return "Pista 2: existe uma pasta que parece conter nada, mas ainda conta para a trilha.";
+    }
+    if (!unlocked.includes("help")) {
+      return "Pista 3: toque cinco vezes no título desta página para completar o enigma.";
+    }
+    return "Enigma completo. O portal misterioso já deve ter sido aberto.";
+  }, [unlocked]);
+
+  const handleTitleClick = async () => {
+    const updatedClicks = helpClicks + 1;
+    setHelpClicks(updatedClicks);
+
+    if (updatedClicks >= 5) {
+      setHelpClicks(0);
+      const progress = await registerEasterEggClue("help");
+      setUnlocked(progress.unlocked);
+      if (!progress.completed) {
+        alert("Pista da Ajuda desbloqueada. Falta pouco para abrir o link misterioso.");
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-5xl mx-auto p-6 pb-16 space-y-8">
@@ -50,7 +90,9 @@ export default function HelpPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-white">Ajuda e FAQ</h1>
+              <button onClick={handleTitleClick} className="text-left" title="Ajuda e FAQ">
+                <h1 className="text-3xl font-bold text-white">Ajuda e FAQ</h1>
+              </button>
               <p className="text-sm text-slate-400">Guia rápido, perguntas frequentes e canais de suporte</p>
             </div>
           </div>
@@ -93,19 +135,27 @@ export default function HelpPage() {
         <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Precisa falar com o time?</h2>
           <div className="grid sm:grid-cols-2 gap-3">
-            <a href={issuesUrl} target="_blank" rel="noreferrer">
-              <Button className="w-full justify-start bg-red-600 hover:bg-red-700 text-white">
-                <Bug className="w-4 h-4 mr-2" />
-                Reportar bug ou pedir ajuda (Issues)
-              </Button>
-            </a>
-            <a href={discussionsUrl} target="_blank" rel="noreferrer">
-              <Button className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white">
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Enviar feedback e ideias (Discussions)
-              </Button>
-            </a>
+            <Button
+              className="w-full justify-start bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => openExternalLink(issuesUrl)}
+            >
+              <Bug className="w-4 h-4 mr-2" />
+              Reportar bug ou pedir ajuda (Issues)
+            </Button>
+            <Button
+              className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => openExternalLink(discussionsUrl)}
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Enviar feedback e ideias (Discussions)
+            </Button>
           </div>
+        </section>
+
+        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Transmissão Desconhecida</h2>
+          <p className="text-sm text-slate-400">{nextHint}</p>
+          <p className="text-xs text-slate-500 mt-2">Progresso: {unlocked.length}/3 sinais coletados.</p>
         </section>
       </div>
     </div>

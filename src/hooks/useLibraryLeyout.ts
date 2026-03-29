@@ -13,8 +13,14 @@ export const useLibraryLeyout = () => {
   const [activeTab, setActiveTab] = useState<AppTabs>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"title" | "rating" | "duration" | "year">("title");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<"modified" | "title" | "rating" | "duration" | "year">("modified");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [statusFilter, setStatusFilter] = useState<"all" | "watched" | "unwatched">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "movie" | "series" | "anime">("all");
+  const [yearRange, setYearRange] = useState<"all" | "before-2000" | "2000-2009" | "2010-2019" | "2020-plus">("all");
+  const [ratingRange, setRatingRange] = useState<"all" | "8-plus" | "7-plus" | "6-plus">("all");
+  const [durationRange, setDurationRange] = useState<"all" | "short" | "medium" | "long">("all");
+  const [localOnly, setLocalOnly] = useState(false);
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
   const [deletingMedia, setDeletingMedia] = useState<Media | null>(null);
   const [isDeletingMedia, setIsDeletingMedia] = useState(false);
@@ -180,12 +186,99 @@ export const useLibraryLeyout = () => {
       );
     }
 
+    if (statusFilter === "watched") {
+      allMedia = allMedia.filter((media) => media.isWatched);
+    } else if (statusFilter === "unwatched") {
+      allMedia = allMedia.filter((media) => !media.isWatched);
+    }
+
+    if (typeFilter !== "all") {
+      const typeMap: Record<"all" | "movie" | "series" | "anime", Media["type"] | null> = {
+        all: null,
+        movie: "MOVIE",
+        series: "SERIES",
+        anime: "ANIME",
+      };
+
+      const expectedType = typeMap[typeFilter];
+      if (expectedType) {
+        allMedia = allMedia.filter((media) => media.type === expectedType);
+      }
+    }
+
+    if (yearRange !== "all") {
+      allMedia = allMedia.filter((media) => {
+        const year = media.year || 0;
+        switch (yearRange) {
+          case "before-2000":
+            return year > 0 && year < 2000;
+          case "2000-2009":
+            return year >= 2000 && year <= 2009;
+          case "2010-2019":
+            return year >= 2010 && year <= 2019;
+          case "2020-plus":
+            return year >= 2020;
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (ratingRange !== "all") {
+      allMedia = allMedia.filter((media) => {
+        const rating = media.rating || 0;
+        switch (ratingRange) {
+          case "8-plus":
+            return rating >= 8;
+          case "7-plus":
+            return rating >= 7;
+          case "6-plus":
+            return rating >= 6;
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (durationRange !== "all") {
+      allMedia = allMedia.filter((media) => {
+        const duration = media.duration || 0;
+        switch (durationRange) {
+          case "short":
+            return duration > 0 && duration < 90;
+          case "medium":
+            return duration >= 90 && duration <= 150;
+          case "long":
+            return duration > 150;
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (localOnly) {
+      allMedia = allMedia.filter((media) => {
+        if (media.type === "MOVIE") {
+          return !!media.filePath && !media.filePath.includes("/demo/");
+        }
+
+        const mediaWithSeasons = media as Series;
+        return mediaWithSeasons.seasons?.some((season) =>
+          season.episodes?.some((episode) => !!episode.filePath && !episode.filePath.includes("/demo/")),
+        );
+      });
+    }
+
     // Apply sorting
     allMedia.sort((a, b) => {
       let compareA: any;
       let compareB: any;
 
       switch (sortBy) {
+        case "modified":
+          compareA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          compareB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          break;
         case "title":
           compareA = a.title.toLowerCase();
           compareB = b.title.toLowerCase();
@@ -232,6 +325,18 @@ export const useLibraryLeyout = () => {
     setSortBy,
     sortOrder,
     setSortOrder,
+    statusFilter,
+    setStatusFilter,
+    typeFilter,
+    setTypeFilter,
+    yearRange,
+    setYearRange,
+    ratingRange,
+    setRatingRange,
+    durationRange,
+    setDurationRange,
+    localOnly,
+    setLocalOnly,
     filteredMedia,
     handleFolderSelect,
     handleEditMedia,

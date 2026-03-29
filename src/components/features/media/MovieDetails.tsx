@@ -48,11 +48,20 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [isRefreshingGallery, setIsRefreshingGallery] = useState(false);
 
   const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
   const { handlePlayMovie: onPlay } = useActions();
 
   const router = useRouter();
+
+  const toGalleryImages = (imagesData: any) => {
+    return [
+      ...(imagesData.backdrop?.slice(0, 12).map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ??
+        []),
+      ...(imagesData.poster?.slice(0, 6).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ?? []),
+    ] as string[];
+  };
 
   // Save movie view action - must be before early return
   useEffect(() => {
@@ -60,13 +69,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
     const loadImages = async () => {
       try {
         const imagesData = await fetchMediaImages(currentMovie.id, "movie");
-        const images: string[] = [
-          ...(imagesData.backdrop
-            ?.slice(0, 12)
-            .map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ?? []),
-          ...(imagesData.poster?.slice(0, 6).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ??
-            []),
-        ];
+        const images = toGalleryImages(imagesData);
         if (images.length > 0) setGalleryImages(images);
         else if (currentMovie.images && currentMovie.images.length > 0) setGalleryImages(currentMovie.images);
       } catch {
@@ -172,6 +175,33 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
     } catch (error) {
       console.error("Error updating movie:", error);
       throw error;
+    }
+  };
+
+  const handleRefreshGallery = async () => {
+    setIsRefreshingGallery(true);
+    try {
+      const imagesData = await fetchMediaImages(currentMovie.id, "movie");
+      const refreshedImages = toGalleryImages(imagesData);
+
+      if (refreshedImages.length === 0) {
+        alert("Não encontramos novas imagens para este filme.");
+        return;
+      }
+
+      const updatedMovie: Movie = {
+        ...currentMovie,
+        images: refreshedImages,
+      };
+
+      await saveMovies([updatedMovie]);
+      setCurrentMovie(updatedMovie);
+      setGalleryImages(refreshedImages);
+    } catch (error) {
+      console.error("Error refreshing movie gallery:", error);
+      alert("Erro ao atualizar galeria.");
+    } finally {
+      setIsRefreshingGallery(false);
     }
   };
 
@@ -451,7 +481,12 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.6 }}
           >
-            <ImageGallery images={galleryImages} title={currentMovie.title} />
+            <ImageGallery
+              images={galleryImages}
+              title={currentMovie.title}
+              onRefresh={handleRefreshGallery}
+              isRefreshing={isRefreshingGallery}
+            />
           </motion.div>
         )}
       </motion.div>

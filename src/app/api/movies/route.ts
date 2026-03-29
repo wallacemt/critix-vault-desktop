@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
       videos: movie.videos ? JSON.parse(movie.videos) : undefined,
       cast: movie.cast ? JSON.parse(movie.cast) : undefined,
       crew: movie.crew ? JSON.parse(movie.crew) : undefined,
+      createdAt: movie.createdAt.toISOString(),
+      updatedAt: movie.updatedAt.toISOString(),
     }));
 
     return successResponse(transformed, 200);

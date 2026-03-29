@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { toggleWatchStatus } from "@/services/databaseService";
+import { setSeriesEpisodesWatchStatus, toggleWatchStatus } from "@/services/databaseService";
 import { Media, MediaType } from "@/types/media";
+import { Series } from "@/types/serie";
 import { useFoldersContext } from "@/context/foldersContext";
 
 interface StreamingCardProps {
@@ -63,6 +64,43 @@ export function StreamingCard({
       return `${hours}h ${mins}m`;
     }
     return `${mins}m`;
+  };
+
+  const handleToggleWatched = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (media.type === "MOVIE") {
+      const newStatus = await toggleWatchStatus(media.id, media.type);
+      await refreshFolders();
+      setIsWatched(newStatus);
+      return;
+    }
+
+    const seriesMedia = media as Series;
+    const episodes = (seriesMedia.seasons || []).flatMap((season) =>
+      (season.episodes || []).map((episode) => ({
+        id: episode.id,
+        seasonNumber: episode.season_number,
+        episodeNumber: episode.episode_number,
+      })),
+    );
+
+    if (episodes.length === 0) {
+      alert("Não foi possível atualizar por aqui porque a série ainda não tem episódios carregados.");
+      return;
+    }
+
+    const nextStatus = !isWatched;
+    const actionLabel = nextStatus ? "marcar" : "desmarcar";
+    const confirmed = window.confirm(
+      `Deseja ${actionLabel} ${episodes.length} episódio(s) desta série como assistido(s)?`,
+    );
+
+    if (!confirmed) return;
+
+    await setSeriesEpisodesWatchStatus(media.id, episodes, nextStatus);
+    await refreshFolders();
+    setIsWatched(nextStatus);
   };
 
   if (viewMode === "list") {
@@ -191,11 +229,7 @@ export function StreamingCard({
                       ? "bg-green-600/20 hover:bg-red-600/20 border-green-500/30"
                       : "bg-[var(--bg-surface-light)] hover:bg-green-600/20",
                   )}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const newStatus = await toggleWatchStatus(media.id, media.type);
-                    setIsWatched(newStatus);
-                  }}
+                  onClick={handleToggleWatched}
                   title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
                 >
                   {isWatched ? (
@@ -356,12 +390,7 @@ export function StreamingCard({
                         ? "bg-green-600/80 hover:bg-red-600/80 border-green-400"
                         : "bg-gray-600/30 hover:bg-green-600/80 border-gray-400",
                     )}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const newStatus = await toggleWatchStatus(media.id, media.type);
-                      await refreshFolders();
-                      setIsWatched(newStatus);
-                    }}
+                    onClick={handleToggleWatched}
                     title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
                   >
                     {isWatched ? <X className="w-5 h-5" /> : <Check className="w-5 h-5" />}

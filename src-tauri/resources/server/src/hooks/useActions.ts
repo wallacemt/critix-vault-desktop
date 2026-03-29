@@ -8,10 +8,11 @@ import { getMovies, getSeries, saveMovies, saveSeries } from "@/services/databas
 import { Media } from "@/types/media";
 import { Movie } from "@/types/movie";
 import { Episode, Series } from "@/types/serie";
+import { registerEasterEggClue } from "@/lib/easter-egg";
 
 export function useActions() {
   const { folders, addFolder, selectedFolder } = useFoldersContext();
-  const { setCurrentMovie: setMovie, setCurrentSerie: setSerie, setCurrentSerie } = useMediaContext();
+  const { setCurrentMovie: setMovie, setCurrentSerie: setSerie, serie, setWatchSession } = useMediaContext();
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -34,6 +35,11 @@ export function useActions() {
       if (!selectedPath) {
         setScanning(false);
         return;
+      }
+
+      const preScanFiles = await tauriService.scanFolder(selectedPath);
+      if (preScanFiles.length === 0) {
+        await registerEasterEggClue("empty-scan");
       }
 
       // Add folder to context (will persist automatically via database)
@@ -88,6 +94,13 @@ export function useActions() {
   const handlePlayMovie = async (movie: Movie) => {
     try {
       await tauriService.openMedia(movie.filePath);
+      setWatchSession({
+        type: "movie",
+        mediaId: movie.id,
+        title: movie.title,
+        backdrop: movie.backdrop || movie.poster,
+      });
+      router.push("/watching");
     } catch (error) {
       console.error("Failed to play movie:", error);
     }
@@ -101,6 +114,22 @@ export function useActions() {
 
     try {
       await tauriService.openMedia(episode.filePath);
+
+      if ("episode_number" in episode) {
+        setWatchSession({
+          type: "episode",
+          mediaId: serie?.id || "",
+          title: serie?.title || "Série",
+          episodeId: episode.id,
+          episodeTitle: episode.title,
+          seasonNumber: episode.season_number,
+          episodeNumber: episode.episode_number,
+          backdrop: episode.still_path
+            ? `https://image.tmdb.org/t/p/original${episode.still_path}`
+            : serie?.backdrop,
+        });
+        router.push("/watching");
+      }
     } catch (error) {
       console.error("Failed to play episode:", error);
     }

@@ -6,6 +6,7 @@
   "/(app)/movie-details/page": "app/(app)/movie-details/page.js",
   "/(app)/series-details/page": "app/(app)/series-details/page.js",
   "/(app)/settings/page": "app/(app)/settings/page.js",
+  "/(app)/watching/page": "app/(app)/watching/page.js",
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
   "/api/external/[...path]/route": "app/api/external/[...path]/route.js",

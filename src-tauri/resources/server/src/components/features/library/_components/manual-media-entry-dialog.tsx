@@ -14,6 +14,7 @@ import { Search, Film, Tv, Loader2, FolderOpen, FileVideo } from "lucide-react";
 import { useState } from "react";
 import { apiService } from "@/services/api";
 import { getMovies, saveMovies, getSeries, saveSeries } from "@/services/databaseService";
+import { tauriService } from "@/services/tauri";
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 import { MediaSearchResult } from "@/types/api";
@@ -42,7 +43,7 @@ export function ManualMediaEntryDialog({
   onClose,
   onSuccess,
   folderId,
-  folderPath,
+  folderPath: _folderPath,
 }: ManualMediaEntryDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -89,21 +90,17 @@ export function ManualMediaEntryDialog({
 
   const handleSelectFile = async () => {
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-
-      // Use Tauri dialog plugin directly
-      const selected = await open({
-        directory: selectedMedia?.mediaType === "tv",
-        multiple: false,
-        defaultPath: folderPath,
-        title: selectedMedia?.mediaType === "movie" ? "Selecione o arquivo de vídeo" : "Selecione a pasta da série",
-      });
+      const selected =
+        selectedMedia?.mediaType === "movie" ? await tauriService.selectMediaFile() : await tauriService.selectFolder();
 
       if (selected) {
-        setSelectedFile(Array.isArray(selected) ? selected[0] : selected);
+        setSelectedFile(selected);
+      } else {
+        alert("Nenhum arquivo ou pasta foi selecionado.");
       }
     } catch (error) {
       console.error("Error selecting file:", error);
+      alert("Não foi possível abrir o seletor. Verifique as permissões do app e tente novamente.");
     }
   };
 

@@ -7,16 +7,18 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, X, Maximize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Maximize2, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface ImageGalleryProps {
   images: string[];
   title: string;
+  onRefresh?: () => Promise<void> | void;
+  isRefreshing?: boolean;
 }
 
-export function ImageGallery({ images, title }: ImageGalleryProps) {
+export function ImageGallery({ images, title, onRefresh, isRefreshing = false }: ImageGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
@@ -37,7 +39,24 @@ export function ImageGallery({ images, title }: ImageGalleryProps) {
   return (
     <>
       <section className="py-8">
-        <h2 className="text-2xl font-[moonjelly-bold] text-white mb-6">Galeria de Imagens</h2>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h2 className="text-2xl font-[moonjelly-bold] text-white">Galeria de Imagens</h2>
+          {onRefresh && (
+            <Button
+              variant="outline"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="bg-slate-900/70 border-slate-700 hover:border-blue-500 hover:text-blue-300"
+            >
+              {isRefreshing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Atualizar Galeria
+            </Button>
+          )}
+        </div>
 
         {/* Main Carousel */}
         <div className="relative aspect-video mx-auto max-h-[30em] rounded-lg overflow-hidden bg-slate-900">

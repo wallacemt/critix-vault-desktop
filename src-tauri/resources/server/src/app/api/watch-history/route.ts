@@ -72,9 +72,23 @@ export async function POST(request: NextRequest) {
     );
     const db = await prisma();
 
+    if (episodeId && (seasonNumber == null || episodeNumber == null)) {
+      return NextResponse.json(
+        { error: "seasonNumber and episodeNumber are required when episodeId is provided" },
+        { status: 400 },
+      );
+    }
+
+    if (!episodeId && mediaType !== "MOVIE") {
+      return NextResponse.json(
+        { error: "Series/anime watch updates must include episodeId" },
+        { status: 400 },
+      );
+    }
+
     // Find existing entry
-    // For episodes, match by episodeId; for movies/series, match by mediaId
-    const whereClause = episodeId ? { episodeId } : { mediaId, episodeId: null };
+    // For episodes, match by episodeId; for movies, match by mediaId + mediaType
+    const whereClause = episodeId ? { episodeId } : { mediaId, mediaType: "MOVIE", episodeId: null };
 
     const existing = await db.watchHistory.findFirst({
       where: whereClause,
@@ -100,8 +114,8 @@ export async function POST(request: NextRequest) {
           mediaId,
           mediaType,
           episodeId: episodeId || null,
-          seasonNumber: seasonNumber || null,
-          episodeNumber: episodeNumber || null,
+          seasonNumber: episodeId ? seasonNumber : null,
+          episodeNumber: episodeId ? episodeNumber : null,
           progress: progress || null,
           completed: completed || false,
           watchedAt: new Date(),

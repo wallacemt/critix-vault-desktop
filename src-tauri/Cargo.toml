@@ -3,8 +3,7 @@ name = "critix-vault"
 version = "1.0.0"
 description = "Seu gerenciador de pastas com medias favorito"
 authors = ["Wallace"]
-edition = "2026"
-copyright = "Copyright © 2025 Critix"
+edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

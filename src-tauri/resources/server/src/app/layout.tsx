@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { MediaProvider } from "@/context/mediaContext";
@@ -25,14 +24,9 @@ const moonjelly = localFont({
   variable: "--font-display",
 });
 
-const poppins = Poppins({
-  variable: "--font-sans",
-  weight: ["200", "300", "400", "500", "600", "700", "800"],
-  subsets: ["latin"],
-});
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-br" className={`${moonjelly.variable} ${poppins.variable} dark`} style={{ userSelect: "none" }}>
+    <html lang="pt-br" className={`${moonjelly.variable} dark`} style={{ userSelect: "none" }}>
       <FoldersProvider>
         <MediaProvider>
           <body className="antialiased bg-[var(--bg-body)] font-sans">{children}</body>

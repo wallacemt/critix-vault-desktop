@@ -66,6 +66,8 @@ export async function GET(request: NextRequest) {
       crew: series.crew ? JSON.parse(series.crew) : undefined,
       networks: series.networks ? JSON.parse(series.networks) : undefined,
       productionCompanies: series.productionCompanies ? JSON.parse(series.productionCompanies) : undefined,
+      createdAt: series.createdAt.toISOString(),
+      updatedAt: series.updatedAt.toISOString(),
       seasons: series.seasons.map((season) => ({
         id: season.id,
         seasonNumber: season.seasonNumber,

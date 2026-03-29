@@ -402,6 +402,36 @@ function SeasonsTab({ series, onChange }: { series: Series; onChange: (seasons: 
 
 // --- Episodes Tab ---
 
+function extractEpisodeFromFilePath(filePath: string): { seasonNumber?: number; episodeNumber: number } | null {
+  const fileName = filePath.split(/[\\/]/).pop() || filePath;
+  const normalized = fileName.toLowerCase();
+
+  const seasonEpisodePatterns: RegExp[] = [/s(\d{1,2})e(\d{1,3})/i, /(\d{1,2})x(\d{1,3})/i];
+
+  for (const pattern of seasonEpisodePatterns) {
+    const match = normalized.match(pattern);
+    if (match) {
+      return {
+        seasonNumber: parseInt(match[1], 10),
+        episodeNumber: parseInt(match[2], 10),
+      };
+    }
+  }
+
+  const episodeOnlyPatterns: RegExp[] = [/[\s._-]e(\d{1,3})[\s._-]/i, /(?:^|[\s._-])ep\s?(\d{1,3})(?:$|[\s._-])/i];
+
+  for (const pattern of episodeOnlyPatterns) {
+    const match = ` ${normalized} `.match(pattern);
+    if (match) {
+      return {
+        episodeNumber: parseInt(match[1], 10),
+      };
+    }
+  }
+
+  return null;
+}
+
 function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons: Season[]) => void }) {
   const [selectedSeason, setSelectedSeason] = useState(
     series.seasons.find((s) => s.available || s.episodes.some((e) => e.filePath))?.seasonNumber ||
@@ -437,10 +467,12 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
         if (ep.id !== episode.id) return ep;
         return { ...ep, filePath: editFilePath || undefined, available: !!editFilePath };
       });
+      const downloadedEpisodes = updatedEps.filter((ep) => ep.available || !!ep.filePath).length;
       return {
         ...s,
         episodes: updatedEps,
-        downloadedEpisodes: updatedEps.filter((ep) => ep.available || !!ep.filePath).length,
+        downloadedEpisodes,
+        available: downloadedEpisodes > 0,
       };
     });
     onChange(updatedSeasons);
@@ -455,39 +487,129 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
         if (ep.id !== episode.id) return ep;
         return { ...ep, filePath: undefined, available: false };
       });
+      const downloadedEpisodes = updatedEps.filter((ep) => ep.available || !!ep.filePath).length;
       return {
         ...s,
         episodes: updatedEps,
-        downloadedEpisodes: updatedEps.filter((ep) => ep.available || !!ep.filePath).length,
+        downloadedEpisodes,
+        available: downloadedEpisodes > 0,
       };
     });
     onChange(updatedSeasons);
+  };
+
+  const handleBulkSelectFiles = async () => {
+    if (!season) return;
+
+    try {
+      const selectedFiles = await tauriService.selectMediaFiles();
+      if (selectedFiles.length === 0) return;
+
+      const filesByEpisodeNumber = new Map<number, string>();
+      let ignoredNoPattern = 0;
+      let ignoredSeasonMismatch = 0;
+
+      selectedFiles.forEach((filePath) => {
+        const parsed = extractEpisodeFromFilePath(filePath);
+        if (!parsed) {
+          ignoredNoPattern++;
+          return;
+        }
+
+        if (parsed.seasonNumber && parsed.seasonNumber !== selectedSeason) {
+          ignoredSeasonMismatch++;
+          return;
+        }
+
+        if (!filesByEpisodeNumber.has(parsed.episodeNumber)) {
+          filesByEpisodeNumber.set(parsed.episodeNumber, filePath);
+        }
+      });
+
+      if (filesByEpisodeNumber.size === 0) {
+        alert("Nenhum arquivo foi vinculado. Verifique se os nomes contêm padrão de episódio (S01E01, 1x01, Ep 01).");
+        return;
+      }
+
+      let linkedCount = 0;
+      const updatedSeasons = series.seasons.map((s) => {
+        if (s.seasonNumber !== selectedSeason) return s;
+
+        const updatedEpisodes = s.episodes.map((ep) => {
+          const episodeFile = filesByEpisodeNumber.get(ep.episode_number);
+          if (!episodeFile) return ep;
+          linkedCount++;
+          return {
+            ...ep,
+            filePath: episodeFile,
+            available: true,
+          };
+        });
+
+        const downloadedEpisodes = updatedEpisodes.filter((ep) => ep.available || !!ep.filePath).length;
+        return {
+          ...s,
+          episodes: updatedEpisodes,
+          downloadedEpisodes,
+          available: downloadedEpisodes > 0,
+        };
+      });
+
+      onChange(updatedSeasons);
+
+      const summary = [
+        `${linkedCount} episódio(s) vinculado(s) automaticamente na Temporada ${selectedSeason}.`,
+        ignoredNoPattern > 0 ? `${ignoredNoPattern} arquivo(s) ignorado(s) por nome sem padrão reconhecido.` : null,
+        ignoredSeasonMismatch > 0
+          ? `${ignoredSeasonMismatch} arquivo(s) ignorado(s) por pertencer(em) a outra temporada.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      alert(summary);
+    } catch (error) {
+      console.error("Failed to bulk select episode files:", error);
+      alert("Não foi possível selecionar vários arquivos no momento.");
+    }
   };
 
   return (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-slate-300 mb-2">Temporada</label>
-        <div className="flex flex-wrap gap-2">
-          {series.seasons
-            .sort((a, b) => a.seasonNumber - b.seasonNumber)
-            .map((s) => {
-              const hasFiles = s.episodes.some((e) => e.available || e.filePath);
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setSelectedSeason(s.seasonNumber)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all relative ${
-                    selectedSeason === s.seasonNumber
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-800 text-slate-400 hover:bg-slate-700"
-                  }`}
-                >
-                  T{s.seasonNumber}
-                  {hasFiles && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full" />}
-                </button>
-              );
-            })}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {series.seasons
+              .sort((a, b) => a.seasonNumber - b.seasonNumber)
+              .map((s) => {
+                const hasFiles = s.episodes.some((e) => e.available || e.filePath);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedSeason(s.seasonNumber)}
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-all relative ${
+                      selectedSeason === s.seasonNumber
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                    }`}
+                  >
+                    T{s.seasonNumber}
+                    {hasFiles && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full" />}
+                  </button>
+                );
+              })}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBulkSelectFiles}
+            className="border-slate-700 text-slate-300 hover:bg-slate-800 whitespace-nowrap"
+          >
+            <FolderOpen className="w-4 h-4 mr-2" />
+            Selecionar Vários
+          </Button>
         </div>
       </div>
 

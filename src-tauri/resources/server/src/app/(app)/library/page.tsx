@@ -6,17 +6,21 @@ import { useFoldersContext } from "@/context/foldersContext";
 import { Movie } from "@/types/movie";
 import { LoaderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function LibraryPage() {
   const { folders, isLoading } = useFoldersContext();
   const { handleAddFolder, handleMediaClick, handlePlayMovie, scanning, scanProgress } = useActions();
   const router = useRouter();
+  const shouldRedirectToLanding = !isLoading && (!folders || folders.length === 0);
 
-  // Redirect if no folders
-  if (!folders || folders.length === 0) {
-    router.push("/landing");
-    return null;
-  }
+  useEffect(() => {
+    if (shouldRedirectToLanding) {
+      router.push("/landing");
+    }
+  }, [shouldRedirectToLanding, router]);
+
+  if (shouldRedirectToLanding) return null;
 
   return (
     <>

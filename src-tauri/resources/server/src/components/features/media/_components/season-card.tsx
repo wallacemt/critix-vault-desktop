@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Episode, Season } from "@/types/serie";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Loader2, Play, X, XCircle } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Loader2, Play, RotateCw, X, XCircle } from "lucide-react";
 import { useState } from "react";
 import { EpisodeCard } from "./episode-card";
 import { getImageUrl } from "@/utils/mediaUtils";
@@ -18,6 +18,7 @@ interface SeasonCardProps {
   onEditEpisode?: (episode: Episode) => void;
   onEpisodeWatchToggle?: (episode: Episode, isWatched: boolean) => void;
   onSeasonWatchToggle?: (season: Season, isWatched: boolean) => void;
+  onSeasonRefresh?: (season: Season) => Promise<void> | void;
 }
 
 export function SeasonCard({
@@ -29,9 +30,11 @@ export function SeasonCard({
   onEditEpisode,
   onEpisodeWatchToggle,
   onSeasonWatchToggle,
+  onSeasonRefresh,
 }: SeasonCardProps) {
   const [posterError, setPosterError] = useState(false);
   const [isTogglingWatched, setIsTogglingWatched] = useState(false);
+  const [isRefreshingSeason, setIsRefreshingSeason] = useState(false);
 
   // Season is watched if it has episodes and all are watched
   const hasEpisodes = season.episodes && season.episodes.length > 0;
@@ -45,6 +48,17 @@ export function SeasonCard({
       await onSeasonWatchToggle(season, !isSeasonWatched);
     } finally {
       setIsTogglingWatched(false);
+    }
+  };
+
+  const handleSeasonRefresh = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onSeasonRefresh) return;
+    setIsRefreshingSeason(true);
+    try {
+      await onSeasonRefresh(season);
+    } finally {
+      setIsRefreshingSeason(false);
     }
   };
 
@@ -107,8 +121,28 @@ export function SeasonCard({
         </button>
 
         {/* Season watch toggle button (outside expand button) */}
-        {hasEpisodes && onSeasonWatchToggle && (
-          <div className="pr-6">
+        {(hasEpisodes || onSeasonRefresh) && (
+          <div className="pr-6 flex items-center gap-2">
+            {onSeasonRefresh && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSeasonRefresh}
+                disabled={isRefreshingSeason}
+                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-blue-600/20 hover:border-blue-500 hover:text-blue-300"
+                title="Atualizar episódios desta temporada"
+              >
+                {isRefreshingSeason ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <RotateCw className="w-4 h-4 mr-1" />
+                    Atualizar Temporada
+                  </>
+                )}
+              </Button>
+            )}
+            {hasEpisodes && onSeasonWatchToggle && (
             <Button
               size="sm"
               variant="outline"
@@ -135,6 +169,7 @@ export function SeasonCard({
                 </>
               )}
             </Button>
+            )}
           </div>
         )}
       </div>

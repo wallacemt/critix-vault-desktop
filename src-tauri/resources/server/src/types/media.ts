@@ -21,4 +21,6 @@ export interface Media {
   folderId: string;
   duration?: number;
   isWatched?: boolean; // Loaded from watch history
+  createdAt?: string;
+  updatedAt?: string;
 }

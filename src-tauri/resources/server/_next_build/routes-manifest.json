@@ -158,6 +158,12 @@
       "regex": "^/settings(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings(?:/)?$"
+    },
+    {
+      "page": "/watching",
+      "regex": "^/watching(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/watching(?:/)?$"
     }
   ],
   "dataRoutes": [],

@@ -6,6 +6,7 @@
   "/(app)/movie-details/page": "/movie-details",
   "/(app)/series-details/page": "/series-details",
   "/(app)/settings/page": "/settings",
+  "/(app)/watching/page": "/watching",
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
   "/api/external/[...path]/route": "/api/external/[...path]",

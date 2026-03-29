@@ -24,10 +24,8 @@ import {
   saveSeries,
   removeSeries,
   toggleEpisodeWatchStatus,
-  markAsWatched,
   toggleSeasonWatchStatus,
-  isMediaWatched,
-  toggleWatchStatus,
+  setSeriesEpisodesWatchStatus,
 } from "@/services/databaseService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useActions } from "@/hooks/useActions";
@@ -54,11 +52,25 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [isRefreshingGallery, setIsRefreshingGallery] = useState(false);
   const [isSeriesWatched, setIsSeriesWatched] = useState(false);
   const [isTogglingWatched, setIsTogglingWatched] = useState(false);
   const router = useRouter();
   const { serie: series, setCurrentSerie: onSeriesUpdate } = useMediaContext();
   const { handlePlayEpisode: onPlayEpisode } = useActions();
+
+  const isSeriesFullyWatched = (seasons: Season[]) => {
+    const episodes = seasons.flatMap((season) => season.episodes || []);
+    if (episodes.length === 0) return false;
+    return episodes.every((episode) => episode.isWatched === true);
+  };
+
+  const toGalleryImages = (imagesData: any) => {
+    return [
+      ...(imagesData.backdrop?.slice(0, 12).map((img: any) => `https://image.tmdb.org/t/p/original${img.file_path}`) ?? []),
+      ...(imagesData.poster?.slice(0, 6).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ?? []),
+    ] as string[];
+  };
 
   // All hooks must be before early return
   // Auto-fetch ALL season + episode details from TMDB (including seasons not in local folder)
@@ -201,8 +213,6 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
         const { getSeriesEpisodeWatchStatus } = await import("@/services/databaseService");
         const watchedEpisodes = await getSeriesEpisodeWatchStatus(series.id);
 
-        if (watchedEpisodes.size === 0) return;
-
         // Update series with watch status for each episode
         const updatedSeasons = series.seasons.map((season) => ({
           ...season,
@@ -220,6 +230,8 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
           seasons: updatedSeasons,
         };
 
+        setIsSeriesWatched(isSeriesFullyWatched(updatedSeasons));
+
         if (onSeriesUpdate) {
           onSeriesUpdate(updatedSeries);
         }
@@ -235,7 +247,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   }, [series?.id, series?.seasons?.length]); // Re-run when series or seasons change
 
-  // Save series view action + load watch status
+  // Save series view action
   useEffect(() => {
     if (!series) return;
 
@@ -248,17 +260,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
       }
     };
 
-    const loadWatchStatus = async () => {
-      try {
-        const watched = await isMediaWatched(series.id);
-        setIsSeriesWatched(watched);
-      } catch (error) {
-        console.error("Failed to load watch status:", error);
-      }
-    };
-
     saveView();
-    loadWatchStatus();
   }, [series?.id]);
 
   if (!series) return null;
@@ -433,11 +435,145 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   };
 
+  const handleRefreshSeason = async (season: Season) => {
+    try {
+      const seasonDetails = await fetchSeasonDetails(series.id, season.seasonNumber);
+
+      if (!seasonDetails) {
+        alert("Não foi possível atualizar os dados desta temporada.");
+        return;
+      }
+
+      const existingByEpisode = new Map<number, Episode>();
+      season.episodes.forEach((episode) => {
+        existingByEpisode.set(episode.episode_number, episode);
+      });
+
+      const refreshedEpisodes: Episode[] = seasonDetails.episodes.map((episode) => {
+        const existing = existingByEpisode.get(episode.episode_number);
+        const filePath = existing?.filePath;
+
+        return {
+          id: episode.id,
+          name: episode.name,
+          title: episode.name,
+          overview: episode.overview,
+          episode_number: episode.episode_number,
+          season_number: episode.season_number,
+          still_path: episode.still_path,
+          air_date: episode.air_date,
+          runtime: episode.runtime,
+          vote_average: episode.vote_average,
+          duration: episode.runtime,
+          filePath,
+          available: !!filePath,
+          isWatched: existing?.isWatched ?? false,
+        } as Episode;
+      });
+
+      const updatedSeasons = series.seasons.map((currentSeason) => {
+        if (currentSeason.seasonNumber !== season.seasonNumber) {
+          return currentSeason;
+        }
+
+        return {
+          ...currentSeason,
+          name: seasonDetails.name || currentSeason.name,
+          overview: seasonDetails.overview || currentSeason.overview,
+          poster: seasonDetails.poster_path || currentSeason.poster,
+          episodeCount: seasonDetails.episodes.length,
+          episodes: refreshedEpisodes,
+          downloadedEpisodes: refreshedEpisodes.filter((episode) => !!episode.filePath).length,
+          available: refreshedEpisodes.some((episode) => !!episode.filePath),
+        };
+      });
+
+      const updatedSeries = {
+        ...series,
+        seasons: updatedSeasons,
+      };
+
+      const allSeries = await getSeries();
+      const updatedAllSeries = allSeries.map((item) =>
+        item.id === updatedSeries.id && item.folderId === updatedSeries.folderId ? updatedSeries : item,
+      );
+
+      await saveSeries(updatedAllSeries);
+
+      setIsSeriesWatched(isSeriesFullyWatched(updatedSeasons));
+      onSeriesUpdate?.(updatedSeries);
+    } catch (error) {
+      console.error("Error refreshing season:", error);
+      alert("Erro ao atualizar a temporada.");
+    }
+  };
+
+  const handleRefreshGallery = async () => {
+    setIsRefreshingGallery(true);
+    try {
+      const imagesData = await fetchMediaImages(series.id, "tv");
+      const refreshedImages = toGalleryImages(imagesData);
+
+      if (refreshedImages.length === 0) {
+        alert("Não encontramos novas imagens para esta série.");
+        return;
+      }
+
+      const updatedSeries = {
+        ...series,
+        images: refreshedImages,
+      };
+
+      const allSeries = await getSeries();
+      const updatedAllSeries = allSeries.map((item) =>
+        item.id === updatedSeries.id && item.folderId === updatedSeries.folderId ? updatedSeries : item,
+      );
+
+      await saveSeries(updatedAllSeries);
+      setGalleryImages(refreshedImages);
+      onSeriesUpdate?.(updatedSeries);
+    } catch (error) {
+      console.error("Error refreshing gallery:", error);
+      alert("Erro ao atualizar galeria.");
+    } finally {
+      setIsRefreshingGallery(false);
+    }
+  };
+
   const handleToggleSeriesWatched = async () => {
     setIsTogglingWatched(true);
     try {
-      const newWatched = await toggleWatchStatus(series.id, series.type);
-      setIsSeriesWatched(newWatched);
+      const allEpisodes = series.seasons.flatMap((season) =>
+        season.episodes.map((episode) => ({
+          id: episode.id,
+          seasonNumber: episode.season_number,
+          episodeNumber: episode.episode_number,
+        })),
+      );
+
+      if (allEpisodes.length === 0) {
+        alert("Não há episódios carregados para atualizar o status de assistido.");
+        return;
+      }
+
+      const targetStatus = !isSeriesWatched;
+      await setSeriesEpisodesWatchStatus(series.id, allEpisodes, targetStatus);
+
+      if (onSeriesUpdate) {
+        const updatedSeasons = series.seasons.map((season) => ({
+          ...season,
+          episodes: season.episodes.map((episode) => ({ ...episode, isWatched: targetStatus })),
+        }));
+
+        onSeriesUpdate({
+          ...series,
+          seasons: updatedSeasons,
+        });
+
+        setIsSeriesWatched(isSeriesFullyWatched(updatedSeasons));
+      } else {
+        setIsSeriesWatched(targetStatus);
+      }
     } catch (error) {
       console.error("Error toggling series watch status:", error);
       alert("Erro ao atualizar status de assistido");
@@ -446,7 +582,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   };
 
-  const handleSeasonWatchToggle = async (season: Season, isWatched: boolean) => {
+  const handleSeasonWatchToggle = async (season: Season, _isWatched: boolean) => {
     try {
       const episodes = season.episodes.map((ep) => ({ id: ep.id, episode_number: ep.episode_number }));
       const newStatus = await toggleSeasonWatchStatus(series.id, season.seasonNumber, episodes);
@@ -457,11 +593,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
           return { ...s, episodes: s.episodes.map((ep) => ({ ...ep, isWatched: newStatus })) };
         });
 
-        // Auto-mark whole series if all seasons watched
-        const allWatched = updatedSeasons.every((s) => s.episodes.length > 0 && s.episodes.every((ep) => ep.isWatched));
-        if (allWatched) {
-          await markAsWatched(series.id, "SERIES");
-        }
+        setIsSeriesWatched(isSeriesFullyWatched(updatedSeasons));
 
         onSeriesUpdate({ ...series, seasons: updatedSeasons });
       }
@@ -471,9 +603,9 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   };
 
-  const handleEpisodeWatchToggle = async (episode: Episode, isWatched: boolean) => {
+  const handleEpisodeWatchToggle = async (episode: Episode, _isWatched: boolean) => {
     try {
-      await toggleEpisodeWatchStatus(series.id, episode.id, episode.season_number, episode.episode_number);
+      const nextStatus = await toggleEpisodeWatchStatus(series.id, episode.id, episode.season_number, episode.episode_number);
 
       // Update local state
       if (onSeriesUpdate) {
@@ -483,7 +615,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
               ...season,
               episodes: season.episodes.map((ep) => {
                 if (ep.id === episode.id) {
-                  return { ...ep, isWatched };
+                  return { ...ep, isWatched: nextStatus };
                 }
                 return ep;
               }),
@@ -492,6 +624,8 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
           return season;
         });
 
+        setIsSeriesWatched(isSeriesFullyWatched(updatedSeasons));
+
         onSeriesUpdate({
           ...series,
           seasons: updatedSeasons,
@@ -499,7 +633,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
       }
 
       console.log(
-        `${isWatched ? "✅" : "❌"} Episode ${episode.season_number}x${episode.episode_number} watch status toggled`,
+        `${nextStatus ? "✅" : "❌"} Episode ${episode.season_number}x${episode.episode_number} watch status toggled`,
       );
     } catch (error) {
       console.error("Error toggling episode watch status:", error);
@@ -825,6 +959,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     onEditEpisode={handleEditEpisode}
                     onEpisodeWatchToggle={handleEpisodeWatchToggle}
                     onSeasonWatchToggle={handleSeasonWatchToggle}
+                    onSeasonRefresh={handleRefreshSeason}
                   />
                 </motion.div>
               ))}
@@ -838,7 +973,12 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
             transition={{ duration: 0.4, delay: 0.5 }}
             className="mb-12"
           >
-            <ImageGallery images={galleryImages} title={series.title} />
+            <ImageGallery
+              images={galleryImages}
+              title={series.title}
+              onRefresh={handleRefreshGallery}
+              isRefreshing={isRefreshingGallery}
+            />
           </motion.div>
         )}
       </motion.div>

@@ -1,12 +1,5 @@
-:HL["/_next/static/chunks/1898215a6c1b68b8.css","style"]
-:HL["/_next/static/chunks/5fc675f6994c4c5f.css","style"]
-:HL["/_next/static/media/47fe1b7cd6e6ed85-s.p.855a563b.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-:HL["/_next/static/media/829ba4228c966254-s.p.a61bc753.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-:HL["/_next/static/media/8e6fa89aa22d24ec-s.p.3aec397d.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/_next/static/chunks/1cf0d24a7db86399.css","style"]
+:HL["/_next/static/chunks/351a359f0d896735.css","style"]
 :HL["/_next/static/media/Moonjelly_Bold-s.p.20f137d2.otf","font",{"crossOrigin":"","type":"font/otf"}]
 :HL["/_next/static/media/Moonjelly_Light-s.p.29ba0f3f.otf","font",{"crossOrigin":"","type":"font/otf"}]
-:HL["/_next/static/media/a218039a3287bcfd-s.p.4a23d71b.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-:HL["/_next/static/media/c7d9ca68f9942779-s.p.5f8f1848.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-:HL["/_next/static/media/c875c6f5d3e977ac-s.p.80fc2c9e.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-:HL["/_next/static/media/e2334d715941921e-s.p.d82a9aff.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-0:{"buildId":"HW9C-_GLVfdledqy11ikt","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"(app)","paramType":null,"paramKey":"(app)","hasRuntimePrefetch":false,"slots":{"children":{"name":"settings","paramType":null,"paramKey":"settings","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
+0:{"buildId":"hdFNCQ0I80d5FDQqeqiZ5","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"(app)","paramType":null,"paramKey":"(app)","hasRuntimePrefetch":false,"slots":{"children":{"name":"settings","paramType":null,"paramKey":"settings","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}

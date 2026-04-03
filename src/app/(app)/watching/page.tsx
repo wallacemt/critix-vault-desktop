@@ -92,7 +92,7 @@ export default function WatchingPage() {
 
   const handleBackToMedia = () => {
     clearWatchSession();
-    router.replace(destinationPath);
+    router.back();
   };
 
   const handleMarkWatched = async () => {
@@ -139,7 +139,7 @@ export default function WatchingPage() {
               };
             }),
           }));
-
+          
           const isSeriesWatched =
             updatedSeasons.flatMap((season) => season.episodes).length > 0 &&
             updatedSeasons.flatMap((season) => season.episodes).every((episode) => episode.isWatched === true);

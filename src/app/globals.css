@@ -53,25 +53,7 @@
   /* --- Bordas e Divisores --- */
   --border-color: #333333;
 
-  --primary90: "#FF2F00";
-  --primary80: "#F9370B";
-  --primary70: "#FF481F";
-  --primary60: "#FF552F";
-  --primary50: "#F25430";
-  --primary40: "#D1492A";
-  --primary30: "#94331E";
-  --primary20: "#702B1C";
-  --primary10: "#E98770";
-  --white: "#FFFFFF";
-  --neutral10: "#E5E5E5";
-  --neutral20: "#CCCCCC";
-  --neutral30: "#B2B2B2";
-  --neutral40: "#B2B2B2";
-  --neutral50: "#808080";
-  --neutral60: "#666666";
-  --neutral70: "#4C4C4C";
-  --neutral80: "#333333";
-  --neutral90: "#1A1A1A";
+
   /* --- Sombras (Glow para dar o ar de cinema) --- */
   --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.3);
   --glow-primary: 0 0 15px rgba(255, 193, 7, 0.4); /* Brilho dourado */

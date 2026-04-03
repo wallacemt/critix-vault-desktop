@@ -733,7 +733,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
         )}
 
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-slate-950/60 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-transparent to-transparent" />
 
         {/* Back Button */}
@@ -741,7 +741,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
           variant="ghost"
           size="icon"
           onClick={onBack}
-          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-sm hover:bg-slate-900"
+          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-xl hover:bg-slate-900"
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -833,7 +833,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     variant="outline"
                     onClick={handleToggleSeriesWatched}
                     disabled={isTogglingWatched}
-                    className={`backdrop-blur-sm ${
+                    className={`backdrop-blur-xl rounded-2xl ${
                       isSeriesWatched
                         ? "bg-green-900/30 border-green-600 text-green-400 hover:bg-green-900/50"
                         : "bg-slate-800/80 border-slate-700 hover:bg-slate-800"
@@ -848,25 +848,12 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     )}
                     {isSeriesWatched ? "Assistido" : "Marcar como Assistido"}
                   </Button>
+
                   <Button
                     size="lg"
                     variant="outline"
-                    onClick={() => setIsEditModalOpen(true)}
-                    disabled={isRematching}
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
-                  >
-                    {isRematching ? (
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    ) : (
-                      <Edit className="w-5 h-5 mr-2" />
-                    )}
-                    Editar Série
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={handleOpenFolder}
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                    onClick={handleOpenFolder} 
+                    className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl"
                   >
                     <FolderOpen className="w-5 h-5 mr-2" />
                     Abrir Pasta
@@ -875,7 +862,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     size="lg"
                     variant="outline"
                     onClick={() => setIsAdvancedEditOpen(true)}
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                    className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl"
                   >
                     <Edit className="w-5 h-5 mr-2" />
                     Edição Avançada
@@ -884,7 +871,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     size="lg"
                     variant="outline"
                     onClick={() => setShowDeleteDialog(true)}
-                    className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
+                    className="bg-red-900/20 border-red-700 rounded-2xl hover:bg-red-900/40 backdrop-blur-xl text-red-400 hover:text-red-300"
                   >
                     <Trash2 className="w-5 h-5 mr-2" />
                     Excluir
@@ -894,7 +881,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
-                      className="flex items-center px-4 py-2 bg-slate-800/80 border border-slate-700 rounded-lg backdrop-blur-sm"
+                      className="flex items-center px-4 py-2  bg-slate-800/80 border border-slate-700 rounded-2xl backdrop-blur-sm"
                     >
                       <span className="text-sm text-white">{rematchStatus}</span>
                     </motion.div>

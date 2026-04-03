@@ -111,7 +111,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             <Button
               onClick={onAddFolder}
               size="lg"
-              className="w-full bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-lg"
+              className="w-full bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-on-primary-crx font-semibold font-display  text-md shadow-lg py-2.5 px-4 rounded-md flex items-center justify-center gap-2 transition-colors"
             >
               <FolderPlus className="w-4 h-4 mr-2" />
               Adicionar Pasta
@@ -192,10 +192,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
       </Sidebar>
 
       {/* Main Content with SidebarInset */}
-      <SidebarInset className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
+      <SidebarInset className="flex-1 flex flex-col overflow-x-hidden">
         {selectedFolder ? (
           <motion.div
-            className="flex-1 flex flex-col"
+            className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar"
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
@@ -248,7 +248,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
               }}
             />
             {/* Content Area */}
-            <div className="flex-1 mt-62 overflow-y-auto custom-scrollbar">
+            <div className="flex-1">
               <div className="p-6">
                 <AnimatePresence mode="wait">
                   {scanning && (
@@ -257,7 +257,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="flex flex-col items-center justify-center py-20 inset-0 fixed z-1  backdrop-blur-xs bg-[var(--bg-surface)]/50"
+                      className="fixed inset-0 z-40 flex flex-col items-center justify-center py-20 backdrop-blur-xs bg-[var(--bg-surface)]/50"
                     >
                       <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600/20 to-purple-600/20 flex items-center justify-center mb-6">
                         <Scan className="w-10 h-10 text-[var(--color-primary)] animate-spin" />
@@ -360,7 +360,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg flex items-center gap-2"
+            className="fixed bottom-4 right-4 z-40 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg flex items-center gap-2"
           >
             <Scan className="h-4 w-4 animate-spin" />
             <span className="font-medium">Scanning for new media...</span>

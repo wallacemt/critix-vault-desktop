@@ -1,41 +1,63 @@
 name: CI
 
 on:
-    push:
-        branches: [main, develop]
-    pull_request:
-        branches: [main, develop]
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-    lint-and-check:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  quality:
+    name: Lint, Typecheck, Build and Rust Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 20
+    env:
+      CI: true
 
-            - name: Install bun
-              uses: oven-sh/setup-bun@v1
-              with:
-                  bun-version: latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Install dependencies
-              run: bun install
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-            - name: Lint (eslint)
-              run: bun run lint
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-            - name: Type check (tsc)
-              run: bun run typecheck || bunx tsc --noEmit
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-            - name: Check formatting (prettier)
-              run: bun run format:check || bunx prettier --check .
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+          key: next-cache-${{ runner.os }}-${{ hashFiles('**/bun.lock*', '**/package.json', '**/tsconfig.json', 'next.config.mjs') }}
+          restore-keys: |
+            next-cache-${{ runner.os }}-
 
-            - name: Check Rust (cargo check)
-              run: |
-                  cd src-tauri
-                  cargo check
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Build web app
+        run: bun run build
+
+      - name: Cargo check (Tauri)
+        working-directory: src-tauri
+        run: cargo check

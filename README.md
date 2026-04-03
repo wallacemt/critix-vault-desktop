@@ -53,21 +53,20 @@ Sem precisar renomear tudo manualmente, o app encontra filmes e series, cria as 
 
 > Dica: para atualizar esta secao, substitua as imagens em public/images/readme mantendo os mesmos nomes.
 
-| Biblioteca                                           | Catalogo                                                 |
-| ---------------------------------------------------- | -------------------------------------------------------- |
+| Biblioteca                                             | Catalogo                                              |
+| ------------------------------------------------------ | ----------------------------------------------------- |
 | ![Biblioteca](public/images/readme/library-movies.png) | ![Catalogo](public/images/readme/library-movie-2.png) |
 
-| Config                                               | Help                                                     |
-| ---------------------------------------------------- | -------------------------------------------------------- |
+| Config                                         | Help                                       |
+| ---------------------------------------------- | ------------------------------------------ |
 | ![Biblioteca](public/images/readme/config.png) | ![Catalogo](public/images/readme/help.png) |
 
-| Serie Screen                                         | Movie Screen                                                     |
-| ---------------------------------------------------- | -------------------------------------------------------- |
+| Serie Screen                                         | Movie Screen                                       |
+| ---------------------------------------------------- | -------------------------------------------------- |
 | ![Biblioteca](public/images/readme/serie-screen.png) | ![Catalogo](public/images/readme/movie-screen.png) |
 
-
-| Destaques                                               | Interface                                                    |
-| ------------------------------------------------------- | ------------------------------------------------------------ |
+| Destaques                                   | Interface                                             |
+| ------------------------------------------- | ----------------------------------------------------- |
 | ![Destaques](public/images/readme/home.png) | ![Interface](public/images/readme/library-series.png) |
 
 ---
@@ -86,8 +85,7 @@ Se voce quer apenas usar e testar:
 ## Documentacao
 
 - Guia tecnico principal: [docs/tech/TECHNICAL_OVERVIEW.md](docs/tech/TECHNICAL_OVERVIEW.md)
-- Mapa de documentos: [docs/tech/FILE_INDEX.md](docs/tech/FILE_INDEX.md)
-- Tarefas e planejamento: [docs/tasks.md](docs/tasks.md)
+- Guia de releases e versionamento: [docs/tech/RELEASES_AND_VERSIONS.md](docs/tech/RELEASES_AND_VERSIONS.md)
 
 ---
 

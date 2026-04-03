@@ -45,7 +45,7 @@ export function TrailerModal({ videos, title }: TrailerModalProps) {
         size="lg"
         variant="outline"
         onClick={() => handleOpenVideo(primaryVideo)}
-        className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+        className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl"
       >
         <Play className="w-5 h-5 mr-2" />
         Assistir Trailer

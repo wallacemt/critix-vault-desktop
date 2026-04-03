@@ -231,9 +231,8 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
         )}
-
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-slate-950/60 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-transparent to-transparent" />
 
         {/* Back Button */}
@@ -241,7 +240,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
           variant="ghost"
           size="icon"
           onClick={onBack}
-          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-sm hover:bg-slate-900"
+          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-xl hover:bg-slate-900"
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -325,8 +324,9 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                   <Button
                     size="lg"
                     onClick={handlePlay}
+                    variant={"ghost"}
                     disabled={currentMovie.isWatched}
-                    className="bg-white text-slate-900 hover:bg-slate-100 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    className=" bg-primary-crx flex items-center justify-center rounded-2xl text-slate-900 hover:backdrop-blur-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Play className="w-5 h-5 mr-2 fill-current" />
                     {currentMovie.isWatched ? "Já Assistido" : "Assistir Agora"}
@@ -335,7 +335,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                     size="lg"
                     variant="outline"
                     onClick={handleMarkAsWatched}
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl"
                   >
                     {currentMovie.isWatched ? (
                       <>
@@ -356,7 +356,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                     size="lg"
                     variant="outline"
                     onClick={handleOpenFolder}
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm"
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl"
                   >
                     <FolderOpen className="w-5 h-5 mr-2" />
                     Abrir Pasta
@@ -365,7 +365,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                     size="lg"
                     variant="outline"
                     onClick={() => setShowEditDialog(true)}
-                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-sm text-blue-400 hover:text-blue-300"
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl text-blue-400 hover:text-blue-300"
                   >
                     <Pencil className="w-5 h-5 mr-2" />
                     Editar
@@ -374,7 +374,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                     size="lg"
                     variant="outline"
                     onClick={() => setShowDeleteDialog(true)}
-                    className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-sm text-red-400 hover:text-red-300"
+                    className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-xl rounded-2xl text-red-400 hover:text-red-300"
                   >
                     <Trash2 className="w-5 h-5 mr-2" />
                     Excluir

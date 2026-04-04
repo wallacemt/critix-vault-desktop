@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
 import { useMediaContext } from "@/context/mediaContext";
@@ -9,11 +9,14 @@ import { Media } from "@/types/media";
 import { Movie } from "@/types/movie";
 import { Episode, Series } from "@/types/serie";
 import { registerEasterEggClue } from "@/lib/easter-egg";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 export function useActions() {
   const { folders, addFolder, selectedFolder } = useFoldersContext();
   const { setCurrentMovie: setMovie, setCurrentSerie: setSerie, serie, setWatchSession } = useMediaContext();
+  const { isOnline } = useApiConnectivity();
   const router = useRouter();
+  const pathname = usePathname();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
 
@@ -27,6 +30,11 @@ export function useActions() {
 
   const handleAddFolder = async () => {
     try {
+      if (!isOnline) {
+        alert("Modo offline ativo. Reconecte para escanear e associar midias automaticamente.");
+        return;
+      }
+
       setScanning(true);
       setScanProgress(0);
 
@@ -98,6 +106,7 @@ export function useActions() {
         type: "movie",
         mediaId: movie.id,
         title: movie.title,
+        returnPath: pathname,
         backdrop: movie.backdrop || movie.poster,
       });
       router.push("/watching");
@@ -120,6 +129,7 @@ export function useActions() {
           type: "episode",
           mediaId: serie?.id || "",
           title: serie?.title || "Série",
+          returnPath: pathname,
           episodeId: episode.id,
           episodeTitle: episode.title,
           seasonNumber: episode.season_number,

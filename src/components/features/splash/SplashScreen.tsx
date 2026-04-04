@@ -5,48 +5,91 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
-import { useApiStatus } from "@/hooks/useApiStatus";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 import { useFoldersContext } from "@/context/foldersContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
+
+const MAX_AUTO_RETRIES = 3;
+const AUTO_RETRY_DELAY_MS = 2_000;
+const AUTO_CONTINUE_OFFLINE_SECONDS = 5;
 
 interface SplashScreenProps {
   onReady: () => void;
 }
 
 export function SplashScreen({ onReady }: SplashScreenProps) {
-  const { data: status, loading, error, retry } = useApiStatus();
-  const {  isLoading: foldersLoading } = useFoldersContext();
+  const { status, isOnline, isChecking, hasChecked, lastError, retryConnection } = useApiConnectivity();
+  const { isLoading: foldersLoading } = useFoldersContext();
   const [autoRetryCount, setAutoRetryCount] = useState(0);
+  const [autoContinueCountdown, setAutoContinueCountdown] = useState<number | null>(null);
+  const hasNavigatedRef = useRef(false);
+
+  const proceedToApp = useCallback(() => {
+    if (hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
+    onReady();
+  }, [onReady]);
 
   useEffect(() => {
-    // Wait for folders to load
-    if (foldersLoading) return;
+    if (hasNavigatedRef.current || foldersLoading || !hasChecked || isChecking) return;
 
-    // Auto-retry up to 3 times if API is offline
-    if (status && !status.online && autoRetryCount < 3) {
+    if (!isOnline && autoRetryCount < MAX_AUTO_RETRIES) {
       const timer = setTimeout(() => {
         setAutoRetryCount((prev) => prev + 1);
-        retry();
-      }, 2000);
+        retryConnection();
+      }, AUTO_RETRY_DELAY_MS);
       return () => clearTimeout(timer);
     }
+  }, [isOnline, autoRetryCount, retryConnection, foldersLoading, hasChecked, isChecking]);
 
-    // If API is online and folders loaded, proceed after a brief delay
-    if (status?.online && !foldersLoading) {
+  useEffect(() => {
+    if (hasNavigatedRef.current || foldersLoading || !hasChecked) return;
+
+    if (isOnline) {
+      setAutoContinueCountdown(null);
       const timer = setTimeout(() => {
-        onReady();
+        proceedToApp();
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [status, autoRetryCount, retry, onReady, foldersLoading]);
+
+    if (autoRetryCount >= MAX_AUTO_RETRIES && autoContinueCountdown === null) {
+      setAutoContinueCountdown(AUTO_CONTINUE_OFFLINE_SECONDS);
+    }
+  }, [isOnline, autoRetryCount, autoContinueCountdown, foldersLoading, hasChecked, proceedToApp]);
+
+  useEffect(() => {
+    if (hasNavigatedRef.current || isOnline || autoContinueCountdown === null) return;
+
+    if (autoContinueCountdown <= 0) {
+      proceedToApp();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setAutoContinueCountdown((prev) => {
+        if (prev === null) return null;
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [autoContinueCountdown, isOnline, proceedToApp]);
 
   const handleManualRetry = () => {
     setAutoRetryCount(0);
-    retry();
+    setAutoContinueCountdown(null);
+    retryConnection();
   };
+
+  const handleContinueOffline = () => {
+    proceedToApp();
+  };
+
+  const isLoading = foldersLoading || !hasChecked || isChecking;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-on-primary-crx">
@@ -66,53 +109,55 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
 
         {/* Status */}
         <div className="flex flex-col items-center gap-4 min-h-[100px]">
-          {loading && (
+          {isLoading && (
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
               <p className="text-sm text-slate-400">
-                {autoRetryCount > 0 ? `Retrying (${autoRetryCount}/3)...` : "Checking API status..."}
+                {autoRetryCount > 0
+                  ? `Tentando reconectar (${autoRetryCount}/${MAX_AUTO_RETRIES})...`
+                  : "Verificando conexao com API externa..."}
               </p>
             </div>
           )}
 
-          {!loading && status?.online && (
+          {!isLoading && isOnline && (
             <div className="flex flex-col items-center gap-3">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
               <p className="text-sm text-green-400">Conectado Com Sucesso</p>
             </div>
           )}
 
-          {!loading && status && !status.online && autoRetryCount >= 3 && (
-            <div className="flex flex-col items-center gap-4 max-w-md">
-              <AlertCircle className="w-8 h-8 text-red-500" />
-              <div className="text-center">
-                <p className="text-sm text-red-400 mb-2">Falha ao estabelecer conexão com Critix API</p>
-                <p className="text-xs text-slate-500">{status.message}</p>
-              </div>
-              <Button
-                onClick={handleManualRetry}
-                variant="outline"
-                className="bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600"
-              >
-                Tentar Novamente
-              </Button>
+          {!isLoading && !isOnline && autoRetryCount < MAX_AUTO_RETRIES && (
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+              <p className="text-sm text-slate-400">API externa indisponivel. Tentando novamente...</p>
             </div>
           )}
 
-          {error && !status && (
+          {!isLoading && !isOnline && autoRetryCount >= MAX_AUTO_RETRIES && (
             <div className="flex flex-col items-center gap-4 max-w-md">
-              <AlertCircle className="w-8 h-8 text-red-500" />
+              <AlertCircle className="w-8 h-8 text-amber-500" />
               <div className="text-center">
-                <p className="text-sm text-red-400 mb-2">Erro de Conexão</p>
-                <p className="text-xs text-slate-500">{error}</p>
+                <p className="text-sm text-amber-300 mb-2">Nao foi possivel conectar com a API externa</p>
+                <p className="text-xs text-slate-500">{status?.message || lastError || "Sem detalhes adicionais."}</p>
+                {autoContinueCountdown !== null && (
+                  <p className="text-xs text-slate-400 mt-2">
+                    Entrando em modo offline automaticamente em {autoContinueCountdown}s...
+                  </p>
+                )}
               </div>
-              <Button
-                onClick={handleManualRetry}
-                variant="outline"
-                className="bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600"
-              >
-               Tentar Novamente
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleManualRetry}
+                  variant="outline"
+                  className="bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600"
+                >
+                  Tentar Novamente
+                </Button>
+                <Button onClick={handleContinueOffline} className="bg-amber-500 text-slate-900 hover:bg-amber-400">
+                  Entrar Offline
+                </Button>
+              </div>
             </div>
           )}
         </div>

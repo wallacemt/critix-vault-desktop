@@ -20,12 +20,13 @@ interface DemoLibraryProps {
 }
 
 export function DemoLibrary({ onBack, onMediaClick, onMediaPlay }: DemoLibraryProps) {
-  const { movies, series, loading, error, loadDemo } = useDemoData();
+  const { movies, series, loading, error, loadDemo, isOnline, retryConnection } = useDemoData();
   const [activeTab, setActiveTab] = useState<"all" | "movies" | "series">("all");
 
   useEffect(() => {
+    if (!isOnline) return;
     loadDemo();
-  }, [loadDemo]);
+  }, [isOnline, loadDemo]);
 
   const filteredMedia = () => {
     const allMedia: Media[] = [...movies, ...series];
@@ -142,6 +143,24 @@ export function DemoLibrary({ onBack, onMediaClick, onMediaPlay }: DemoLibraryPr
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
                 <p className="text-slate-400">Loading trending content...</p>
+              </div>
+            ) : !isOnline ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <AlertCircle className="w-12 h-12 text-amber-400 mb-4" />
+                <p className="text-amber-300 mb-2">Modo offline ativo</p>
+                <p className="text-sm text-slate-500 max-w-md">
+                  O modo demonstracao depende da API externa para carregar conteudo em alta.
+                </p>
+                <Button
+                  onClick={async () => {
+                    await retryConnection();
+                    await loadDemo();
+                  }}
+                  variant="outline"
+                  className="mt-4 bg-slate-800/50 border-slate-700 hover:bg-slate-800"
+                >
+                  Tentar Reconectar
+                </Button>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">

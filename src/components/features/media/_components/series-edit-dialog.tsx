@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -71,10 +71,22 @@ export interface FileBinding {
 
 type TabType = "general" | "seasons" | "episodes" | "files";
 
+function normalizeSeriesForEditing(series: Series): Series {
+  return {
+    ...series,
+    seasons: Array.isArray(series.seasons) ? series.seasons : [],
+  };
+}
+
 export function SeriesEditDialog({ series, isOpen, onClose, onSave }: SeriesEditDialogProps) {
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const [isSaving, setIsSaving] = useState(false);
-  const [editedSeries, setEditedSeries] = useState<Series>(series);
+  const [editedSeries, setEditedSeries] = useState<Series>(normalizeSeriesForEditing(series));
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setEditedSeries(normalizeSeriesForEditing(series));
+  }, [series, isOpen]);
 
   if (!isOpen) return null;
 
@@ -88,12 +100,13 @@ export function SeriesEditDialog({ series, isOpen, onClose, onSave }: SeriesEdit
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const normalizedSeries = normalizeSeriesForEditing(editedSeries);
       const allSeries = await getSeries();
       const updatedAllSeries = allSeries.map((s) =>
-        s.id === editedSeries.id && s.folderId === editedSeries.folderId ? editedSeries : s,
+        s.id === normalizedSeries.id && s.folderId === normalizedSeries.folderId ? normalizedSeries : s,
       );
       await saveSeries(updatedAllSeries);
-      await onSave(editedSeries);
+      await onSave(normalizedSeries);
       onClose();
     } catch (error) {
       console.error("Error saving series edits:", error);
@@ -311,8 +324,10 @@ function GeneralTab({ series, onChange }: { series: Series; onChange: (series: S
 // --- Seasons Tab ---
 
 function SeasonsTab({ series, onChange }: { series: Series; onChange: (seasons: Season[]) => void }) {
+  const seasons = Array.isArray(series.seasons) ? series.seasons : [];
+
   const handleSeasonFolderPathChange = (seasonId: string, folderPath: string) => {
-    const updatedSeasons = series.seasons.map((season) =>
+    const updatedSeasons = seasons.map((season) =>
       season.id === seasonId
         ? {
             ...season,
@@ -338,11 +353,12 @@ function SeasonsTab({ series, onChange }: { series: Series; onChange: (seasons: 
   return (
     <div className="space-y-4">
       <p className="text-slate-400 text-sm">
-        {series.numberOfSeasons} temporada(s) &bull; {series.seasons.reduce((acc, s) => acc + s.downloadedEpisodes, 0)}{" "}
+        {series.numberOfSeasons} temporada(s) &bull; {seasons.reduce((acc, s) => acc + s.downloadedEpisodes, 0)}{" "}
         episódios disponíveis
       </p>
       <div className="grid gap-3">
-        {series.seasons
+        {seasons
+          .slice()
           .sort((a, b) => a.seasonNumber - b.seasonNumber)
           .map((season) => {
             const available = season.episodes.filter((e) => e.available || e.filePath).length;
@@ -433,15 +449,17 @@ function extractEpisodeFromFilePath(filePath: string): { seasonNumber?: number; 
 }
 
 function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons: Season[]) => void }) {
+  const seasons = Array.isArray(series.seasons) ? series.seasons : [];
+
   const [selectedSeason, setSelectedSeason] = useState(
-    series.seasons.find((s) => s.available || s.episodes.some((e) => e.filePath))?.seasonNumber ||
-      series.seasons[0]?.seasonNumber ||
+    seasons.find((s) => s.available || s.episodes.some((e) => e.filePath))?.seasonNumber ||
+      seasons[0]?.seasonNumber ||
       1,
   );
   const [editingEpId, setEditingEpId] = useState<string | null>(null);
   const [editFilePath, setEditFilePath] = useState("");
 
-  const season = series.seasons.find((s) => s.seasonNumber === selectedSeason);
+  const season = seasons.find((s) => s.seasonNumber === selectedSeason);
 
   const handleSelectEpisodeFile = (episode: Episode) => {
     setEditingEpId(episode.id);
@@ -461,7 +479,7 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
   };
 
   const handleSaveEpisodePath = (episode: Episode) => {
-    const updatedSeasons = series.seasons.map((s) => {
+    const updatedSeasons = seasons.map((s) => {
       if (s.seasonNumber !== selectedSeason) return s;
       const updatedEps = s.episodes.map((ep) => {
         if (ep.id !== episode.id) return ep;
@@ -481,7 +499,7 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
   };
 
   const handleClearEpisodePath = (episode: Episode) => {
-    const updatedSeasons = series.seasons.map((s) => {
+    const updatedSeasons = seasons.map((s) => {
       if (s.seasonNumber !== selectedSeason) return s;
       const updatedEps = s.episodes.map((ep) => {
         if (ep.id !== episode.id) return ep;
@@ -532,7 +550,7 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
       }
 
       let linkedCount = 0;
-      const updatedSeasons = series.seasons.map((s) => {
+      const updatedSeasons = seasons.map((s) => {
         if (s.seasonNumber !== selectedSeason) return s;
 
         const updatedEpisodes = s.episodes.map((ep) => {
@@ -580,7 +598,8 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
         <label className="block text-sm font-medium text-slate-300 mb-2">Temporada</label>
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-            {series.seasons
+            {seasons
+              .slice()
               .sort((a, b) => a.seasonNumber - b.seasonNumber)
               .map((s) => {
                 const hasFiles = s.episodes.some((e) => e.available || e.filePath);
@@ -732,8 +751,9 @@ function EpisodesTab({ series, onChange }: { series: Series; onChange: (seasons:
 // --- Files Tab ---
 
 function FilesTab({ series, onChange }: { series: Series; onChange: (series: Series) => void }) {
+  const seasons = Array.isArray(series.seasons) ? series.seasons : [];
   const allFiles: { file: string; season: number; episode: number; epName: string }[] = [];
-  series.seasons.forEach((season) => {
+  seasons.forEach((season) => {
     season.episodes.forEach((episode) => {
       if (episode.filePath) {
         allFiles.push({

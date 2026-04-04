@@ -40,7 +40,7 @@ export function AppSidebar({
   const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar variant="floating" collapsible="icon" className="border-r border-[var(--border-color)] group-data-[collapsible=icon]:w-24">
+    <Sidebar collapsible="icon" className="border-r border-[var(--border-color)] ">
       <div
         className="absolute inset-0 z-0 opacity-90 pointer-events-none"
         style={{
@@ -53,7 +53,7 @@ export function AppSidebar({
         <div className="absolute inset-0   bg-gradient-to-b from-[#121212]/80 via-[#121212]/95 to-[#121212]"></div>
       </div>
       <SidebarHeader className="z-10 border-b border-[var(--border-color)] p-4 md:p-5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex w-full items-center justify-center gap-2">
           <Link
             href="/library"
             className="flex items-center transition-all hover:scale-105 group-data-[collapsible=icon]:hidden cursor-pointer"
@@ -64,10 +64,12 @@ export function AppSidebar({
               <span className="animate-pulse text-primary">V</span>ault
             </span>
           </Link>
+        </div>
 
+        <div className="flex gap-2 flex-row-reverse items-center justify-center group-data-[collapsible=icon]:flex-col">
           <Tooltip>
             <TooltipTrigger asChild>
-              <SidebarTrigger className="shrink-0 rounded-md border border-[var(--border-color)] bg-[var(--bg-surface-light)] hover:bg-[var(--bg-surface-light)]/70 group-data-[collapsible=icon]:mx-auto" />
+              <SidebarTrigger className="p-2 size-9 text-text-secondary-crx hover:text-text-primary-crx hover:bg-surface-light-crx rounded-lg transition-colors" size={'icon-lg'}  />
             </TooltipTrigger>
             {isCollapsed && (
               <TooltipContent side="right" sideOffset={8}>
@@ -75,27 +77,26 @@ export function AppSidebar({
               </TooltipContent>
             )}
           </Tooltip>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={onAddFolder}
+                  size="lg"
+                  className="w-full rounded-md bg-gradient-to-r from-[var(--color-primary)] to-amber-500 px-4 py-2.5 text-md font-display font-semibold text-on-primary-crx shadow-lg transition-colors hover:from-yellow-500 hover:to-amber-600 group-data-[collapsible=icon]:h-11 group-data-[collapsible=icon]:w-11 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0"
+                >
+                  <FolderPlus className="h-4 w-4 shrink-0 md:mr-2 group-data-[collapsible=icon]:mr-0" />
+                  <span className="group-data-[collapsible=icon]:hidden">Adicionar Pasta</span>
+                </Button>
+              </TooltipTrigger>
+              {isCollapsed && (
+                <TooltipContent side="right" sideOffset={8}>
+                  Adicionar Pasta
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </motion.div>
         </div>
-
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={onAddFolder}
-                size="lg"
-                className="w-full rounded-md bg-gradient-to-r from-[var(--color-primary)] to-amber-500 px-4 py-2.5 text-md font-display font-semibold text-on-primary-crx shadow-lg transition-colors hover:from-yellow-500 hover:to-amber-600 group-data-[collapsible=icon]:h-11 group-data-[collapsible=icon]:w-11 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0"
-              >
-                <FolderPlus className="h-4 w-4 shrink-0 md:mr-2 group-data-[collapsible=icon]:mr-0" />
-                <span className="group-data-[collapsible=icon]:hidden">Adicionar Pasta</span>
-              </Button>
-            </TooltipTrigger>
-            {isCollapsed && (
-              <TooltipContent side="right" sideOffset={8}>
-                Adicionar Pasta
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </motion.div>
       </SidebarHeader>
 
       <SidebarContent>
@@ -123,7 +124,7 @@ export function AppSidebar({
               <Link href="/landing?home=true">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center"
+                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
                 >
                   <Home className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Início</span>
@@ -141,7 +142,7 @@ export function AppSidebar({
               <Link href="/settings">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center"
+                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
                 >
                   <Settings className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Configurações</span>
@@ -159,7 +160,7 @@ export function AppSidebar({
               <Link href="/help">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center"
+                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
                 >
                   <CircleHelp className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Ajuda e FAQ</span>

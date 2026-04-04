@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Dispatch, SetStateAction, useState } from "react";
 import { userActionService } from "@/services/userActionService";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface FolderMediaHeaderProps {
   selectedFolder: Folder;
@@ -53,7 +54,6 @@ interface FolderMediaHeaderProps {
   setDurationRange: Dispatch<SetStateAction<"all" | "short" | "medium" | "long">>;
   setLocalOnly: Dispatch<SetStateAction<boolean>>;
   scanFolder: (folderPath: string) => Promise<void>;
-  onScanWithPreview?: () => void;
   onManualEntry?: () => void;
   onOpenFolder?: () => void;
   watchedSeriesCount?: number;
@@ -90,15 +90,15 @@ export function FolderMediaHeader({
   unwatchedMoviesCount,
   watchedMoviesCount,
   seriesCount,
-  onScanWithPreview,
   onManualEntry,
   onOpenFolder,
   watchedSeriesCount = 0,
 }: FolderMediaHeaderProps) {
+  const { isOnline } = useApiConnectivity();
   const [showControlPanel, setShowControlPanel] = useState(false);
 
   const sortValue = `${sortBy}-${sortOrder}`;
-  const triggerClass = "h-9 border-[var(--border-color)] bg-[var(--bg-surface-light)] text-[var(--text-primary)]";
+  const triggerClass = "h-9 border-[var(--border-color)] bg-[var(--bg-surface-light)] text-[var(--text-primary)] rounded-md";
 
   return (
     <div className="sticky top-0 z-20 w-full border-b border-[var(--border-color)] bg-[var(--bg-surface)]/95 backdrop-blur-lg">
@@ -192,18 +192,41 @@ export function FolderMediaHeader({
                   <TooltipContent side="bottom">Lista</TooltipContent>
                 </Tooltip>
               </div>
-
-              <Button
-                onClick={() => scanFolder(selectedFolder.path)}
-                variant="outline"
-                size="sm"
-                disabled={scanning}
-                className={cn(triggerClass, "px-3")}
-              >
-                <Scan className={cn("mr-2 h-4 w-4", scanning && "animate-spin")} />
-                {scanning ? `${Math.round(scanProgress)}%` : "Reescanear"}
-              </Button>
-
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => scanFolder(selectedFolder.path)}
+                    variant="outline"
+                    size="sm"
+                    disabled={scanning || !isOnline}
+                    className={cn(triggerClass, "px-3 r")}
+                  >
+                    <Scan className={cn(" h-4 w-4", scanning && "animate-spin")} />
+                    {scanning ? `${Math.round(scanProgress)}%` : ""}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reescanear Pasta</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  {onManualEntry && (
+                    <div className="flex flex-wrap gap-2">
+                      {onManualEntry && (
+                        <Button
+                          onClick={onManualEntry}
+                          size="sm"
+                          variant="outline"
+                          disabled={!isOnline}
+                          className={cn(triggerClass, "px-3 ")}
+                        >
+                          <Plus className=" h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </TooltipTrigger>
+                <TooltipContent>Adicionar Mídia</TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -211,15 +234,14 @@ export function FolderMediaHeader({
                     size="sm"
                     aria-label="Mostrar filtros e opções"
                     className={cn(
-                      "h-9 border-[var(--border-color)]",
+                      "h-9 border-[var(--border-color)] rounded-md",
                       showControlPanel
                         ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)]"
                         : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--color-primary)]",
                     )}
                     onClick={() => setShowControlPanel((current) => !current)}
                   >
-                    <SlidersHorizontal className="mr-2 h-4 w-4" />
-                    Opções
+                    <SlidersHorizontal className=" h-8 w-8" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Filtros e ações avançadas</TooltipContent>
@@ -292,7 +314,9 @@ export function FolderMediaHeader({
                   Filtros e Opções
                 </p>
 
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+               
+
+                <div className="flex gap-4 justify-between">
                   <Select
                     value={sortValue}
                     onValueChange={(value) => {
@@ -316,18 +340,6 @@ export function FolderMediaHeader({
                       <SelectItem value="duration-asc">Duração (Menor)</SelectItem>
                       <SelectItem value="year-desc">Ano (Mais Recente)</SelectItem>
                       <SelectItem value="year-asc">Ano (Mais Antigo)</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
-                    <SelectTrigger className={triggerClass}>
-                      <Filter className="mr-2 h-4 w-4" />
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent className="border-[var(--border-color)] bg-[var(--bg-surface)]">
-                      <SelectItem value="all">Status: Todos</SelectItem>
-                      <SelectItem value="watched">Status: Assistidos</SelectItem>
-                      <SelectItem value="unwatched">Status: Não assistidos</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -382,43 +394,7 @@ export function FolderMediaHeader({
                       <SelectItem value="long">Longa (&gt; 150 min)</SelectItem>
                     </SelectContent>
                   </Select>
-
-                  <Button
-                    variant={localOnly ? "default" : "outline"}
-                    onClick={() => setLocalOnly((value) => !value)}
-                    className={cn(
-                      "h-9 w-full",
-                      localOnly
-                        ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)]"
-                        : "border-[var(--border-color)] bg-[var(--bg-surface-light)] text-[var(--text-primary)]",
-                    )}
-                  >
-                    Somente Arquivo Local
-                  </Button>
                 </div>
-
-                {(onScanWithPreview || onManualEntry) && (
-                  <div className="flex flex-wrap gap-2">
-                    {onScanWithPreview && (
-                      <Button
-                        onClick={onScanWithPreview}
-                        size="sm"
-                        variant="outline"
-                        className={cn(triggerClass, "px-3")}
-                      >
-                        <Scan className="mr-2 h-4 w-4" />
-                        Pré-escanear
-                      </Button>
-                    )}
-
-                    {onManualEntry && (
-                      <Button onClick={onManualEntry} size="sm" variant="outline" className={cn(triggerClass, "px-3")}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Adicionar Mídia
-                      </Button>
-                    )}
-                  </div>
-                )}
               </div>
             </motion.div>
           )}

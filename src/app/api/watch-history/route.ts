@@ -63,29 +63,44 @@ export async function POST(request: NextRequest) {
   try {
     const { mediaId, mediaType, episodeId, seasonNumber, episodeNumber, progress, completed } = await request.json();
 
+    const normalizedEpisodeId =
+      episodeId === undefined || episodeId === null || episodeId === "" ? null : String(episodeId);
+
+    const normalizedSeasonNumber =
+      seasonNumber === undefined || seasonNumber === null || seasonNumber === "" ? null : Number(seasonNumber);
+
+    const normalizedEpisodeNumber =
+      episodeNumber === undefined || episodeNumber === null || episodeNumber === "" ? null : Number(episodeNumber);
+
     if (!mediaId || !mediaType) {
       return NextResponse.json({ error: "mediaId and mediaType are required" }, { status: 400 });
     }
 
-    console.log(
-      `data: ${JSON.stringify({ mediaId, mediaType, episodeId, seasonNumber, episodeNumber, progress, completed })}`,
-    );
     const db = await prisma();
 
-    if (episodeId && (seasonNumber == null || episodeNumber == null)) {
+    if (normalizedEpisodeId && (normalizedSeasonNumber == null || normalizedEpisodeNumber == null)) {
       return NextResponse.json(
         { error: "seasonNumber and episodeNumber are required when episodeId is provided" },
         { status: 400 },
       );
     }
 
-    if (!episodeId && mediaType !== "MOVIE") {
+    if (normalizedEpisodeId && (Number.isNaN(normalizedSeasonNumber) || Number.isNaN(normalizedEpisodeNumber))) {
+      return NextResponse.json(
+        { error: "seasonNumber and episodeNumber must be valid numbers when episodeId is provided" },
+        { status: 400 },
+      );
+    }
+
+    if (!normalizedEpisodeId && mediaType !== "MOVIE") {
       return NextResponse.json({ error: "Series/anime watch updates must include episodeId" }, { status: 400 });
     }
 
     // Find existing entry
     // For episodes, match by episodeId; for movies, match by mediaId + mediaType
-    const whereClause = episodeId ? { episodeId } : { mediaId, mediaType: "MOVIE", episodeId: null };
+    const whereClause = normalizedEpisodeId
+      ? { episodeId: normalizedEpisodeId }
+      : { mediaId, mediaType: "MOVIE", episodeId: null };
 
     const existing = await db.watchHistory.findFirst({
       where: whereClause,
@@ -110,9 +125,9 @@ export async function POST(request: NextRequest) {
         data: {
           mediaId,
           mediaType,
-          episodeId: episodeId || null,
-          seasonNumber: episodeId ? seasonNumber : null,
-          episodeNumber: episodeId ? episodeNumber : null,
+          episodeId: normalizedEpisodeId,
+          seasonNumber: normalizedEpisodeId ? normalizedSeasonNumber : null,
+          episodeNumber: normalizedEpisodeId ? normalizedEpisodeNumber : null,
           progress: progress || null,
           completed: completed || false,
           watchedAt: new Date(),

@@ -325,14 +325,16 @@ export async function isMediaWatched(
  */
 export async function markEpisodeAsWatched(
   seriesId: string,
-  episodeId: string,
+  episodeId: string | number,
   seasonNumber: number,
   episodeNumber: number,
 ): Promise<WatchHistory> {
+  const normalizedEpisodeId = String(episodeId);
+
   return addWatchHistory({
     mediaId: seriesId,
     mediaType: "SERIES",
-    episodeId,
+    episodeId: normalizedEpisodeId,
     seasonNumber,
     episodeNumber,
     progress: 100,
@@ -344,35 +346,39 @@ export async function isEpisodeWatched(
   seriesId: string,
   seasonNumber: number,
   episodeNumber: number,
-  episodeId?: string,
+  episodeId?: string | number,
 ): Promise<boolean> {
+  const normalizedEpisodeId = episodeId != null ? String(episodeId) : undefined;
   const history = await getWatchHistory(seriesId);
   return history.some(
     (h) =>
       h.mediaType === "SERIES" &&
       h.completed &&
       !!h.episodeId &&
-      (episodeId ? h.episodeId === episodeId : h.seasonNumber === seasonNumber && h.episodeNumber === episodeNumber),
+      (normalizedEpisodeId
+        ? h.episodeId === normalizedEpisodeId
+        : h.seasonNumber === seasonNumber && h.episodeNumber === episodeNumber),
   );
 }
 
 export async function toggleEpisodeWatchStatus(
   seriesId: string,
-  episodeId: string,
+  episodeId: string | number,
   seasonNumber: number,
   episodeNumber: number,
 ): Promise<boolean> {
-  const isWatched = await isEpisodeWatched(seriesId, seasonNumber, episodeNumber, episodeId);
+  const normalizedEpisodeId = String(episodeId);
+  const isWatched = await isEpisodeWatched(seriesId, seasonNumber, episodeNumber, normalizedEpisodeId);
 
   if (isWatched) {
     // Delete the specific episode watch history by episodeId
-    await fetch(`${API_BASE}/watch-history?episodeId=${episodeId}`, {
+    await fetch(`${API_BASE}/watch-history?episodeId=${normalizedEpisodeId}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
     });
     return false;
   } else {
-    await markEpisodeAsWatched(seriesId, episodeId, seasonNumber, episodeNumber);
+    await markEpisodeAsWatched(seriesId, normalizedEpisodeId, seasonNumber, episodeNumber);
     return true;
   }
 }

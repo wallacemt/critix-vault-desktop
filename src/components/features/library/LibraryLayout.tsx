@@ -14,7 +14,6 @@ import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { NewMediaNotification } from "@/components/features/library/_components/new-media-notification";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
 import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { useLibraryLeyout } from "@/hooks/useLibraryLeyout";
@@ -56,8 +55,6 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     handleFolderSelect,
     handleEditMedia,
     handleUpdateMedia,
-    handleScanWithPreview,
-    handleConfirmScan,
     handleManualEntrySuccess,
     isAutoScanning,
     viewMode,
@@ -72,15 +69,13 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     unwatchedMovies,
     watchedSeries,
     unwatchedSeries,
-    series,
+  
     loading,
     error,
     newMediaNotification,
     editingMedia,
     setEditingMedia,
-    showScanPreview,
-    setShowScanPreview,
-    folderPreviews,
+  
     showManualEntry,
     setNewMediaNotification,
     handleDeleteMedia,
@@ -91,7 +86,6 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
   } = useLibraryLeyout();
   return (
     <SidebarProvider defaultOpen={true}>
-      {/* ShadCN Sidebar */}
       <AppSidebar
         {...{
           onAddFolder,
@@ -145,7 +139,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 watchedMoviesCount: watchedMovies.length,
                 seriesCount: unwatchedSeries.length,
                 watchedSeriesCount: watchedSeries.length,
-                onScanWithPreview: handleScanWithPreview,
+             
                 onManualEntry: () => setShowManualEntry(true),
                 onOpenFolder: async () => {
                   if (selectedFolder) {
@@ -293,13 +287,6 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
           />
         )}
 
-        {/* Scan Preview Dialog */}
-        <ScanPreviewDialog
-          isOpen={showScanPreview}
-          onClose={() => setShowScanPreview(false)}
-          onConfirm={handleConfirmScan}
-          folders={folderPreviews}
-        />
 
         {/* Manual Media Entry Dialog */}
         {selectedFolder && (

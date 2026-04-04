@@ -4,17 +4,18 @@ import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 import { useEffect, useState } from "react";
 import { useMediaLibrary } from "./useMediaLibrary";
-import { folderScanService } from "@/services/folderScanService";
 import { FolderPreview } from "@/types/folder";
 import gsap from "gsap";
 import { AppTabs } from "@/types/utils";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 export const useLibraryLeyout = () => {
   const { folders, selectedFolder, selectFolder, removeFolder } = useFoldersContext();
+  const { isOnline } = useApiConnectivity();
   const [activeTab, setActiveTab] = useState<AppTabs>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"modified" | "title" | "rating" | "duration" | "year">("modified");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState<"all" | "watched" | "unwatched">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "movie" | "series" | "anime">("all");
   const [yearRange, setYearRange] = useState<"all" | "before-2000" | "2000-2009" | "2010-2019" | "2020-plus">("all");
@@ -127,26 +128,12 @@ export const useLibraryLeyout = () => {
     setEditingMedia(null);
   };
 
-  const handleScanWithPreview = async () => {
-    if (!folders.length) return;
-
-    // Generate preview for all folders
-    const previews = await Promise.all(
-      folders.map(async (folder) => {
-        const preview = await folderScanService.previewFolder(folder.path);
-        return {
-          path: folder.path,
-          name: folder.name,
-          ...preview,
-        };
-      }),
-    );
-
-    setFolderPreviews(previews);
-    setShowScanPreview(true);
-  };
-
   const handleConfirmScan = async (selectedPaths: string[]) => {
+    if (!isOnline) {
+      alert("Modo offline ativo. Reconecte para executar scans com API externa.");
+      return;
+    }
+
     // Scan only selected folders
     for (const path of selectedPaths) {
       const folder = folders.find((f) => f.path === path);
@@ -346,7 +333,6 @@ export const useLibraryLeyout = () => {
     deletingMedia,
     isDeletingMedia,
     handleUpdateMedia,
-    handleScanWithPreview,
     handleConfirmScan,
     handleManualEntrySuccess,
     isAutoScanning,

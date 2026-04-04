@@ -36,6 +36,7 @@ import { useActions } from "@/hooks/useActions";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { userActionService } from "@/services/userActionService";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface MovieDetailsProps {
   demoMode?: boolean;
@@ -52,6 +53,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
 
   const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
   const { handlePlayMovie: onPlay } = useActions();
+  const { isOnline } = useApiConnectivity();
 
   const router = useRouter();
 
@@ -67,6 +69,13 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   useEffect(() => {
     if (!currentMovie) return;
     const loadImages = async () => {
+      if (!isOnline) {
+        if (currentMovie.images && currentMovie.images.length > 0) {
+          setGalleryImages(currentMovie.images);
+        }
+        return;
+      }
+
       try {
         const imagesData = await fetchMediaImages(currentMovie.id, "movie");
         const images = toGalleryImages(imagesData);
@@ -77,7 +86,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
       }
     };
     loadImages();
-  }, [currentMovie?.id]);
+  }, [currentMovie?.id, currentMovie?.images, isOnline]);
 
   useEffect(() => {
     if (!currentMovie) return;
@@ -179,6 +188,11 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   };
 
   const handleRefreshGallery = async () => {
+    if (!isOnline) {
+      alert("Modo offline ativo. A atualizacao da galeria requer conexao com a API externa.");
+      return;
+    }
+
     setIsRefreshingGallery(true);
     try {
       const imagesData = await fetchMediaImages(currentMovie.id, "movie");
@@ -240,7 +254,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
           variant="ghost"
           size="icon"
           onClick={onBack}
-          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-xl hover:bg-slate-900"
+          className="fixed z-10 top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-xl hover:bg-slate-900"
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>

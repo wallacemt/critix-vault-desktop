@@ -8,6 +8,7 @@ export type WatchSession = {
   type: "movie" | "episode";
   mediaId: string;
   title: string;
+  returnPath?: string;
   backdrop?: string;
   episodeId?: string;
   episodeTitle?: string;

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BookOpen, Bug, MessageSquare, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getEasterEggProgress, registerEasterEggClue } from "@/lib/easter-egg";
+import { getEasterEggProgress, MYSTERY_LINK, registerEasterEggClue } from "@/lib/easter-egg";
 import { openExternalLink } from "@/lib/external-link";
 
 const issuesUrl = "https://github.com/wallacemt/critix-vault-desktop/issues/new/choose";
@@ -43,22 +43,68 @@ export default function HelpPage() {
   const [helpClicks, setHelpClicks] = useState(0);
   const [unlocked, setUnlocked] = useState<string[]>([]);
 
-  useEffect(() => {
+  const refreshProgress = useCallback(() => {
     const progress = getEasterEggProgress();
     setUnlocked(progress.unlocked);
   }, []);
 
+  useEffect(() => {
+    refreshProgress();
+
+    const handleFocus = () => refreshProgress();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshProgress();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshProgress]);
+
+  const requiredClues = [
+    {
+      id: "help",
+      hint: "toque cinco vezes no título desta página para começar o enigma.",
+    },
+    {
+      id: "home-no-folder",
+      hint: "quando a biblioteca estiver vazia, o caminho aparece no início.",
+    },
+    {
+      id: "empty-scan",
+      hint: "existe uma pasta que parece conter nada, mas ainda conta para a trilha.",
+    },
+  ] as const;
+
   const nextHint = useMemo(() => {
-    if (!unlocked.includes("home-no-folder")) {
-      return "Pista 1: quando a biblioteca estiver vazia, o caminho aparece no início.";
+    const unlockedSet = new Set(unlocked);
+    const missing = requiredClues.filter((clue) => !unlockedSet.has(clue.id));
+
+    if (missing.length === 0) {
+      return (
+        <div className="flex items-center gap-2 w-full">
+          Enigma completo. O portal misterioso já deve ter sido aberto. Para ver o que continha no portal acesse:
+          <Button variant={"ghost"} className="underline  rounded-2xl" onClick={() => openExternalLink(MYSTERY_LINK)}>
+            🧙🏻‍♂️ Link Misteriso
+          </Button>
+        </div>
+      );
     }
-    if (!unlocked.includes("empty-scan")) {
-      return "Pista 2: existe uma pasta que parece conter nada, mas ainda conta para a trilha.";
+
+    const foundCount = requiredClues.length - missing.length;
+    const next = missing[0];
+
+    if (foundCount > 0) {
+      return `Você já encontrou ${foundCount}/${requiredClues.length} sinais. Pista ${foundCount + 1}: ${next.hint}`;
     }
-    if (!unlocked.includes("help")) {
-      return "Pista 3: toque cinco vezes no título desta página para completar o enigma.";
-    }
-    return "Enigma completo. O portal misterioso já deve ter sido aberto.";
+
+    return `Pista 1: ${next.hint}`;
   }, [unlocked]);
 
   const handleTitleClick = async () => {

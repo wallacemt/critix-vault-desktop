@@ -7,23 +7,30 @@ import { markAsWatched, markEpisodeAsWatched } from "@/services/databaseService"
 import { fetchMediaImages, fetchSeasonDetails } from "@/services/mediaService";
 import { CheckCircle2, Loader2, MonitorPlay, Tv2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 export default function WatchingPage() {
   const router = useRouter();
   const { movie, serie, watchSession, setCurrentMovie, setCurrentSerie, clearWatchSession } = useMediaContext();
+  const { isOnline } = useApiConnectivity();
+  const skipEmptySessionRedirectRef = useRef(false);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(watchSession?.backdrop || null);
   const [isResolvingImage, setIsResolvingImage] = useState(false);
   const [isMarkingWatched, setIsMarkingWatched] = useState(false);
 
   const destinationPath = useMemo(() => {
     if (!watchSession) return "/library";
+    if (watchSession.returnPath && watchSession.returnPath !== "/watching") {
+      return watchSession.returnPath;
+    }
     return watchSession.type === "movie" ? "/movie-details" : "/series-details";
   }, [watchSession]);
 
   useEffect(() => {
     if (!watchSession) {
+      if (skipEmptySessionRedirectRef.current) return;
       router.replace("/library");
     }
   }, [watchSession, router]);
@@ -32,6 +39,18 @@ export default function WatchingPage() {
     if (!watchSession) return;
 
     const resolveImage = async () => {
+      if (!isOnline) {
+        if (watchSession.type === "movie" && movie?.backdrop) {
+          setBackgroundImage(movie.backdrop);
+          return;
+        }
+
+        if (serie?.backdrop) {
+          setBackgroundImage(serie.backdrop);
+        }
+        return;
+      }
+
       if (watchSession.backdrop) {
         setBackgroundImage(watchSession.backdrop);
         return;
@@ -86,13 +105,14 @@ export default function WatchingPage() {
     };
 
     resolveImage();
-  }, [watchSession, movie?.backdrop, serie?.id, serie?.backdrop]);
+  }, [watchSession, movie?.backdrop, serie?.id, serie?.backdrop, isOnline]);
 
   if (!watchSession) return null;
 
   const handleBackToMedia = () => {
+    skipEmptySessionRedirectRef.current = true;
     clearWatchSession();
-    router.back();
+    router.replace(destinationPath);
   };
 
   const handleMarkWatched = async () => {
@@ -139,7 +159,7 @@ export default function WatchingPage() {
               };
             }),
           }));
-          
+
           const isSeriesWatched =
             updatedSeasons.flatMap((season) => season.episodes).length > 0 &&
             updatedSeasons.flatMap((season) => season.episodes).every((episode) => episode.isWatched === true);
@@ -152,6 +172,7 @@ export default function WatchingPage() {
         }
       }
 
+      skipEmptySessionRedirectRef.current = true;
       clearWatchSession();
       router.replace(destinationPath);
     } catch (error) {

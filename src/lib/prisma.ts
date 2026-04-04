@@ -174,10 +174,8 @@ export async function getPrismaClient() {
       adapter,
     });
 
-    // Run migrations if database is new
-    if (isNewDb) {
-      await initializeDatabase(dbPath);
-    }
+    // Always run migration sync so existing databases receive new schema updates.
+    await initializeDatabase(dbPath);
 
     await validateSchemaReady(prismaInstance);
 

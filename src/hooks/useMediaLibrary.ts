@@ -22,6 +22,7 @@ import {
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 import { Media } from "@/types/media";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 /**
  * Hook to manage media library for a specific folder
@@ -35,6 +36,7 @@ export function useMediaLibrary(folderId: string | null) {
   const [scanProgress, setScanProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const { folders } = useFoldersContext();
+  const { isOnline } = useApiConnectivity();
 
   const loadMediaFromStorage = useCallback(async () => {
     if (!folderId) {
@@ -124,6 +126,11 @@ export function useMediaLibrary(folderId: string | null) {
 
   const scanFolder = async (folderPath: string) => {
     if (!folderId) return;
+
+    if (!isOnline) {
+      setError("Modo offline ativo. Reconecte para escanear pastas e buscar correspondencias online.");
+      return;
+    }
 
     // Get existing media for this folder (for intelligent rescan)
     const allMovies = await getMovies();
@@ -261,6 +268,10 @@ export function useMediaLibrary(folderId: string | null) {
   const updateMedia = useCallback(
     async (originalMedia: Media, newMediaId: string, newMediaType: "movie" | "tv"): Promise<void> => {
       if (!folderId) return;
+
+      if (!isOnline) {
+        throw new Error("Modo offline ativo. Reconecte para atualizar dados da midia.");
+      }
 
       try {
         console.log(`🔄 Updating media: ${originalMedia.title} -> ID: ${newMediaId} (${newMediaType})`);
@@ -400,7 +411,7 @@ export function useMediaLibrary(folderId: string | null) {
         throw error;
       }
     },
-    [folderId, loadMediaFromStorage],
+    [folderId, isOnline, loadMediaFromStorage],
   );
 
   const deleteMedia = async (media: Media): Promise<void> => {

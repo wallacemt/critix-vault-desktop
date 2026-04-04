@@ -51,13 +51,7 @@ export function StreamingGrid({
   }
 
   return (
-    <div
-      className={
-        viewMode === "grid"
-          ? "grid grid-cols-2  lg:grid-cols-5 gap-8"
-          : "flex flex-col gap-3"
-      }
-    >
+    <div className={viewMode === "grid" ? "grid grid-cols-2  lg:grid-cols-4 gap-8" : "flex flex-col gap-3"}>
       {media.map((item, index) => (
         <motion.div
           key={item.id}

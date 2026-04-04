@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
           orderBy: { seasonNumber: "asc" },
         },
       },
-      orderBy: folderId ? { title: "asc" } : { createdAt: "desc" },
+      orderBy: { createdAt: "desc" },
     });
 
     // Transform to frontend format
@@ -55,7 +55,11 @@ export async function GET(request: NextRequest) {
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
       // TMDB Extended Fields
-      genres: series.genres ? JSON.parse(series.genres).map((g: string) => ({ name: g })) : undefined,
+      genres: series.genres
+        ? JSON.parse(series.genres)
+            .filter((g: string) => g != null)
+            .map((g: string) => ({ name: g }))
+        : undefined,
       imdbId: series.imdbId || undefined,
       tagline: series.tagline || undefined,
       voteCount: series.voteCount || undefined,
@@ -73,6 +77,7 @@ export async function GET(request: NextRequest) {
         seasonNumber: season.seasonNumber,
         name: season.name,
         overview: season.overview || undefined,
+        folderPath: season.folderPath || undefined,
         poster: season.poster || undefined,
         episodeCount: season.episodeCount,
         available: season.available,
@@ -228,6 +233,7 @@ export async function POST(request: NextRequest) {
               seasonNumber: season.seasonNumber,
               name: season.name,
               overview: season.overview,
+              folderPath: season.folderPath,
               poster: season.poster,
               episodeCount: season.episodeCount,
               available: season.available,
@@ -237,6 +243,7 @@ export async function POST(request: NextRequest) {
             update: {
               name: season.name,
               overview: season.overview,
+              folderPath: season.folderPath,
               poster: season.poster,
               episodeCount: season.episodeCount,
               available: season.available,
@@ -294,7 +301,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Series saved successfully", count: seriesList.length }, { status: 200 });
   } catch (error) {
     console.error("Failed to save series:", error);
-    return NextResponse.json({ error: "Failed to save series" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Failed to save series",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
   }
 }
 

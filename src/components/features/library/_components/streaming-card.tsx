@@ -155,15 +155,17 @@ export function StreamingCard({
                 {/* Genres */}
                 {media.genres && media.genres.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-2">
-                    {media.genres.slice(0, 3).map((genre, index) => (
-                      <Badge
-                        key={index}
-                        variant="outline"
-                        className="text-xs px-2 py-0.5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
-                      >
-                        {genre.name}
-                      </Badge>
-                    ))}
+                    {media.genres
+                      .slice(0, 3)
+                      .map((genre, index) => (
+                        <Badge
+                          key={index}
+                          variant="outline"
+                          className="text-xs px-2 py-0.5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
+                        >
+                          {genre.name}
+                        </Badge>
+                      ))}
                   </div>
                 )}
 
@@ -441,21 +443,24 @@ export function StreamingCard({
           {/* Genres */}
           {media.genres && media.genres.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
-              {media.genres.slice(0, 2).map((genre, index) => (
-                <Badge
-                  key={index}
-                  variant="outline"
-                  className="text-[10px] px-1.5 py-0 h-5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
-                >
-                  {genre.name}
-                </Badge>
-              ))}
+              {media.genres
+                .slice(0, 2)
+                .map((genre, index) => (
+                  <Badge
+                    key={index}
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 h-5 border-[var(--color-primary)]/30 text-[var(--text-secondary)]"
+                  >
+                    {genre.name}
+                  </Badge>
+                ))}
             </div>
           )}
 
           <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] font-sans gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              {media.year && <span>{media.year}</span>}
+              {media.year && <span>{media.year}</span>} -
+              {media.createdAt && <span>{new Date(media.createdAt).toLocaleString("pt-BR")}</span>}
               {media.duration && (
                 <div className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />

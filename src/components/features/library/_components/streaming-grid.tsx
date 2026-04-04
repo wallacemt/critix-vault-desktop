@@ -54,7 +54,7 @@ export function StreamingGrid({
     <div
       className={
         viewMode === "grid"
-          ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6"
+          ? "grid grid-cols-2  lg:grid-cols-5 gap-8"
           : "flex flex-col gap-3"
       }
     >

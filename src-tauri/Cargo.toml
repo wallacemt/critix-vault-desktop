@@ -1,6 +1,6 @@
 [package]
 name = "critix-vault"
-version = "1.0.0"
+version = "1.1.9"
 description = "Seu gerenciador de pastas com medias favorito"
 authors = ["Wallace"]
 edition = "2021"

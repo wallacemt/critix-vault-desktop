@@ -289,13 +289,13 @@ export function StreamingCard({
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       <Card
-        className="group relative bg-[var(--bg-surface)] border-[var(--border-color)] overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-2xl hover:shadow-[var(--color-primary)]/20 hover:border-[var(--color-primary)]/50"
+        className="group relative bg-surface-crx border-border overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-2xl hover:shadow-primary/20 hover:border-primary/50  -p-2 rounded-lg"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={() => onClick?.(media)}
       >
-        {/* Poster Image */}
-        <div className="relative aspect-[2/3] overflow-hidden bg-slate-800">
+        <div className="relative aspect-[2/3] overflow-hidden bg-slate-900 ">
+          {/* Poster Image */}
           {media.poster && !imageError ? (
             <motion.img
               src={media.poster}
@@ -312,7 +312,7 @@ export function StreamingCard({
           )}
 
           {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-50" />
 
           {/* Status Badge */}
           {media.status === "UNMATCHED" && (

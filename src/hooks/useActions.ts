@@ -89,13 +89,13 @@ export function useActions() {
   const handleViewDemo = () => {
     router.push("/demo");
   };
-  const handleMediaClick = (media: Media) => {
+  const handleMediaClick = (media: Media, demo = false) => {
     if (media.type === "MOVIE") {
       setMovie(media as Movie);
-      router.push("/movie-details");
+      router.push(`/movie-details${demo ? "?demo=true" : ""}`);
     } else {
       setSerie(media as Series);
-      router.push("/series-details");
+      router.push(`/series-details${demo ? "?demo=true" : ""}`);
     }
   };
 

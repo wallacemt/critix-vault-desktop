@@ -290,7 +290,7 @@ export function LandingPage({
                           size="lg"
                           onClick={onAddFolder}
                           disabled={loading}
-                          className="w-full sm:w-auto bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-[var(--glow-primary)] transition-all duration-300 text-lg px-8 py-6"
+                          className="w-full sm:w-auto bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-[var(--glow-primary)] transition-all duration-300 text-lg px-8 py-6 rounded-lg"
                         >
                           <FolderPlus className="w-5 h-5 mr-2" />
                           {loading ? "Adicionando..." : "Adicionar Pasta"}
@@ -303,7 +303,7 @@ export function LandingPage({
                             size="lg"
                             variant="outline"
                             onClick={onViewDemo}
-                            className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-[var(--color-primary)]/50 text-[var(--text-primary)] font-semibold text-lg px-8 py-6"
+                            className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-[var(--color-primary)]/50 text-[var(--text-primary)] rounded-lg font-semibold text-lg px-8 py-6"
                           >
                             <Play className="w-5 h-5 mr-2" />
                             Ver Demo
@@ -330,7 +330,7 @@ export function LandingPage({
                               variant="outline"
                               onClick={() => fileInputRef.current?.click()}
                               disabled={loading}
-                              className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-emerald-500/50 text-[var(--text-primary)] font-semibold text-lg px-8 py-6"
+                              className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] rounded-lg hover:border-emerald-500/50 text-[var(--text-primary)] font-semibold text-lg px-8 py-6"
                             >
                               <UploadCloud className="w-5 h-5 mr-2 text-emerald-400" />
                               Carregar Backup

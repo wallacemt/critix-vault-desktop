@@ -8,7 +8,7 @@ export default function DemoPage() {
   return (
     <DemoLibrary
       onBack={handleBack}
-      onMediaClick={(media) => handleMediaClick(media)}
+      onMediaClick={(media) => handleMediaClick(media, true)}
       onMediaPlay={(media) => {
         if (media.type === "MOVIE") {
           handlePlayMovie(media as Movie);

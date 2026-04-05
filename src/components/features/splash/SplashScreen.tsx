@@ -11,6 +11,7 @@ import { useFoldersContext } from "@/context/foldersContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
+import { APP_VERSION } from "@/lib/config";
 
 const MAX_AUTO_RETRIES = 3;
 const AUTO_RETRY_DELAY_MS = 2_000;
@@ -163,7 +164,7 @@ export function SplashScreen({ onReady }: SplashScreenProps) {
         </div>
 
         {/* Version */}
-        <p className="text-xs text-slate-600 absolute bottom-8">{status?.version && `v${status.version} • `}</p>
+        <p className="text-xs text-slate-600 absolute bottom-8">{`v${APP_VERSION} • `}</p>
       </div>
     </div>
   );

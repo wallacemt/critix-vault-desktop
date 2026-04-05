@@ -231,9 +231,6 @@ export function LandingPage({
                             <p className="text-sm font-medium text-[var(--text-primary)] truncate">{folder.name}</p>
                             <p className="text-xs text-[var(--text-muted)] truncate">{folder.path}</p>
                           </div>
-                          <span className="text-xs text-[var(--text-secondary)] flex-shrink-0">
-                            {folder.mediaCount} mídia{folder.mediaCount !== 1 ? "s" : ""}
-                          </span>
                         </motion.div>
                       ))}
                     </div>

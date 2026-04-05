@@ -8,6 +8,11 @@ import { Series } from "@/types/serie";
 
 const API_BASE = "/api";
 
+function apiPath(path: string): string {
+  const normalized = path.replace(/^\/+|\/+$/g, "");
+  return `${API_BASE}/${normalized}/`;
+}
+
 type ApiEnvelope<T> =
   | T
   | {
@@ -66,51 +71,51 @@ async function parseApiError(response: Response, fallback: string): Promise<Erro
 // ============================================================================
 
 export async function getFolders(): Promise<Folder[]> {
-  const response = await fetch(`${API_BASE}/folders`, {
+  const response = await fetch(apiPath("folders"), {
     method: "GET",
     cache: "no-store",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to get folders");
+    throw await parseApiError(response, "Nao foi possivel carregar as pastas.");
   }
 
   return parseApiResponse<Folder[]>(response);
 }
 
 export async function addFolder(path: string, name: string): Promise<Folder> {
-  const response = await fetch(`${API_BASE}/folders`, {
+  const response = await fetch(apiPath("folders"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, name }),
   });
 
   if (!response.ok) {
-    throw await parseApiError(response, "Failed to add folder");
+    throw await parseApiError(response, "Nao foi possivel adicionar a pasta.");
   }
 
   return parseApiResponse<Folder>(response);
 }
 
 export async function removeFolder(folderId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/folders?id=${folderId}`, {
+  const response = await fetch(`${apiPath("folders")}?id=${encodeURIComponent(folderId)}`, {
     method: "DELETE",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to remove folder");
+    throw await parseApiError(response, "Nao foi possivel remover a pasta.");
   }
 }
 
 export async function updateFolderMediaCount(folderId: string): Promise<Folder> {
-  const response = await fetch(`${API_BASE}/folders`, {
+  const response = await fetch(apiPath("folders"), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ folderId }),
   });
 
   if (!response.ok) {
-    throw new Error("Failed to update folder media count");
+    throw await parseApiError(response, "Nao foi possivel atualizar a contagem de midias da pasta.");
   }
 
   return parseApiResponse<Folder>(response);
@@ -121,7 +126,7 @@ export async function updateFolderMediaCount(folderId: string): Promise<Folder> 
 // ============================================================================
 
 export async function getMovies(folderId?: string): Promise<Movie[]> {
-  const url = folderId ? `${API_BASE}/movies?folderId=${folderId}` : `${API_BASE}/movies`;
+  const url = folderId ? `${apiPath("movies")}?folderId=${encodeURIComponent(folderId)}` : apiPath("movies");
 
   const response = await fetch(url, {
     method: "GET",
@@ -129,31 +134,31 @@ export async function getMovies(folderId?: string): Promise<Movie[]> {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to get movies");
+    throw await parseApiError(response, "Nao foi possivel carregar os filmes.");
   }
 
   return parseApiResponse<Movie[]>(response);
 }
 
 export async function saveMovies(movies: Movie[]): Promise<void> {
-  const response = await fetch(`${API_BASE}/movies`, {
+  const response = await fetch(apiPath("movies"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(movies),
   });
 
   if (!response.ok) {
-    throw new Error("Failed to save movies");
+    throw await parseApiError(response, "Nao foi possivel salvar os filmes.");
   }
 }
 
 export async function removeMovie(movieId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/movies?id=${movieId}`, {
+  const response = await fetch(`${apiPath("movies")}?id=${encodeURIComponent(movieId)}`, {
     method: "DELETE",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to remove movie");
+    throw await parseApiError(response, "Nao foi possivel remover o filme.");
   }
 }
 
@@ -162,7 +167,7 @@ export async function removeMovie(movieId: string): Promise<void> {
 // ============================================================================
 
 export async function getSeries(folderId?: string): Promise<Series[]> {
-  const url = folderId ? `${API_BASE}/series?folderId=${folderId}` : `${API_BASE}/series`;
+  const url = folderId ? `${apiPath("series")}?folderId=${encodeURIComponent(folderId)}` : apiPath("series");
 
   const response = await fetch(url, {
     method: "GET",
@@ -170,31 +175,31 @@ export async function getSeries(folderId?: string): Promise<Series[]> {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to get series");
+    throw await parseApiError(response, "Nao foi possivel carregar as series.");
   }
 
   return parseApiResponse<Series[]>(response);
 }
 
 export async function saveSeries(seriesList: Series[]): Promise<void> {
-  const response = await fetch(`${API_BASE}/series`, {
+  const response = await fetch(apiPath("series"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(seriesList),
   });
 
   if (!response.ok) {
-    throw new Error("Failed to save series");
+    throw await parseApiError(response, "Nao foi possivel salvar as series.");
   }
 }
 
 export async function removeSeries(seriesId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/series?id=${seriesId}`, {
+  const response = await fetch(`${apiPath("series")}?id=${encodeURIComponent(seriesId)}`, {
     method: "DELETE",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to remove series");
+    throw await parseApiError(response, "Nao foi possivel remover a serie.");
   }
 }
 
@@ -229,7 +234,7 @@ export async function getWatchHistory(mediaId?: string, limit?: number): Promise
   if (mediaId) params.append("mediaId", mediaId);
   if (limit) params.append("limit", limit.toString());
 
-  const url = `${API_BASE}/watch-history${params.toString() ? "?" + params.toString() : ""}`;
+  const url = `${apiPath("watch-history")}${params.toString() ? "?" + params.toString() : ""}`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -237,21 +242,21 @@ export async function getWatchHistory(mediaId?: string, limit?: number): Promise
   });
 
   if (!response.ok) {
-    throw new Error("Failed to get watch history");
+    throw await parseApiError(response, "Nao foi possivel carregar o historico de assistidos.");
   }
 
   return response.json();
 }
 
 export async function addWatchHistory(data: WatchHistoryInput): Promise<WatchHistory> {
-  const response = await fetch(`${API_BASE}/watch-history`, {
+  const response = await fetch(apiPath("watch-history"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
   if (!response.ok) {
-    throw new Error("Failed to add watch history");
+    throw await parseApiError(response, "Nao foi possivel registrar no historico de assistidos.");
   }
 
   return response.json();
@@ -259,7 +264,7 @@ export async function addWatchHistory(data: WatchHistoryInput): Promise<WatchHis
 
 export async function markAsWatched(mediaId: string, mediaType: "MOVIE" | "SERIES" | "ANIME"): Promise<WatchHistory> {
   if (mediaType !== "MOVIE") {
-    throw new Error("Use funções de episódio para marcar séries/animes como assistidos.");
+    throw new Error("Use as funcoes de episodio para marcar series/animes como assistidos.");
   }
 
   return addWatchHistory({
@@ -284,18 +289,18 @@ export async function updateWatchProgress(
 }
 
 export async function clearWatchHistory(mediaId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/watch-history?mediaId=${mediaId}`, {
+  const response = await fetch(`${apiPath("watch-history")}?mediaId=${encodeURIComponent(mediaId)}`, {
     method: "DELETE",
   });
 
   if (!response.ok) {
-    throw new Error("Failed to clear watch history");
+    throw await parseApiError(response, "Nao foi possivel limpar o historico de assistidos.");
   }
 }
 
 export async function toggleWatchStatus(mediaId: string, mediaType: "MOVIE" | "SERIES" | "ANIME"): Promise<boolean> {
   if (mediaType !== "MOVIE") {
-    throw new Error("toggleWatchStatus só é suportado para filmes.");
+    throw new Error("toggleWatchStatus so e suportado para filmes.");
   }
 
   const isWatched = await isMediaWatched(mediaId, mediaType);

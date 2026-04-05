@@ -4,10 +4,74 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import type { Series } from "@/types/serie";
+import { errorResponse, successResponse } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
+
+type ParseContext = {
+  seriesId: string;
+  field: string;
+};
+
+function parseJsonSafe<T>(raw: string | null | undefined, fallback: T, context: ParseContext): T {
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    logger.warn("Campo JSON invalido em series", {
+      ...context,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  }
+}
+
+function toGenreObjects(raw: string | null | undefined, seriesId: string): Array<{ name: string }> | undefined {
+  const parsed = parseJsonSafe<unknown[]>(raw, [], { seriesId, field: "genres" });
+  const normalized = parsed
+    .map((item) => {
+      if (typeof item === "string") {
+        return { name: item };
+      }
+
+      if (item && typeof item === "object" && "name" in item && typeof (item as { name?: unknown }).name === "string") {
+        return { name: (item as { name: string }).name };
+      }
+
+      return null;
+    })
+    .filter((item): item is { name: string } => item !== null);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function serializeGenreNames(genres: unknown): string | undefined {
+  if (!Array.isArray(genres)) {
+    return undefined;
+  }
+
+  const names = genres
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+
+      if (item && typeof item === "object" && "name" in item && typeof (item as { name?: unknown }).name === "string") {
+        return (item as { name: string }).name;
+      }
+
+      return null;
+    })
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+
+  return names.length > 0 ? JSON.stringify(names) : undefined;
+}
 
 /**
  * GET /api/series?folderId={optional}
@@ -33,7 +97,6 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Transform to frontend format
     const transformed = allSeries.map((series) => ({
       id: series.id,
       title: series.title,
@@ -54,22 +117,20 @@ export async function GET(request: NextRequest) {
       numberOfEpisodes: series.numberOfEpisodes,
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
-      // TMDB Extended Fields
-      genres: series.genres
-        ? JSON.parse(series.genres)
-            .filter((g: string) => g != null)
-            .map((g: string) => ({ name: g }))
-        : undefined,
+      genres: toGenreObjects(series.genres, series.id),
       imdbId: series.imdbId || undefined,
       tagline: series.tagline || undefined,
       voteCount: series.voteCount || undefined,
       popularity: series.popularity || undefined,
-      images: series.images ? JSON.parse(series.images) : undefined,
-      videos: series.videos ? JSON.parse(series.videos) : undefined,
-      cast: series.cast ? JSON.parse(series.cast) : undefined,
-      crew: series.crew ? JSON.parse(series.crew) : undefined,
-      networks: series.networks ? JSON.parse(series.networks) : undefined,
-      productionCompanies: series.productionCompanies ? JSON.parse(series.productionCompanies) : undefined,
+      images: parseJsonSafe<unknown[]>(series.images, [], { seriesId: series.id, field: "images" }),
+      videos: parseJsonSafe<unknown[]>(series.videos, [], { seriesId: series.id, field: "videos" }),
+      cast: parseJsonSafe<unknown[]>(series.cast, [], { seriesId: series.id, field: "cast" }),
+      crew: parseJsonSafe<unknown[]>(series.crew, [], { seriesId: series.id, field: "crew" }),
+      networks: parseJsonSafe<unknown[]>(series.networks, [], { seriesId: series.id, field: "networks" }),
+      productionCompanies: parseJsonSafe<unknown[]>(series.productionCompanies, [], {
+        seriesId: series.id,
+        field: "productionCompanies",
+      }),
       createdAt: series.createdAt.toISOString(),
       updatedAt: series.updatedAt.toISOString(),
       seasons: series.seasons.map((season) => ({
@@ -93,17 +154,17 @@ export async function GET(request: NextRequest) {
           air_date: ep.airDate,
           runtime: ep.duration,
           duration: ep.duration,
-          vote_average: 0, // Not stored in database
+          vote_average: 0,
           filePath: ep.filePath || undefined,
           available: ep.available,
         })),
       })),
     }));
 
-    return NextResponse.json(transformed, { status: 200 });
+    return successResponse(transformed, 200);
   } catch (error) {
-    console.error("Failed to get series:", error);
-    return NextResponse.json({ error: "Failed to get series" }, { status: 500 });
+    logger.error("Falha ao carregar series", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel carregar as series.");
   }
 }
 
@@ -117,12 +178,11 @@ export async function POST(request: NextRequest) {
     const seriesList: Series[] = await request.json();
 
     if (!Array.isArray(seriesList)) {
-      return NextResponse.json({ error: "Request body must be an array of series" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "Corpo da requisicao deve ser um array de series.");
     }
 
     const db = await prisma();
 
-    // Validate that all folders exist
     const uniqueFolderIds = [...new Set(seriesList.map((s) => s.folderId))];
     const existingFolders = await db.folder.findMany({
       where: { id: { in: uniqueFolderIds } },
@@ -130,25 +190,22 @@ export async function POST(request: NextRequest) {
     });
     const existingFolderIds = new Set(existingFolders.map((f) => f.id));
 
-    // Filter out series with invalid folder references
     const validSeries = seriesList.filter((series) => {
       if (!existingFolderIds.has(series.folderId)) {
-        console.warn(`⚠️ Skipping series "${series.title}" - folder ${series.folderId} not found`);
+        logger.warn("Serie ignorada por pasta invalida", {
+          seriesTitle: series.title,
+          folderId: series.folderId,
+        });
         return false;
       }
       return true;
     });
 
     if (validSeries.length === 0) {
-      return NextResponse.json(
-        { error: "No valid series to save. All folder references are invalid." },
-        { status: 400 },
-      );
+      return errorResponse(400, "BAD_REQUEST", "Nenhuma serie valida para salvar. As pastas informadas nao existem.");
     }
 
-    // Process each series
     for (const series of validSeries) {
-      // Upsert series
       await db.series.upsert({
         where: { id: series.id },
         create: {
@@ -171,9 +228,7 @@ export async function POST(request: NextRequest) {
           numberOfEpisodes: series.numberOfEpisodes,
           duration: series.duration,
           trailer: series.trailer,
-          genres: series.genres
-            ? JSON.stringify(series.genres.map((g: any) => (typeof g === "string" ? g : null)))
-            : undefined,
+          genres: serializeGenreNames(series.genres),
           cast: series.cast ? JSON.stringify(series.cast) : undefined,
           crew: series.crew ? JSON.stringify(series.crew) : undefined,
           images: series.images ? JSON.stringify(series.images) : undefined,
@@ -202,9 +257,7 @@ export async function POST(request: NextRequest) {
           numberOfEpisodes: series.numberOfEpisodes,
           duration: series.duration,
           trailer: series.trailer,
-          genres: series.genres
-            ? JSON.stringify(series.genres.map((g: any) => (typeof g === "string" ? g : g.name)))
-            : undefined,
+          genres: serializeGenreNames(series.genres),
           cast: series.cast ? JSON.stringify(series.cast) : undefined,
           crew: series.crew ? JSON.stringify(series.crew) : undefined,
           images: series.images ? JSON.stringify(series.images) : undefined,
@@ -218,10 +271,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Handle seasons if provided
       if (series.seasons && series.seasons.length > 0) {
         for (const season of series.seasons) {
-          // Upsert season
           const seasonData = await db.season.upsert({
             where: {
               seriesId_seasonNumber: {
@@ -251,18 +302,18 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          // Handle episodes if provided
           if (season.episodes && season.episodes.length > 0) {
             for (const episode of season.episodes) {
-              // Skip episodes with invalid/null episode numbers to avoid Prisma validation errors
               const epNum = episode.episode_number;
               if (epNum == null || isNaN(epNum)) {
-                console.warn(
-                  `⚠️ Skipping episode with invalid episode_number in season ${season.seasonNumber}:`,
-                  episode.filePath,
-                );
+                logger.warn("Episodio ignorado por episode_number invalido", {
+                  seriesId: series.id,
+                  seasonNumber: season.seasonNumber,
+                  filePath: episode.filePath,
+                });
                 continue;
               }
+
               await db.episode.upsert({
                 where: {
                   seasonId_episodeNumber: {
@@ -298,16 +349,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ message: "Series saved successfully", count: seriesList.length }, { status: 200 });
+    return successResponse({ message: "Series salvas com sucesso", count: validSeries.length }, 200);
   } catch (error) {
-    console.error("Failed to save series:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to save series",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    logger.error("Falha ao salvar series", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel salvar as series.");
   }
 }
 
@@ -321,7 +366,7 @@ export async function DELETE(request: NextRequest) {
     const seriesId = searchParams.get("id");
 
     if (!seriesId) {
-      return NextResponse.json({ error: "Series ID is required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "ID da serie e obrigatorio.");
     }
 
     const db = await prisma();
@@ -330,9 +375,9 @@ export async function DELETE(request: NextRequest) {
       where: { id: seriesId },
     });
 
-    return NextResponse.json({ message: "Series deleted successfully" }, { status: 200 });
+    return successResponse({ message: "Serie removida com sucesso" }, 200);
   } catch (error) {
-    console.error("Failed to delete series:", error);
-    return NextResponse.json({ error: "Failed to delete series" }, { status: 500 });
+    logger.error("Falha ao remover serie", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel remover a serie.");
   }
 }

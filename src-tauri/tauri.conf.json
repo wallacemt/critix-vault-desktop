@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Critix Vault",
-  "version": "0.1.0",
+  "version": "1.1.9",
   "identifier": "com.walla.critix-vault",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -31,19 +31,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
-    "resources": [
-      "resources/server"
-    ],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "targets": ["nsis"],
+    "resources": ["resources/server"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "linux": {
       "appimage": {
         "bundleMediaFramework": true
@@ -55,7 +45,8 @@
       "timestampUrl": "",
       "nsis": {
         "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "installer-hooks.nsh"
       }
     }
   }

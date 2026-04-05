@@ -115,7 +115,7 @@ export function useMediaLibrary(folderId: string | null) {
       setSeries(filteredSeries);
       setError(null);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load media";
+      const errorMessage = err instanceof Error ? err.message : "Nao foi possivel carregar as midias.";
       setError(errorMessage);
       setMovies([]);
       setSeries([]);
@@ -247,7 +247,7 @@ export function useMediaLibrary(folderId: string | null) {
       // Reload from database
       await loadMediaFromStorage();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to scan folder";
+      const errorMessage = err instanceof Error ? err.message : "Nao foi possivel escanear a pasta.";
       console.error("❌ Scan error:", errorMessage);
       setError(errorMessage);
     } finally {
@@ -280,7 +280,7 @@ export function useMediaLibrary(folderId: string | null) {
         const details = await apiService.getMediaDetailsById(newMediaId, newMediaType);
 
         if (!details) {
-          throw new Error("Failed to fetch media details");
+          throw new Error("Nao foi possivel buscar os detalhes da midia.");
         }
 
         const apiData = details as any;

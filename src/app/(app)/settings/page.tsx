@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { tauriService } from "@/services/tauri";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -95,7 +97,7 @@ export default function SettingsPage() {
   const loadInfo = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/settings/info", { cache: "no-store" });
+      const res = await fetch("/api/settings/info/", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load info");
       const payload = (await res.json()) as ApiEnvelope<DbInfo>;
       const data = unwrapApiResponse(payload);
@@ -114,7 +116,7 @@ export default function SettingsPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch("/api/settings/backup");
+      const res = await fetch("/api/settings/backup/");
       if (!res.ok) throw new Error("Failed to export");
       const data = await res.json();
       const jsonString = JSON.stringify(data, null, 2);
@@ -171,13 +173,20 @@ export default function SettingsPage() {
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        const res = await fetch("/api/settings/backup", {
+        const res = await fetch("/api/settings/backup/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(parsed),
         });
-        if (!res.ok) throw new Error("Failed to import");
-        showStatus("success", "Dados importados com sucesso!");
+        const payload = await res.json().catch(() => ({}) as { error?: string; summary?: any });
+
+        if (!res.ok) {
+          throw new Error(payload.error || "Nao foi possivel importar o backup.");
+        }
+
+        const restoredMovies = payload?.summary?.movies?.restored ?? 0;
+        const restoredSeries = payload?.summary?.series?.restored ?? 0;
+        showStatus("success", `Backup importado com sucesso! Filmes: ${restoredMovies} | Series: ${restoredSeries}`);
         await loadInfo();
       } catch (error) {
         showStatus("error", "Erro ao importar: " + (error instanceof Error ? error.message : "Erro desconhecido"));
@@ -191,7 +200,7 @@ export default function SettingsPage() {
   const handleClearAll = async () => {
     setClearing(true);
     try {
-      const res = await fetch("/api/settings/backup", { method: "DELETE" });
+      const res = await fetch("/api/settings/backup/", { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to clear data");
       showStatus("success", "Todos os dados foram removidos.");
       await loadInfo();
@@ -329,9 +338,30 @@ export default function SettingsPage() {
                   <FolderOpen className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500 mb-1">Localização do banco de dados</p>
-                    <code className="text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg block break-all border border-slate-700">
-                      {info.dbPath}
-                    </code>
+                    <div className="flex gap-2">
+                      <code className="text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg block break-all border border-slate-700 flex-1">
+                        {info.dbPath}
+                      </code>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            onClick={async () => {
+                              try {
+                                await tauriService.openFileLocation(info.dbPath);
+                              } catch (error) {
+                                alert("Erro ao abrir Pasta");
+                              }
+                            }}
+                            className="rounded-md"
+                            size={"icon"}
+                            variant={"ghost"}
+                          >
+                            <FolderOpen />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Abrir Pasta do Banco</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                 </div>
               </>

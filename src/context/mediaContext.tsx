@@ -4,6 +4,27 @@ import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
+type ApiEnvelope<T> =
+  | T
+  | {
+      success: boolean;
+      data?: T;
+      error?: {
+        message?: string;
+      };
+    };
+
+function extractApiData<T>(payload: ApiEnvelope<T>): T {
+  if (payload && typeof payload === "object" && "success" in payload && typeof payload.success === "boolean") {
+    if (!payload.success) {
+      throw new Error(payload.error?.message || "Falha na requisicao da API.");
+    }
+    return payload.data as T;
+  }
+
+  return payload as T;
+}
+
 export type WatchSession = {
   type: "movie" | "episode";
   mediaId: string;
@@ -54,7 +75,8 @@ export function MediaProvider({ children }: { children: ReactNode }) {
     if (mediaType === "MOVIE") {
       const res = await fetch(`/api/movie?movieId=${mediaId}`);
 
-      const movie = (await res.json()) as Movie;
+      const payload = (await res.json()) as ApiEnvelope<Movie>;
+      const movie = extractApiData(payload);
 
       return setCurrentMovie(movie);
     }
@@ -62,7 +84,8 @@ export function MediaProvider({ children }: { children: ReactNode }) {
     if (mediaType === "SERIES") {
       const res = await fetch(`/api/serie?serieId=${mediaId}`);
 
-      const serie = (await res.json()) as Series;
+      const payload = (await res.json()) as ApiEnvelope<Series>;
+      const serie = extractApiData(payload);
 
       return setCurrentSerie(serie);
     }

@@ -118,7 +118,6 @@ export const loadingHtml = `<!DOCTYPE html>
         alt="Critix Vault Logo"
         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
       />
-      <span class="logo-text" style="display:none">C</span>
     </div>
 
     <div class="title">
@@ -132,6 +131,5 @@ export const loadingHtml = `<!DOCTYPE html>
     </div>
   </div>
 
-  <span class="version">v0.1.0</span>
 </body>
 </html>`;

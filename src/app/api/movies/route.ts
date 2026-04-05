@@ -11,6 +11,39 @@ import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
+function parseJsonSafe<T>(raw: string | null | undefined, fallback: T, context: { movieId: string; field: string }): T {
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    logger.warn("Campo JSON invalido em movies", {
+      ...context,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  }
+}
+
+function toGenreObjects(raw: string | null | undefined, movieId: string): Array<{ name: string }> | undefined {
+  const parsed = parseJsonSafe<unknown[]>(raw, [], { movieId, field: "genres" });
+  const normalized = parsed
+    .map((item) => {
+      if (typeof item === "string") {
+        return { name: item };
+      }
+      if (item && typeof item === "object" && "name" in item && typeof (item as { name?: unknown }).name === "string") {
+        return { name: (item as { name: string }).name };
+      }
+      return null;
+    })
+    .filter((item): item is { name: string } => item !== null);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 /**
  * GET /api/movies?folderId={optional}
  * Get all movies or filter by folderId
@@ -27,7 +60,6 @@ export async function GET(request: NextRequest) {
       orderBy: folderId ? { title: "asc" } : { createdAt: "desc" },
     });
 
-    // Transform to frontend format
     const transformed = movies.map((movie) => ({
       id: movie.id,
       title: movie.title,
@@ -44,28 +76,25 @@ export async function GET(request: NextRequest) {
       folderId: movie.folderId,
       duration: movie.duration || undefined,
       trailer: movie.trailer || undefined,
-      // TMDB Extended Fields
-      genres: movie.genres
-        ? JSON.parse(movie.genres).map((g: any) => (typeof g === "string" ? { name: g } : { name: g.name }))
-        : undefined,
+      genres: toGenreObjects(movie.genres, movie.id),
       imdbId: movie.imdbId || undefined,
       tagline: movie.tagline || undefined,
       budget: movie.budget || undefined,
       revenue: movie.revenue || undefined,
       voteCount: movie.voteCount || undefined,
       popularity: movie.popularity || undefined,
-      images: movie.images ? JSON.parse(movie.images) : undefined,
-      videos: movie.videos ? JSON.parse(movie.videos) : undefined,
-      cast: movie.cast ? JSON.parse(movie.cast) : undefined,
-      crew: movie.crew ? JSON.parse(movie.crew) : undefined,
+      images: parseJsonSafe<unknown[]>(movie.images, [], { movieId: movie.id, field: "images" }),
+      videos: parseJsonSafe<unknown[]>(movie.videos, [], { movieId: movie.id, field: "videos" }),
+      cast: parseJsonSafe<unknown[]>(movie.cast, [], { movieId: movie.id, field: "cast" }),
+      crew: parseJsonSafe<unknown[]>(movie.crew, [], { movieId: movie.id, field: "crew" }),
       createdAt: movie.createdAt.toISOString(),
       updatedAt: movie.updatedAt.toISOString(),
     }));
 
     return successResponse(transformed, 200);
   } catch (error) {
-    logger.error("Failed to get movies", error);
-    return errorResponse(500, "DATABASE_ERROR", "Failed to get movies");
+    logger.error("Falha ao carregar filmes", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel carregar os filmes.");
   }
 }
 
@@ -79,7 +108,7 @@ export async function POST(request: NextRequest) {
     const movies: Movie[] = await request.json();
 
     if (!Array.isArray(movies)) {
-      return errorResponse(400, "BAD_REQUEST", "Request body must be an array of movies");
+      return errorResponse(400, "BAD_REQUEST", "Corpo da requisicao deve ser um array de filmes.");
     }
 
     const db = await prisma();
@@ -102,7 +131,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (validMovies.length === 0) {
-      return errorResponse(400, "BAD_REQUEST", "No valid movies to save. All folder references are invalid.");
+      return errorResponse(400, "BAD_REQUEST", "Nenhum filme valido para salvar. As pastas informadas nao existem.");
     }
 
     // Upsert each movie
@@ -171,10 +200,10 @@ export async function POST(request: NextRequest) {
       ),
     );
 
-    return successResponse({ message: "Movies saved successfully", count: results.length }, 200);
+    return successResponse({ message: "Filmes salvos com sucesso", count: results.length }, 200);
   } catch (error) {
-    logger.error("Failed to save movies", error);
-    return errorResponse(500, "DATABASE_ERROR", "Failed to save movies");
+    logger.error("Falha ao salvar filmes", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel salvar os filmes.");
   }
 }
 
@@ -188,7 +217,7 @@ export async function DELETE(request: NextRequest) {
     const movieId = searchParams.get("id");
 
     if (!movieId) {
-      return errorResponse(400, "BAD_REQUEST", "Movie ID is required");
+      return errorResponse(400, "BAD_REQUEST", "ID do filme e obrigatorio.");
     }
 
     const db = await prisma();
@@ -197,9 +226,9 @@ export async function DELETE(request: NextRequest) {
       where: { id: movieId },
     });
 
-    return successResponse({ message: "Movie deleted successfully" }, 200);
+    return successResponse({ message: "Filme removido com sucesso" }, 200);
   } catch (error) {
-    logger.error("Failed to delete movie", error);
-    return errorResponse(500, "DATABASE_ERROR", "Failed to delete movie");
+    logger.error("Falha ao remover filme", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel remover o filme.");
   }
 }

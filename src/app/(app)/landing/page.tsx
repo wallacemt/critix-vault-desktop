@@ -33,7 +33,7 @@ function LendingPageContent() {
       const text = await file.text();
       const json = JSON.parse(text);
 
-      const res = await fetch("/api/settings/backup", {
+      const res = await fetch("/api/settings/backup/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(json),

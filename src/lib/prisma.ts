@@ -35,27 +35,21 @@ export const getDatabaseFilePath = () => getDbPath();
 // Run migration SQL files to initialize the database schema
 const initializeDatabase = async (dbFilePath: string) => {
   try {
-    // Find the prisma/migrations directory
+    // Collect available prisma/migrations directories.
+    // In packaged apps we prefer the bundled migrations (current working dir)
+    // and then merge with CRITIX_DATA_DIR copies for backward compatibility.
     const possibleMigrationDirs = [
-      process.env.CRITIX_DATA_DIR ? path.join(process.env.CRITIX_DATA_DIR, "prisma", "migrations") : null,
       path.join(process.cwd(), "prisma", "migrations"),
+      process.env.CRITIX_DATA_DIR ? path.join(process.env.CRITIX_DATA_DIR, "prisma", "migrations") : null,
     ].filter(Boolean) as string[];
 
-    let migrationsDir: string | null = null;
-    for (const dir of possibleMigrationDirs) {
-      if (fs.existsSync(dir)) {
-        migrationsDir = dir;
-        break;
-      }
-    }
-
-    if (!migrationsDir) {
+    const availableMigrationDirs = possibleMigrationDirs.filter((dir) => fs.existsSync(dir));
+    if (availableMigrationDirs.length === 0) {
       console.warn("⚠️ Migrations directory not found, skipping DB initialization");
       return;
     }
 
-    // Assign to a non-nullable const so Turbopack doesn't see a 'null/' path pattern
-    const mdir: string = migrationsDir;
+    console.log("📦 Migration sources:", availableMigrationDirs.join(" | "));
 
     // Use better-sqlite3 directly to run migrations
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -82,38 +76,60 @@ const initializeDatabase = async (dbFilePath: string) => {
         .map((row: { migration_name: string }) => row.migration_name),
     );
 
-    // Read and apply migration directories in order
-    const migrationFolders = fs
-      .readdirSync(mdir)
-      .filter((f: string) => {
+    // Merge migrations by folder name from all sources.
+    const migrationSqlByName = new Map<string, string>();
+
+    for (const sourceDir of availableMigrationDirs) {
+      const entries = fs.readdirSync(sourceDir).filter((f: string) => {
         try {
-          return fs.statSync(path.join(mdir, f)).isDirectory();
+          return fs.statSync(path.join(sourceDir, f)).isDirectory();
         } catch {
           return false;
         }
-      })
-      .sort();
+      });
 
-    for (const folder of migrationFolders) {
-      if (applied.has(folder)) continue;
+      for (const folder of entries) {
+        if (migrationSqlByName.has(folder)) {
+          continue;
+        }
 
-      const sqlFile = path.join(mdir, folder, "migration.sql");
-      if (!fs.existsSync(sqlFile)) continue;
+        const sqlFile = path.join(sourceDir, folder, "migration.sql");
+        if (fs.existsSync(sqlFile)) {
+          migrationSqlByName.set(folder, sqlFile);
+        }
+      }
+    }
+
+    const migrationEntries = [...migrationSqlByName.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+    const markApplied = db.prepare(
+      "INSERT OR IGNORE INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (?, ?, datetime('now'), ?, 1)",
+    );
+
+    for (const [folder, sqlFile] of migrationEntries) {
+      if (applied.has(folder)) {
+        continue;
+      }
 
       const sql = fs.readFileSync(sqlFile, "utf-8");
       console.log(`📦 Applying migration: ${folder}`);
 
       try {
         db.exec(sql);
-        db.prepare(
-          "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (?, ?, datetime('now'), ?, 1)",
-        ).run(crypto.randomUUID(), "", folder);
+        markApplied.run(crypto.randomUUID(), "", folder);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        // Ignore "already exists" errors (table may already exist from a previous partial run)
-        if (!message.includes("already exists")) {
+        const isBenignMigrationError = message.includes("already exists") || message.includes("duplicate column name");
+
+        if (!isBenignMigrationError) {
           console.error(`❌ Migration ${folder} failed:`, message);
+          continue;
         }
+
+        // If schema already matches the migration effect, mark it as applied
+        // to avoid retry loops on every startup.
+        console.warn(`⚠️ Migration ${folder} already reflected in schema, marking as applied.`);
+        markApplied.run(crypto.randomUUID(), "", folder);
       }
     }
 

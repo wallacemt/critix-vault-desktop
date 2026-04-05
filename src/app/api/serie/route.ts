@@ -1,23 +1,61 @@
 /**
- * Movies API Routes
- * RESTful endpoints for movie management
+ * Series detail API Route
+ * GET /api/serie?serieId={id}
  */
 
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { errorResponse, successResponse } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
+
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/serie?serieId={movieId}
- */
+function parseJsonSafe<T>(
+  raw: string | null | undefined,
+  fallback: T,
+  context: { seriesId: string; field: string },
+): T {
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    logger.warn("Campo JSON invalido em detalhe de serie", {
+      ...context,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  }
+}
+
+function toGenreObjects(raw: string | null | undefined, seriesId: string): Array<{ name: string }> | undefined {
+  const parsed = parseJsonSafe<unknown[]>(raw, [], { seriesId, field: "genres" });
+  const normalized = parsed
+    .map((item) => {
+      if (typeof item === "string") {
+        return { name: item };
+      }
+      if (item && typeof item === "object" && "name" in item && typeof (item as { name?: unknown }).name === "string") {
+        return { name: (item as { name: string }).name };
+      }
+      return null;
+    })
+    .filter((item): item is { name: string } => item !== null);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const serieId = searchParams.get("serieId");
 
     if (!serieId) {
-      return NextResponse.json({ error: "Movie ID is required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "ID da serie e obrigatorio.");
     }
+
     const db = await prisma();
 
     const series = await db.series.findFirst({
@@ -33,7 +71,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!series) {
-      return NextResponse.json({ error: "movie not found" }, { status: 404 });
+      return errorResponse(404, "NOT_FOUND", "Serie nao encontrada.");
     }
 
     const transformed = {
@@ -56,19 +94,20 @@ export async function GET(request: NextRequest) {
       numberOfEpisodes: series.numberOfEpisodes,
       duration: series.duration || undefined,
       trailer: series.trailer || undefined,
-      // TMDB Extended Fields
-      genres: series.genres ? JSON.parse(series.genres).map(({ name }: { name: string }) => ({ name })) : undefined,
-
+      genres: toGenreObjects(series.genres, series.id),
       imdbId: series.imdbId || undefined,
       tagline: series.tagline || undefined,
       voteCount: series.voteCount || undefined,
       popularity: series.popularity || undefined,
-      images: series.images ? JSON.parse(series.images) : undefined,
-      videos: series.videos ? JSON.parse(series.videos) : undefined,
-      cast: series.cast ? JSON.parse(series.cast) : undefined,
-      crew: series.crew ? JSON.parse(series.crew) : undefined,
-      networks: series.networks ? JSON.parse(series.networks) : undefined,
-      productionCompanies: series.productionCompanies ? JSON.parse(series.productionCompanies) : undefined,
+      images: parseJsonSafe<unknown[]>(series.images, [], { seriesId: series.id, field: "images" }),
+      videos: parseJsonSafe<unknown[]>(series.videos, [], { seriesId: series.id, field: "videos" }),
+      cast: parseJsonSafe<unknown[]>(series.cast, [], { seriesId: series.id, field: "cast" }),
+      crew: parseJsonSafe<unknown[]>(series.crew, [], { seriesId: series.id, field: "crew" }),
+      networks: parseJsonSafe<unknown[]>(series.networks, [], { seriesId: series.id, field: "networks" }),
+      productionCompanies: parseJsonSafe<unknown[]>(series.productionCompanies, [], {
+        seriesId: series.id,
+        field: "productionCompanies",
+      }),
       seasons: series.seasons.map((season) => ({
         id: season.id,
         seasonNumber: season.seasonNumber,
@@ -89,16 +128,16 @@ export async function GET(request: NextRequest) {
           air_date: ep.airDate,
           runtime: ep.duration,
           duration: ep.duration,
-          vote_average: 0, // Not stored in database
+          vote_average: 0,
           filePath: ep.filePath || undefined,
           available: ep.available,
         })),
       })),
     };
 
-    return NextResponse.json(transformed, { status: 200 });
+    return successResponse(transformed, 200);
   } catch (error) {
-    console.error("Failed to get movies:", error);
-    return NextResponse.json({ error: `Failed to get movies: ${error}` }, { status: 500 });
+    logger.error("Falha ao carregar detalhes da serie", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel carregar os detalhes da serie.");
   }
 }

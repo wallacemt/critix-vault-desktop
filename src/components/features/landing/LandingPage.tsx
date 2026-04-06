@@ -19,11 +19,11 @@ import {
   UploadCloud,
   ArrowRight,
   Folder,
+  CircleHelp,
 } from "lucide-react";
 import Image from "next/image";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useEffect, useRef } from "react";
-import gsap from "gsap";
 import { Folder as FolderType } from "@/types/folder";
 
 interface LandingPageProps {
@@ -33,6 +33,7 @@ interface LandingPageProps {
   loading?: boolean;
   folders?: FolderType[];
   onGoToLibrary?: () => void;
+  onOpenHelp?: () => void;
 }
 
 export function LandingPage({
@@ -42,43 +43,64 @@ export function LandingPage({
   loading,
   folders,
   onGoToLibrary,
+  onOpenHelp,
 }: LandingPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8]);
 
   useEffect(() => {
-    // GSAP animations for feature cards
-    gsap.from(".feature-card", {
-      opacity: 50,
-      y: 60,
-      stagger: 0.2,
-      duration: 1,
-      ease: "power3.out",
-      delay: 0.5,
+    if (shouldReduceMotion) {
+      return;
+    }
+
+    let isActive = true;
+    const activeTweens: { kill: () => void }[] = [];
+
+    void import("gsap").then(({ default: gsap }) => {
+      if (!isActive) return;
+
+      activeTweens.push(
+        gsap.from(".feature-card", {
+          opacity: 50,
+          y: 60,
+          stagger: 0.2,
+          duration: 1,
+          ease: "power3.out",
+          delay: 0.5,
+        }),
+      );
+
+      activeTweens.push(
+        gsap.to(".logo-float", {
+          y: -10,
+          duration: 2,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut",
+        }),
+      );
+
+      activeTweens.push(
+        gsap.to(".glow-pulse", {
+          opacity: 0.6,
+          scale: 1.05,
+          duration: 2,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut",
+        }),
+      );
     });
 
-    // Floating animation for logo
-    gsap.to(".logo-float", {
-      y: -10,
-      duration: 2,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
-
-    // Glow pulse animation
-    gsap.to(".glow-pulse", {
-      opacity: 0.6,
-      scale: 1.05,
-      duration: 2,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
-  }, []);
+    return () => {
+      isActive = false;
+      activeTweens.forEach((tween) => tween.kill());
+    };
+  }, [shouldReduceMotion]);
 
   const features = [
     {
@@ -110,27 +132,43 @@ export function LandingPage({
       <div className="absolute inset-1 z-1 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute -top-1/2 - -left-1/2 w-full h-full bg-gradient-to-br from-blue-600/5 to-transparent rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 90, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "linear",
-          }}
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  scale: [1, 1.2, 1],
+                  rotate: [0, 90, 0],
+                }
+          }
+          transition={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  duration: 20,
+                  repeat: Infinity,
+                  ease: "linear",
+                }
+          }
         />
         <motion.div
           className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-600/5 to-transparent rounded-full blur-3xl"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            rotate: [90, 0, 90],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: "linear",
-          }}
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  scale: [1.2, 1, 1.2],
+                  rotate: [90, 0, 90],
+                }
+          }
+          transition={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  duration: 25,
+                  repeat: Infinity,
+                  ease: "linear",
+                }
+          }
         />
       </div>
 
@@ -236,16 +274,29 @@ export function LandingPage({
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-2 w-full items-center justify-center">
                       {onGoToLibrary && (
                         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                           <Button
                             size="lg"
                             onClick={onGoToLibrary}
-                            className="w-full sm:w-auto bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-[var(--glow-primary)] transition-all duration-300 text-lg px-8 py-6"
+                            className="w-full sm:w-auto bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-[var(--glow-primary)] transition-all duration-300 text-lg px-8 py-6 "
                           >
                             <ArrowRight className="w-5 h-5 mr-2" />
                             Ir para Biblioteca
+                          </Button>
+                        </motion.div>
+                      )}
+                      {onOpenHelp && (
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            onClick={onOpenHelp}
+                            className="w-full sm:w-auto bg-blue-600/15 border-blue-500/40 hover:bg-blue-600/25 hover:border-blue-400/60 text-blue-100 font-semibold text-lg px-8 py-6"
+                          >
+                            <CircleHelp className="w-5 h-5 mr-2" />
+                            Ajuda e FAQ
                           </Button>
                         </motion.div>
                       )}
@@ -307,6 +358,20 @@ export function LandingPage({
                           >
                             <Play className="w-5 h-5 mr-2" />
                             Ver Demo
+                          </Button>
+                        </motion.div>
+                      )}
+
+                      {onOpenHelp && (
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            onClick={onOpenHelp}
+                            className="w-full sm:w-auto bg-blue-600/15 border-blue-500/40 hover:bg-blue-600/25 hover:border-blue-400/60 text-blue-100 rounded-lg font-semibold text-lg px-8 py-6"
+                          >
+                            <CircleHelp className="w-5 h-5 mr-2" />
+                            Ajuda e FAQ
                           </Button>
                         </motion.div>
                       )}

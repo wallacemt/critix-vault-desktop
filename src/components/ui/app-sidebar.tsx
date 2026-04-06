@@ -69,7 +69,10 @@ export function AppSidebar({
         <div className="flex gap-2 flex-row-reverse items-center justify-center group-data-[collapsible=icon]:flex-col">
           <Tooltip>
             <TooltipTrigger asChild>
-              <SidebarTrigger className="p-2 size-9 text-text-secondary-crx hover:text-text-primary-crx hover:bg-surface-light-crx rounded-lg transition-colors" size={'icon-lg'}  />
+              <SidebarTrigger
+                className="p-2 size-9 text-text-secondary-crx hover:text-text-primary-crx hover:bg-surface-light-crx rounded-lg transition-colors"
+                size={"icon-lg"}
+              />
             </TooltipTrigger>
             {isCollapsed && (
               <TooltipContent side="right" sideOffset={8}>
@@ -121,15 +124,16 @@ export function AppSidebar({
         <div className="p-4 space-y-1">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link href="/landing?home=true">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
-                >
+              <Button
+                asChild
+                variant="ghost"
+                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
+              >
+                <Link href="/landing?home=true" aria-label="Ir para Início">
                   <Home className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Início</span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </TooltipTrigger>
             {isCollapsed && (
               <TooltipContent side="right" sideOffset={8}>
@@ -139,15 +143,16 @@ export function AppSidebar({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link href="/settings">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
-                >
+              <Button
+                asChild
+                variant="ghost"
+                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
+              >
+                <Link href="/settings" aria-label="Ir para Configurações">
                   <Settings className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Configurações</span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </TooltipTrigger>
             {isCollapsed && (
               <TooltipContent side="right" sideOffset={8}>
@@ -157,15 +162,16 @@ export function AppSidebar({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link href="/help">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
-                >
+              <Button
+                asChild
+                variant="ghost"
+                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
+              >
+                <Link href="/help" aria-label="Ir para Ajuda e FAQ">
                   <CircleHelp className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
                   <span className="group-data-[collapsible=icon]:hidden">Ajuda e FAQ</span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </TooltipTrigger>
             {isCollapsed && (
               <TooltipContent side="right" sideOffset={8}>

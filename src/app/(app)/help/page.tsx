@@ -2,13 +2,34 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookOpen, Bug, MessageSquare, ShieldCheck } from "lucide-react";
+import { ArrowLeft, BookOpen, Bug, ExternalLink, MessageSquare, PlayCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getEasterEggProgress, MYSTERY_LINK, registerEasterEggClue } from "@/lib/easter-egg";
 import { openExternalLink } from "@/lib/external-link";
 
 const issuesUrl = "https://github.com/wallacemt/critix-vault-desktop/issues/new/choose";
 const discussionsUrl = "https://github.com/wallacemt/critix-vault-desktop/wiki";
+const showcaseVideoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.hostname.includes("youtu.be")) {
+      const id = parsed.pathname.replace("/", "").trim();
+      return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0` : null;
+    }
+
+    if (parsed.hostname.includes("youtube.com")) {
+      const id = parsed.searchParams.get("v");
+      return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0` : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const quickStart = [
   "Adicione uma ou mais pastas na Biblioteca.",
@@ -42,6 +63,7 @@ const faq = [
 export default function HelpPage() {
   const [helpClicks, setHelpClicks] = useState(0);
   const [unlocked, setUnlocked] = useState<string[]>([]);
+  const showcaseVideoEmbedUrl = useMemo(() => getYouTubeEmbedUrl(showcaseVideoUrl), []);
 
   const refreshProgress = useCallback(() => {
     const progress = getEasterEggProgress();
@@ -126,18 +148,19 @@ export default function HelpPage() {
       <div className="max-w-5xl mx-auto p-6 pb-16 space-y-8">
         <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/library">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-              >
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <Link href="/library" aria-label="Voltar para Biblioteca">
                 <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <div>
               <button onClick={handleTitleClick} className="text-left" title="Ajuda e FAQ">
-                <h1 className="text-3xl font-bold text-white">Ajuda e FAQ</h1>
+                <h1 className="text-3xl font-display font-bold text-white">Ajuda e FAQ</h1>
               </button>
               <p className="text-sm text-slate-400">Guia rápido, perguntas frequentes e canais de suporte</p>
             </div>
@@ -145,7 +168,7 @@ export default function HelpPage() {
         </header>
 
         <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-display font-semibold text-white mb-4 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-amber-400" />
             Como usar o Critix Vault
           </h2>
@@ -162,7 +185,7 @@ export default function HelpPage() {
         </section>
 
         <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <h2 className="text-lg  font-display font-semibold text-white mb-4 flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             Perguntas Frequentes
           </h2>
@@ -179,21 +202,68 @@ export default function HelpPage() {
         </section>
 
         <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Precisa falar com o time?</h2>
+          <h2 className="text-lg font-semibold text-white mb-4 font-display">Precisa falar com o time?</h2>
           <div className="grid sm:grid-cols-2 gap-3">
             <Button
-              className="w-full justify-start bg-red-600 hover:bg-red-700 text-white"
+              className="w-full justify-between bg-red-600/30 hover:bg-red-600/50 text-white rounded-xl transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-red-300"
               onClick={() => openExternalLink(issuesUrl)}
+              aria-label="Abrir página de reportar bug e suporte"
             >
-              <Bug className="w-4 h-4 mr-2" />
-              Reportar bug ou pedir ajuda (Issues)
+              <span className="flex items-center">
+                <Bug className="w-4 h-4 mr-2" />
+                Reportar bug ou pedir ajuda
+              </span>
+              <ExternalLink className="w-4 h-4" />
             </Button>
             <Button
-              className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full justify-between bg-blue-600/30 hover:bg-blue-600/50 text-white rounded-xl transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-300"
               onClick={() => openExternalLink(discussionsUrl)}
+              aria-label="Abrir wiki de ajuda e feedback"
             >
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Enviar feedback e ideias (Discussions)
+              <span className="flex items-center">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Ver documentação e enviar feedback
+              </span>
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          </div>
+        </section>
+
+        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
+          <h2 className="text-lg font-display font-semibold text-white mb-3 flex items-center gap-2">
+            <PlayCircle className="w-5 h-5 text-rose-400" />
+            Vídeo de demonstração
+          </h2>
+          <p className="text-sm text-slate-400 mb-4">
+            Assista ao vídeo de showcase para entender o fluxo completo de uso do app.
+          </p>
+
+          {showcaseVideoEmbedUrl ? (
+            <div className="rounded-xl overflow-hidden border border-slate-700 bg-black aspect-video">
+              <iframe
+                src={showcaseVideoEmbedUrl}
+                title="Vídeo de demonstração do Critix Vault"
+                className="w-full h-full"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-amber-300">
+              Não foi possível carregar o vídeo incorporado. Use o botão abaixo para abrir no navegador.
+            </p>
+          )}
+
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              className="border-slate-700 hover:bg-slate-800 text-slate-100 rounded-xl"
+              onClick={() => openExternalLink(showcaseVideoUrl)}
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Abrir vídeo no navegador
             </Button>
           </div>
         </section>

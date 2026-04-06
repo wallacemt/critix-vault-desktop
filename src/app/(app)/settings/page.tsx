@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft,
+  ArrowUpRight,
   Database,
   FolderOpen,
   Film,
@@ -38,6 +39,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { tauriService } from "@/services/tauri";
+import { openExternalLink } from "@/lib/external-link";
+import { APP_VERSION } from "@/lib/config";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -58,6 +61,17 @@ interface DbInfo {
     episodes: number;
     watchHistory: number;
   };
+}
+
+interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  isUpdateAvailable: boolean;
+  releaseUrl: string;
+  releaseName?: string;
+  prerelease: boolean;
+  publishedAt: string | null;
+  checkedAt: string;
 }
 
 type ApiEnvelope<T> =
@@ -87,6 +101,9 @@ export default function SettingsPage() {
   const [clearing, setClearing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const showStatus = (type: "success" | "error", text: string) => {
@@ -214,6 +231,35 @@ export default function SettingsPage() {
     }
   };
 
+  const handleCheckUpdates = async () => {
+    setCheckingUpdates(true);
+    setUpdateError(null);
+
+    try {
+      const res = await fetch("/api/settings/update/", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Não foi possível verificar atualizações");
+      }
+
+      const payload = (await res.json()) as ApiEnvelope<UpdateInfo>;
+      const data = unwrapApiResponse(payload);
+      setUpdateInfo(data);
+
+      showStatus(
+        "success",
+        data.isUpdateAvailable
+          ? `Nova versão disponível: ${data.latestVersion}`
+          : "Você já está usando a versão mais recente.",
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido ao verificar atualizações";
+      setUpdateError(message);
+      showStatus("error", message);
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
   const totalItems = info ? info.counts.movies + info.counts.series : 0;
 
   return (
@@ -238,25 +284,26 @@ export default function SettingsPage() {
           <span className="text-sm font-medium">{statusMsg.text}</span>
         </motion.div>
       )}
-
-      <div className="max-w-5xl mx-auto p-6 pb-16">
+     
+      <div className="max-w-5xl mx-auto p-6 pb-16" >
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-4 mb-10"
         >
-          <Link href="/library">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-            >
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <Link href="/library" aria-label="Voltar para Biblioteca">
               <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <div>
-            <h1 className="text-3xl font-bold text-white">Configurações</h1>
+            <h1 className="text-3xl font-display font-bold text-white">Configurações</h1>
             <p className="text-slate-400 text-sm mt-0.5">Gerencie armazenamento, backups e dados do aplicativo</p>
           </div>
         </motion.div>
@@ -275,7 +322,7 @@ export default function SettingsPage() {
                   <HardDrive className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Armazenamento</h2>
+                  <h2 className="text-lg font-semibold text-white font-display">Armazenamento</h2>
                   <p className="text-xs text-slate-500">Banco de dados SQLite local</p>
                 </div>
               </div>
@@ -382,7 +429,7 @@ export default function SettingsPage() {
                 <Shield className="w-5 h-5 text-green-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Backup e Restauração</h2>
+                <h2 className="text-lg font-semibold text-white font-display">Backup e Restauração</h2>
                 <p className="text-xs text-slate-500">Exporte ou importe todos os seus dados</p>
               </div>
             </div>
@@ -448,6 +495,72 @@ export default function SettingsPage() {
             </div>
           </motion.section>
 
+          {/* Updates */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Atualizações do Aplicativo</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Verifique se existe uma nova versão disponível para instalar.
+                </p>
+              </div>
+              <Button
+                onClick={handleCheckUpdates}
+                disabled={checkingUpdates}
+                variant="outline"
+                className="border-amber-600/60 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+              >
+                {checkingUpdates ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Clock className="w-4 h-4 mr-2" />
+                )}
+                {checkingUpdates ? "Verificando..." : "Verificar atualização"}
+              </Button>
+            </div>
+
+            <div
+              className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-2"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-sm text-slate-200">
+                Versão atual: <span className="font-semibold">{APP_VERSION}</span>
+              </p>
+              {updateInfo ? (
+                <>
+                  <p className="text-sm text-slate-300">
+                    Última versão disponível: <span className="font-semibold">{updateInfo.latestVersion}</span>
+                  </p>
+                  <p className={`text-sm ${updateInfo.isUpdateAvailable ? "text-emerald-300" : "text-slate-400"}`}>
+                    {updateInfo.isUpdateAvailable
+                      ? "Nova versão encontrada. Recomendado atualizar para a release mais recente."
+                      : "Seu aplicativo já está atualizado."}
+                  </p>
+
+                  {updateInfo.isUpdateAvailable && (
+                    <Button
+                      onClick={() => openExternalLink(updateInfo.releaseUrl)}
+                      className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white"
+                    >
+                      <ArrowUpRight className="w-4 h-4 mr-2" />
+                      Baixar atualização
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-slate-400">Nenhuma verificação realizada ainda nesta sessão.</p>
+              )}
+
+              {updateError && <p className="text-sm text-red-300">{updateError}</p>}
+            </div>
+          </motion.section>
+
           {/* Danger Zone */}
           <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -460,7 +573,7 @@ export default function SettingsPage() {
                 <AlertTriangle className="w-5 h-5 text-red-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-red-400">Zona de Perigo</h2>
+                <h2 className="text-lg font-semibold text-red-400 font-display">Zona de Perigo</h2>
                 <p className="text-xs text-red-400/60">Ações irreversíveis — tenha cuidado</p>
               </div>
             </div>
@@ -530,7 +643,7 @@ export default function SettingsPage() {
                 <Database className="w-7 h-7 text-yellow-400" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Critix Vault</h3>
+                <h3 className="text-lg font-bold text-white font-display">Critix Vault</h3>
                 <p className="text-sm text-slate-400">Gerenciador de biblioteca de mídia local</p>
                 <div className="flex items-center gap-4 mt-2">
                   <span className="text-xs text-slate-600 flex items-center gap-1">
@@ -540,6 +653,9 @@ export default function SettingsPage() {
                   <span className="text-xs text-slate-600 flex items-center gap-1">
                     <BarChart3 className="w-3 h-3" />
                     {totalItems} itens na biblioteca
+                  </span>
+                  <span className="text-xs text-slate-600 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />v{APP_VERSION}
                   </span>
                 </div>
               </div>

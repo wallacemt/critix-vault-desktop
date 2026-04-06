@@ -60,6 +60,10 @@ function LendingPageContent() {
     router.push("/library");
   };
 
+  const handleGoToHelp = () => {
+    router.push("/help");
+  };
+
   // Show loading while checking folders
   if (isLoading) {
     return (
@@ -96,6 +100,7 @@ function LendingPageContent() {
         loading={scanning || importLoading}
         folders={hasFolders ? folders : undefined}
         onGoToLibrary={hasFolders ? handleGoToLibrary : undefined}
+        onOpenHelp={handleGoToHelp}
       />
       <ScanningProgress progress={scanProgress} isOpen={scanning} />
     </>

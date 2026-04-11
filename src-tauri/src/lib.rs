@@ -26,11 +26,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|_app| {
             // Em modo de produção, inicia o servidor Next.js e navega para ele assim que estiver pronto
             #[cfg(not(debug_assertions))]
             {
-                let app_handle = app.handle().clone();
+                let app_handle = _app.handle().clone();
                 std::thread::spawn(move || {
                     if let Err(e) = server::start_nextjs_server_internal() {
                         eprintln!("[critix] Erro ao iniciar servidor: {e}");

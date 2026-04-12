@@ -1,0 +1,155 @@
+name: Tauri Updater Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da release (ex: v1.2.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Publicar como pre-release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updater-release-${{ github.ref_name }}${{ github.event.inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign and publish updater release
+    runs-on: windows-latest
+    timeout-minutes: 80
+    env:
+      CI: true
+      BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      NEXT_PUBLIC_CRITIX_API_URL: ${{ secrets.BACKEND_URL }}
+      CRITIX_EXTERNAL_API_URL: ${{ secrets.BACKEND_URL }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      # Backward compatibility for old signer variable names.
+      TAURI_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.tag }}".Trim()
+          }
+
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$') {
+            Write-Error "Invalid tag format. Use vX.Y.Z (example: v1.2.0)."
+            exit 1
+          }
+
+          $isPrerelease = "false"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.prerelease }}" -eq "true") {
+            $isPrerelease = "true"
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
+
+      - name: Validate required secrets
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace("$env:BACKEND_URL")) {
+            Write-Error "BACKEND_URL secret is required."
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace("$env:TAURI_SIGNING_PRIVATE_KEY")) {
+            Write-Error "TAURI_SIGNING_PRIVATE_KEY secret is required for updater artifact signing."
+            exit 1
+          }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Enable updater artifacts for release build
+        shell: pwsh
+        run: |
+          $configPath = "src-tauri/tauri.conf.json"
+          $json = Get-Content $configPath -Raw | ConvertFrom-Json
+          if ($null -eq $json.bundle) {
+            $json | Add-Member -NotePropertyName bundle -NotePropertyValue (@{})
+          }
+          $json.bundle.createUpdaterArtifacts = $true
+          $json | ConvertTo-Json -Depth 100 | Set-Content $configPath -Encoding utf8
+
+      - name: Build desktop app with updater artifacts
+        run: bun run tauri:build -- --ci
+
+      - name: Validate updater artifacts
+        shell: pwsh
+        run: |
+          $bundleDir = "src-tauri/target/release/bundle"
+          $latestJson = Get-ChildItem -Path $bundleDir -Recurse -Filter "latest.json" | Select-Object -First 1
+          if (-not $latestJson) {
+            Write-Error "latest.json was not generated. Ensure createUpdaterArtifacts=true and signing secrets are valid."
+            exit 1
+          }
+
+          $signatureCount = (Get-ChildItem -Path $bundleDir -Recurse -Filter "*.sig" | Measure-Object).Count
+          if ($signatureCount -lt 1) {
+            Write-Error "No updater signature files (*.sig) were found."
+            exit 1
+          }
+
+          Copy-Item $latestJson.FullName "$bundleDir/latest.json" -Force
+          Write-Host "Resolved latest.json from: $($latestJson.FullName)"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: critix-updater-${{ steps.meta.outputs.tag }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msi/*.msi.sig
+            src-tauri/target/release/bundle/latest.json
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Critix Vault ${{ steps.meta.outputs.tag }}
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msi/*.msi.sig
+            src-tauri/target/release/bundle/latest.json

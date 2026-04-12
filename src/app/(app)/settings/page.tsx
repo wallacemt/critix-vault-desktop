@@ -72,7 +72,18 @@ interface UpdateInfo {
   prerelease: boolean;
   publishedAt: string | null;
   checkedAt: string;
+  source: "native" | "api";
 }
+
+interface NativeUpdatePayload {
+  version: string;
+  currentVersion: string;
+  date?: string;
+  body?: string;
+  downloadAndInstall: (...args: unknown[]) => Promise<void>;
+}
+
+const isTauriRuntime = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 type ApiEnvelope<T> =
   | T
@@ -102,6 +113,9 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [installProgress, setInstallProgress] = useState<number | null>(null);
+  const [nativeUpdate, setNativeUpdate] = useState<NativeUpdatePayload | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -234,8 +248,59 @@ export default function SettingsPage() {
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true);
     setUpdateError(null);
+    setInstallProgress(null);
+    setNativeUpdate(null);
 
     try {
+      if (isTauriRuntime()) {
+        try {
+          const { check } = await import("@tauri-apps/plugin-updater");
+          const result = (await check()) as NativeUpdatePayload | null;
+
+          if (result) {
+            setNativeUpdate(result);
+            setUpdateInfo({
+              currentVersion: result.currentVersion || APP_VERSION,
+              latestVersion: result.version,
+              isUpdateAvailable: true,
+              releaseUrl: `https://github.com/wallacemt/critix-vault-desktop/releases/tag/v${result.version}`,
+              releaseName: `v${result.version}`,
+              prerelease: false,
+              publishedAt: result.date || null,
+              checkedAt: new Date().toISOString(),
+              source: "native",
+            });
+
+            showStatus("success", `Nova versão disponível: ${result.version}`);
+            return;
+          }
+
+          setUpdateInfo({
+            currentVersion: APP_VERSION,
+            latestVersion: APP_VERSION,
+            isUpdateAvailable: false,
+            releaseUrl: "https://github.com/wallacemt/critix-vault-desktop/releases",
+            releaseName: `v${APP_VERSION}`,
+            prerelease: false,
+            publishedAt: null,
+            checkedAt: new Date().toISOString(),
+            source: "native",
+          });
+
+          showStatus("success", "Você já está usando a versão mais recente.");
+          return;
+        } catch (nativeError) {
+          const nativeMessage =
+            nativeError instanceof Error ? nativeError.message : "Falha no updater nativo. Tentando fallback web.";
+          console.error("Native updater check failed:", nativeError);
+          setUpdateError(
+            nativeMessage.includes("pubkey") || nativeMessage.includes("signature")
+              ? "Updater nativo não está configurado com chave pública válida. Usando fallback para checar releases."
+              : `Updater nativo indisponível: ${nativeMessage}`,
+          );
+        }
+      }
+
       const res = await fetch("/api/settings/update/", { cache: "no-store" });
       if (!res.ok) {
         throw new Error("Não foi possível verificar atualizações");
@@ -243,7 +308,7 @@ export default function SettingsPage() {
 
       const payload = (await res.json()) as ApiEnvelope<UpdateInfo>;
       const data = unwrapApiResponse(payload);
-      setUpdateInfo(data);
+      setUpdateInfo({ ...data, source: "api" });
 
       showStatus(
         "success",
@@ -257,6 +322,66 @@ export default function SettingsPage() {
       showStatus("error", message);
     } finally {
       setCheckingUpdates(false);
+    }
+  };
+
+  const handleInstallNativeUpdate = async () => {
+    if (!nativeUpdate) {
+      showStatus("error", "Nenhuma atualização nativa pendente para instalação.");
+      return;
+    }
+
+    setInstallingUpdate(true);
+    setInstallProgress(0);
+
+    try {
+      let downloaded = 0;
+      let total = 0;
+
+      await nativeUpdate.downloadAndInstall((event: any) => {
+        const eventName = event?.event as string | undefined;
+
+        if (eventName === "Started") {
+          total = Number(event?.data?.contentLength ?? 0);
+          downloaded = 0;
+          setInstallProgress(0);
+          return;
+        }
+
+        if (eventName === "Progress") {
+          const chunk = Number(event?.data?.chunkLength ?? 0);
+          downloaded += chunk;
+
+          if (total > 0) {
+            const progress = Math.min(100, Math.round((downloaded / total) * 100));
+            setInstallProgress(progress);
+          }
+          return;
+        }
+
+        if (eventName === "Finished") {
+          setInstallProgress(100);
+        }
+      });
+
+      setNativeUpdate(null);
+      showStatus("success", "Atualização instalada com sucesso. Reiniciando o aplicativo...");
+
+      try {
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
+      } catch (restartError) {
+        const restartMessage = restartError instanceof Error ? restartError.message : "Erro desconhecido";
+        console.error("Failed to relaunch after update:", restartError);
+        setUpdateError(`Atualização instalada, mas não foi possível reiniciar automaticamente: ${restartMessage}`);
+        showStatus("success", "Atualização instalada. Reinicie manualmente o aplicativo para concluir a atualização.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao instalar atualização";
+      setUpdateError(message);
+      showStatus("error", `Falha ao instalar atualização: ${message}`);
+    } finally {
+      setInstallingUpdate(false);
     }
   };
 
@@ -284,8 +409,8 @@ export default function SettingsPage() {
           <span className="text-sm font-medium">{statusMsg.text}</span>
         </motion.div>
       )}
-     
-      <div className="max-w-5xl mx-auto p-6 pb-16" >
+
+      <div className="max-w-5xl mx-auto p-6 pb-16">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -537,20 +662,39 @@ export default function SettingsPage() {
                   <p className="text-sm text-slate-300">
                     Última versão disponível: <span className="font-semibold">{updateInfo.latestVersion}</span>
                   </p>
+                  <p className="text-xs text-slate-500">
+                    Fonte da verificação: {updateInfo.source === "native" ? "Updater nativo (Tauri)" : "Fallback API"}
+                  </p>
                   <p className={`text-sm ${updateInfo.isUpdateAvailable ? "text-emerald-300" : "text-slate-400"}`}>
                     {updateInfo.isUpdateAvailable
                       ? "Nova versão encontrada. Recomendado atualizar para a release mais recente."
                       : "Seu aplicativo já está atualizado."}
                   </p>
 
-                  {updateInfo.isUpdateAvailable && (
+                  {updateInfo.isUpdateAvailable && nativeUpdate && (
                     <Button
-                      onClick={() => openExternalLink(updateInfo.releaseUrl)}
+                      onClick={handleInstallNativeUpdate}
+                      disabled={installingUpdate}
                       className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white"
                     >
                       <ArrowUpRight className="w-4 h-4 mr-2" />
-                      Baixar atualização
+                      {installingUpdate ? "Instalando atualização..." : "Atualizar automaticamente agora"}
                     </Button>
+                  )}
+
+                  {updateInfo.isUpdateAvailable && (
+                    <Button
+                      onClick={() => openExternalLink(updateInfo.releaseUrl)}
+                      variant="outline"
+                      className="mt-2 border-emerald-600/60 text-emerald-300 hover:bg-emerald-600/10"
+                    >
+                      <ArrowUpRight className="w-4 h-4 mr-2" />
+                      Abrir release manual
+                    </Button>
+                  )}
+
+                  {installProgress !== null && (
+                    <p className="text-xs text-amber-200">Progresso da instalação: {installProgress}%</p>
                   )}
                 </>
               ) : (

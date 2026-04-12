@@ -46,7 +46,6 @@ function compareVersions(a: string, b: string): number {
 export async function GET() {
   try {
     const githubApiUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/latest`;
-    console.log(githubApiUrl)
     const response = await fetch(githubApiUrl, {
       headers: {
         Accept: "application/vnd.github+json",

@@ -8,6 +8,15 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Play, Calendar, Star, Edit, Loader2, FolderOpen, Trash2, CheckCircle2, Eye } from "lucide-react";
 import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
@@ -28,7 +37,7 @@ import {
   setSeriesEpisodesWatchStatus,
 } from "@/services/databaseService";
 import { useMediaContext } from "@/context/mediaContext";
-import { useActions } from "@/hooks/useActions";
+import { useActions, type SeriesPlayResult } from "@/hooks/useActions";
 import { useRouter } from "next/navigation";
 import { CastSection } from "./_components/cast-section";
 import { TrailerModal } from "./_components/trailer-modal";
@@ -56,9 +65,13 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   const [isRefreshingGallery, setIsRefreshingGallery] = useState(false);
   const [isSeriesWatched, setIsSeriesWatched] = useState(false);
   const [isTogglingWatched, setIsTogglingWatched] = useState(false);
+  const [isStartingSeriesPlayback, setIsStartingSeriesPlayback] = useState(false);
+  const [showSeasonSelectionDialog, setShowSeasonSelectionDialog] = useState(false);
+  const [seasonSelectionOptions, setSeasonSelectionOptions] = useState<number[]>([]);
+  const [selectedSeasonToStart, setSelectedSeasonToStart] = useState<string>("");
   const router = useRouter();
   const { serie: series, setCurrentSerie: onSeriesUpdate } = useMediaContext();
-  const { handlePlayEpisode: onPlayEpisode } = useActions();
+  const { handlePlayEpisode: onPlayEpisode, handlePlaySeries } = useActions();
   const { isOnline } = useApiConnectivity();
   const seriesSeasons = Array.isArray(series?.seasons) ? series.seasons : [];
   const [filePath, setFilePath] = useState("");
@@ -292,6 +305,67 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   function onBack() {
     router.back();
   }
+
+  const handleSeriesPlayResult = (result: SeriesPlayResult) => {
+    if (result.status === "needs-season-selection") {
+      setSeasonSelectionOptions(result.availableSeasons);
+      setSelectedSeasonToStart(String(result.availableSeasons[0] ?? ""));
+      setShowSeasonSelectionDialog(true);
+      return;
+    }
+
+    if (result.status === "invalid-season") {
+      alert(`Temporada invalida. Escolha apenas entre: ${result.availableSeasons.join(", ")}.`);
+      return;
+    }
+
+    if (result.status === "completed") {
+      alert("Serie concluida. Nao ha proximo episodio disponivel para reproduzir.");
+      return;
+    }
+
+    if (result.status === "no-episodes") {
+      alert("Nao ha episodios disponiveis localmente para esta serie.");
+    }
+  };
+
+  const handlePlaySeriesClick = async () => {
+    setIsStartingSeriesPlayback(true);
+    try {
+      const result = await handlePlaySeries(series);
+      handleSeriesPlayResult(result);
+    } catch (error) {
+      console.error("Failed to start series playback:", error);
+      alert("Nao foi possivel iniciar a reproducao da serie.");
+    } finally {
+      setIsStartingSeriesPlayback(false);
+    }
+  };
+
+  const handleConfirmSeasonSelection = async () => {
+    const seasonNumber = Number(selectedSeasonToStart);
+    if (!Number.isInteger(seasonNumber)) {
+      alert("Temporada invalida. Informe um numero de temporada.");
+      return;
+    }
+
+    setIsStartingSeriesPlayback(true);
+    try {
+      const result = await handlePlaySeries(series, { seasonNumber });
+
+      if (result.status === "played") {
+        setShowSeasonSelectionDialog(false);
+        return;
+      }
+
+      handleSeriesPlayResult(result);
+    } catch (error) {
+      console.error("Failed to start series playback with selected season:", error);
+      alert("Nao foi possivel iniciar a reproducao da serie.");
+    } finally {
+      setIsStartingSeriesPlayback(false);
+    }
+  };
 
   const toggleSeason = (seasonId: string) => {
     setExpandedSeasons((prev) => {
@@ -852,6 +926,20 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
               {/* Actions */}
               {!demoMode && (
                 <div className="flex gap-3 flex-wrap">
+                  <Button
+                    size="lg"
+                    onClick={handlePlaySeriesClick}
+                    disabled={isStartingSeriesPlayback}
+                    className="bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] rounded-2xl"
+                  >
+                    {isStartingSeriesPlayback ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="w-5 h-5 mr-2 fill-current" />
+                    )}
+                    Assistir
+                  </Button>
+
                   {series.videos && series.videos.length > 0 && (
                     <TrailerModal videos={series.videos} title={series.title} />
                   )}
@@ -1006,6 +1094,48 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
         )}
       </motion.div>
       {/* Edit Media Modal */}
+      <Dialog open={showSeasonSelectionDialog} onOpenChange={setShowSeasonSelectionDialog}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Escolher temporada</DialogTitle>
+            <DialogDescription className="text-slate-300">
+              Selecione uma temporada disponivel localmente para iniciar do primeiro episodio.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Select value={selectedSeasonToStart} onValueChange={setSelectedSeasonToStart}>
+            <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-white">
+              <SelectValue placeholder="Selecione a temporada" />
+            </SelectTrigger>
+            <SelectContent>
+              {seasonSelectionOptions.map((seasonNumber) => (
+                <SelectItem key={seasonNumber} value={String(seasonNumber)}>
+                  Temporada {seasonNumber}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowSeasonSelectionDialog(false)}
+              className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmSeasonSelection}
+              disabled={isStartingSeriesPlayback || !selectedSeasonToStart}
+              className="bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)]"
+            >
+              {isStartingSeriesPlayback ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Iniciar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <EditMediaModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}

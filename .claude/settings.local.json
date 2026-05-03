@@ -8,7 +8,8 @@
       "Bash(grep -rn \"\\\\.filter\\\\s*\\(\\\\s*\\([a-zA-Z_$]\" \"e:/WorkSpace/PESONAL_PROJECTS/CRITIX/critix_vault_desktop/src/app/api\" --include=\"*.ts\")",
       "Bash(cat)",
       "Bash(chmod +x /tmp/search_patterns.sh)",
-      "Bash(bash /tmp/search_patterns.sh)"
+      "Bash(bash /tmp/search_patterns.sh)",
+      "Bash(Get-ChildItem -Recurse -Name)"
     ]
   }
 }

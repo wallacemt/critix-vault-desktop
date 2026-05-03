@@ -302,13 +302,23 @@ async function renameDotEntries(serverDir) {
     await rename(dotPrisma, underPrisma);
     console.log("  ✅ node_modules/.prisma → node_modules/_prisma");
 
-    // 5. Atualizar require('.prisma/...') → require('_prisma/...') em @prisma/client
-    const prismaClientDefault = path.join(serverDir, "node_modules", "@prisma", "client", "default.js");
-    if (existsSync(prismaClientDefault)) {
-      let content = await readFile(prismaClientDefault, "utf8");
-      content = content.replaceAll(".prisma/client", "_prisma/client");
-      await writeFile(prismaClientDefault, content, "utf8");
-      console.log("  ✅ @prisma/client/default.js atualizado para _prisma");
+    // 5. Atualizar require('.prisma/...') → require('_prisma/...') em todos os arquivos de @prisma/client
+    const prismaClientDir = path.join(serverDir, "node_modules", "@prisma", "client");
+    if (existsSync(prismaClientDir)) {
+      const clientFiles = await readdir(prismaClientDir);
+      for (const file of clientFiles) {
+        if (!/\.(js|mjs|cjs)$/.test(file)) continue;
+        const filePath = path.join(prismaClientDir, file);
+        let content;
+        try {
+          content = await readFile(filePath, "utf8");
+        } catch {
+          continue;
+        }
+        if (!content.includes(".prisma/client")) continue;
+        await writeFile(filePath, content.replaceAll(".prisma/client", "_prisma/client"), "utf8");
+      }
+      console.log("  ✅ @prisma/client/* atualizado para _prisma");
     }
   }
 

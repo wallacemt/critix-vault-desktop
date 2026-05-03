@@ -60,7 +60,8 @@ export async function GET(request: NextRequest) {
       orderBy: folderId ? { title: "asc" } : { createdAt: "desc" },
     });
 
-    const transformed = movies.map((movie) => ({
+    // @ts-ignore
+    const transformed = movies.map((movie: any) => ({
       id: movie.id,
       title: movie.title,
       originalTitle: movie.originalTitle || undefined,

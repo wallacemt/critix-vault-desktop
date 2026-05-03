@@ -26,23 +26,35 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' http://127.0.0.1:1422; connect-src 'self' http://127.0.0.1:* http://localhost:* https://* https://believable-hope-production-e207.up.railway.app wss://believable-hope-production-e207.up.railway.app http://localhost:8080 ws://localhost:8080; img-src 'self' https://image.tmdb.org data: blob: http://127.0.0.1:* http://localhost:* https://believable-hope-production-e207.up.railway.app http://localhost:8080; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+      "csp": "default-src 'self' http://127.0.0.1:1422; connect-src 'self' http://127.0.0.1:* http://localhost:* https://* wss://api-critix.wallacedev.com.br http://localhost:8080 ws://localhost:8080 https://api-critix.wallacedev.com.br; img-src 'self' https://image.tmdb.org data: blob: http://127.0.0.1:* http://localhost:* https://api-critix.wallacedev.com.br http://localhost:8080; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
     }
   },
   "plugins": {
     "updater": {
       "active": true,
       "dialog": false,
-      "endpoints": ["https://github.com/wallacemt/critix-vault-desktop/releases/latest/download/latest.json"],
+      "endpoints": [
+        "https://github.com/wallacemt/critix-vault-desktop/releases/latest/download/latest.json"
+      ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQzM0M1ODZGNTlBNDU0RjMKUldUelZLUlpiMWc4MHhRN2RKNlIzaC9jdTQ2d1lhSzltY3V5eE8vNnlQNlJITndxZjZ5byt5RU0K"
     }
   },
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": false,
-    "targets": ["nsis"],
-    "resources": ["resources/server"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "targets": [
+      "nsis"
+    ],
+    "resources": [
+      "resources/server"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "linux": {
       "appimage": {
         "bundleMediaFramework": true

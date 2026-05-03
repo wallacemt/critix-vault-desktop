@@ -7,9 +7,9 @@ import { Folder } from "@/types/folder";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpDown,
+  BookmarkPlus,
   CheckCircleIcon,
   Film,
-  Filter,
   FolderOpen,
   Grid3x3,
   List,
@@ -18,10 +18,12 @@ import {
   Search,
   SlidersHorizontal,
   Tv,
+  X,
 } from "lucide-react";
 import { Dispatch, SetStateAction, useState } from "react";
 import { userActionService } from "@/services/userActionService";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
+import { MonthFilter } from "./MonthFilter";
 
 interface FolderMediaHeaderProps {
   selectedFolder: Folder;
@@ -33,6 +35,8 @@ interface FolderMediaHeaderProps {
   unwatchedMoviesCount: number;
   watchedMoviesCount: number;
   seriesCount: number;
+  watchedMonthFilter: string;
+  watchedMonthOptions: Array<{ value: string; label: string }>;
   searchQuery: string;
   sortBy: "modified" | "title" | "rating" | "duration" | "year";
   sortOrder: "asc" | "desc";
@@ -52,11 +56,16 @@ interface FolderMediaHeaderProps {
   setYearRange: Dispatch<SetStateAction<"all" | "before-2000" | "2000-2009" | "2010-2019" | "2020-plus">>;
   setRatingRange: Dispatch<SetStateAction<"all" | "8-plus" | "7-plus" | "6-plus">>;
   setDurationRange: Dispatch<SetStateAction<"all" | "short" | "medium" | "long">>;
+  setWatchedMonthFilter: Dispatch<SetStateAction<string>>;
   setLocalOnly: Dispatch<SetStateAction<boolean>>;
   scanFolder: (folderPath: string) => Promise<void>;
   onManualEntry?: () => void;
   onOpenFolder?: () => void;
   watchedSeriesCount?: number;
+  filterPresets?: Array<{ name: string }>;
+  onSaveFilterPreset?: (name: string) => void;
+  onApplyFilterPreset?: (name: string) => void;
+  onDeleteFilterPreset?: (name: string) => void;
 }
 
 export function FolderMediaHeader({
@@ -93,12 +102,22 @@ export function FolderMediaHeader({
   onManualEntry,
   onOpenFolder,
   watchedSeriesCount = 0,
+  watchedMonthFilter,
+  watchedMonthOptions,
+  setWatchedMonthFilter,
+  filterPresets = [],
+  onSaveFilterPreset,
+  onApplyFilterPreset,
+  onDeleteFilterPreset,
 }: FolderMediaHeaderProps) {
   const { isOnline } = useApiConnectivity();
   const [showControlPanel, setShowControlPanel] = useState(false);
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetNameInput, setPresetNameInput] = useState("");
 
   const sortValue = `${sortBy}-${sortOrder}`;
-  const triggerClass = "h-9 border-[var(--border-color)] bg-[var(--bg-surface-light)] text-[var(--text-primary)] rounded-md";
+  const triggerClass =
+    "h-9 border-[var(--border-color)] bg-[var(--bg-surface-light)] text-[var(--text-primary)] rounded-md";
 
   return (
     <div className="sticky top-0 z-20 w-full border-b border-[var(--border-color)] bg-[var(--bg-surface)]/95 backdrop-blur-lg">
@@ -257,14 +276,15 @@ export function FolderMediaHeader({
             <div className="overflow-x-auto pb-1">
               <div className="flex min-w-max items-center gap-2 pr-2">
                 {[
-                  { key: "all", label: "Tudo", icon: null, count: totalCount },
-                  { key: "movies", label: "Filmes", icon: Film, count: unwatchedMoviesCount },
-                  { key: "series", label: "Séries", icon: Tv, count: seriesCount },
+                  { key: "all", label: "Tudo", icon: null, count: totalCount, showCount: true },
+                  { key: "movies", label: "Filmes", icon: Film, count: unwatchedMoviesCount, showCount: true },
+                  { key: "series", label: "Séries", icon: Tv, count: seriesCount, showCount: true },
                   {
                     key: "watched",
                     label: "Assistidos",
                     icon: CheckCircleIcon,
                     count: watchedMoviesCount + watchedSeriesCount,
+                    showCount: false,
                   },
                 ].map((tab) => (
                   <Button
@@ -285,7 +305,8 @@ export function FolderMediaHeader({
                     )}
                   >
                     {tab.icon && <tab.icon className="mr-2 h-4 w-4" />}
-                    {tab.label} ({tab.count})
+                    {tab.label}
+                    {tab.showCount && ` (${tab.count})`}
                     {activeTab === tab.key && (
                       <motion.div
                         className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"
@@ -313,8 +334,6 @@ export function FolderMediaHeader({
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   Filtros e Opções
                 </p>
-
-               
 
                 <div className="flex gap-4 justify-between">
                   <Select
@@ -394,6 +413,103 @@ export function FolderMediaHeader({
                       <SelectItem value="long">Longa (&gt; 150 min)</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {activeTab === "watched" && (
+                    <div className="min-w-32 mr-12">
+                      <MonthFilter
+                        value={watchedMonthFilter}
+                        options={watchedMonthOptions}
+                        onValueChange={setWatchedMonthFilter}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Filter Presets */}
+                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-color)]/50 pt-3">
+                  <span className="text-xs font-medium text-[var(--text-muted)] shrink-0">Presets:</span>
+
+                  {filterPresets.map((preset) => (
+                    <div key={preset.name} className="flex items-center gap-0.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-primary)] rounded-lg rounded-r-none"
+                        onClick={() => onApplyFilterPreset?.(preset.name)}
+                      >
+                        {preset.name}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-6 p-0 text-[var(--text-muted)] hover:text-red-400 rounded-lg rounded-l-none border border-l-0 border-[var(--border-color)]"
+                        onClick={() => onDeleteFilterPreset?.(preset.name)}
+                        aria-label={`Remover preset ${preset.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  {savingPreset ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        autoFocus
+                        className="h-7 w-32 text-xs border-[var(--border-color)] bg-[var(--bg-surface)]"
+                        placeholder="Nome do preset..."
+                        value={presetNameInput}
+                        onChange={(e) => setPresetNameInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && presetNameInput.trim()) {
+                            onSaveFilterPreset?.(presetNameInput.trim());
+                            setPresetNameInput("");
+                            setSavingPreset(false);
+                          }
+                          if (e.key === "Escape") {
+                            setPresetNameInput("");
+                            setSavingPreset(false);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 px-2 text-xs rounded-lg"
+                        disabled={!presetNameInput.trim()}
+                        onClick={() => {
+                          if (presetNameInput.trim()) {
+                            onSaveFilterPreset?.(presetNameInput.trim());
+                            setPresetNameInput("");
+                            setSavingPreset(false);
+                          }
+                        }}
+                      >
+                        OK
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 rounded-lg"
+                        onClick={() => { setPresetNameInput(""); setSavingPreset(false); }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] rounded-lg"
+                      onClick={() => setSavingPreset(true)}
+                    >
+                      <BookmarkPlus className="h-3 w-3 mr-1" />
+                      Salvar preset
+                    </Button>
+                  )}
                 </div>
               </div>
             </motion.div>

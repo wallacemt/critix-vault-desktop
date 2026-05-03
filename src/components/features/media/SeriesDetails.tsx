@@ -1053,7 +1053,15 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
           <div className="space-y-4">
             {seriesSeasons
               .slice()
-              .sort((a, b) => a.seasonNumber - b.seasonNumber)
+              .sort((a, b) => {
+                const aHas = a.downloadedEpisodes > 0 || a.available;
+                const bHas = b.downloadedEpisodes > 0 || b.available;
+                const aInProgress = aHas && a.episodes.some((ep) => ep.isWatched) && !a.episodes.every((ep) => ep.isWatched);
+                const bInProgress = bHas && b.episodes.some((ep) => ep.isWatched) && !b.episodes.every((ep) => ep.isWatched);
+                if (aInProgress !== bInProgress) return aInProgress ? -1 : 1;
+                if (aHas !== bHas) return aHas ? -1 : 1;
+                return a.seasonNumber - b.seasonNumber;
+              })
               .map((season, index) => (
                 <motion.div
                   key={season.id}

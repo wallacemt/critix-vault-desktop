@@ -1,6 +1,6 @@
 /**
  * Streaming Grid Component
- * Grid/List layout for media cards
+ * Grid/List layout for media cards with Canva-style drag-to-select
  */
 
 "use client";
@@ -16,9 +16,12 @@ interface StreamingGridProps {
   onMediaPlay?: (media: Media) => void;
   onMediaEdit?: (media: Media) => void;
   onMediaDelete?: (media: Media) => void;
+  selectedMediaIds?: Set<string>;
+  onToggleMediaSelection?: (media: string) => void;
   viewMode?: "grid" | "list";
   emptyMessage?: string;
   demoMode?: boolean;
+  handleMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export function StreamingGrid({
@@ -27,9 +30,12 @@ export function StreamingGrid({
   onMediaPlay,
   onMediaEdit,
   onMediaDelete,
+  selectedMediaIds,
+  onToggleMediaSelection,
   viewMode = "grid",
   emptyMessage = "No media found",
   demoMode = false,
+  handleMouseDown,
 }: StreamingGridProps) {
   if (media.length === 0) {
     return (
@@ -51,25 +57,33 @@ export function StreamingGrid({
   }
 
   return (
-    <div className={viewMode === "grid" ? "grid grid-cols-2  lg:grid-cols-4 gap-8" : "flex flex-col gap-3"}>
-      {media.map((item, index) => (
-        <motion.div
-          key={item.id}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.05, duration: 0.3 }}
-        >
-          <StreamingCard
-            media={item}
-            onClick={onMediaClick}
-            onPlay={onMediaPlay}
-            onEdit={onMediaEdit}
-            onDelete={onMediaDelete}
-            viewMode={viewMode}
-            demoMode={demoMode}
-          />
-        </motion.div>
-      ))}
-    </div>
+    <>
+      <div
+        className={viewMode === "grid" ? "grid grid-cols-2 lg:grid-cols-4 gap-8 px-4" : "flex flex-col gap-3"}
+        onMouseDown={handleMouseDown}
+      >
+        {media.map((item, index) => (
+          <motion.div
+            key={item.id}
+            data-media-id={item.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05, duration: 0.3 }}
+          >
+            <StreamingCard
+              media={item}
+              onClick={onMediaClick}
+              onPlay={onMediaPlay}
+              onEdit={onMediaEdit}
+              onDelete={onMediaDelete}
+              selected={selectedMediaIds?.has(item.id)}
+              onToggleSelect={onToggleMediaSelection}
+              viewMode={viewMode}
+              demoMode={demoMode}
+            />
+          </motion.div>
+        ))}
+      </div>
+    </>
   );
 }

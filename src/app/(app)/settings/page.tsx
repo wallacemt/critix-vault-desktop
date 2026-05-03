@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft,
+  ArrowUpRight,
   Database,
   FolderOpen,
   Film,
@@ -36,6 +37,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { tauriService } from "@/services/tauri";
+import { openExternalLink } from "@/lib/external-link";
+import { APP_VERSION } from "@/lib/config";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -57,6 +62,28 @@ interface DbInfo {
     watchHistory: number;
   };
 }
+
+interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  isUpdateAvailable: boolean;
+  releaseUrl: string;
+  releaseName?: string;
+  prerelease: boolean;
+  publishedAt: string | null;
+  checkedAt: string;
+  source: "native" | "api";
+}
+
+interface NativeUpdatePayload {
+  version: string;
+  currentVersion: string;
+  date?: string;
+  body?: string;
+  downloadAndInstall: (...args: unknown[]) => Promise<void>;
+}
+
+const isTauriRuntime = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 type ApiEnvelope<T> =
   | T
@@ -85,6 +112,12 @@ export default function SettingsPage() {
   const [clearing, setClearing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [installProgress, setInstallProgress] = useState<number | null>(null);
+  const [nativeUpdate, setNativeUpdate] = useState<NativeUpdatePayload | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const showStatus = (type: "success" | "error", text: string) => {
@@ -95,7 +128,7 @@ export default function SettingsPage() {
   const loadInfo = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/settings/info", { cache: "no-store" });
+      const res = await fetch("/api/settings/info/", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load info");
       const payload = (await res.json()) as ApiEnvelope<DbInfo>;
       const data = unwrapApiResponse(payload);
@@ -114,7 +147,7 @@ export default function SettingsPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch("/api/settings/backup");
+      const res = await fetch("/api/settings/backup/");
       if (!res.ok) throw new Error("Failed to export");
       const data = await res.json();
       const jsonString = JSON.stringify(data, null, 2);
@@ -171,13 +204,20 @@ export default function SettingsPage() {
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        const res = await fetch("/api/settings/backup", {
+        const res = await fetch("/api/settings/backup/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(parsed),
         });
-        if (!res.ok) throw new Error("Failed to import");
-        showStatus("success", "Dados importados com sucesso!");
+        const payload = await res.json().catch(() => ({}) as { error?: string; summary?: any });
+
+        if (!res.ok) {
+          throw new Error(payload.error || "Nao foi possivel importar o backup.");
+        }
+
+        const restoredMovies = payload?.summary?.movies?.restored ?? 0;
+        const restoredSeries = payload?.summary?.series?.restored ?? 0;
+        showStatus("success", `Backup importado com sucesso! Filmes: ${restoredMovies} | Series: ${restoredSeries}`);
         await loadInfo();
       } catch (error) {
         showStatus("error", "Erro ao importar: " + (error instanceof Error ? error.message : "Erro desconhecido"));
@@ -191,7 +231,7 @@ export default function SettingsPage() {
   const handleClearAll = async () => {
     setClearing(true);
     try {
-      const res = await fetch("/api/settings/backup", { method: "DELETE" });
+      const res = await fetch("/api/settings/backup/", { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to clear data");
       showStatus("success", "Todos os dados foram removidos.");
       await loadInfo();
@@ -202,6 +242,146 @@ export default function SettingsPage() {
       showStatus("error", "Erro ao limpar: " + (error instanceof Error ? error.message : "Erro desconhecido"));
     } finally {
       setClearing(false);
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdates(true);
+    setUpdateError(null);
+    setInstallProgress(null);
+    setNativeUpdate(null);
+
+    try {
+      if (isTauriRuntime()) {
+        try {
+          const { check } = await import("@tauri-apps/plugin-updater");
+          const result = (await check()) as NativeUpdatePayload | null;
+
+          if (result) {
+            setNativeUpdate(result);
+            setUpdateInfo({
+              currentVersion: result.currentVersion || APP_VERSION,
+              latestVersion: result.version,
+              isUpdateAvailable: true,
+              releaseUrl: `https://github.com/wallacemt/critix-vault-desktop/releases/tag/v${result.version}`,
+              releaseName: `v${result.version}`,
+              prerelease: false,
+              publishedAt: result.date || null,
+              checkedAt: new Date().toISOString(),
+              source: "native",
+            });
+
+            showStatus("success", `Nova versão disponível: ${result.version}`);
+            return;
+          }
+
+          setUpdateInfo({
+            currentVersion: APP_VERSION,
+            latestVersion: APP_VERSION,
+            isUpdateAvailable: false,
+            releaseUrl: "https://github.com/wallacemt/critix-vault-desktop/releases",
+            releaseName: `v${APP_VERSION}`,
+            prerelease: false,
+            publishedAt: null,
+            checkedAt: new Date().toISOString(),
+            source: "native",
+          });
+
+          showStatus("success", "Você já está usando a versão mais recente.");
+          return;
+        } catch (nativeError) {
+          const nativeMessage =
+            nativeError instanceof Error ? nativeError.message : "Falha no updater nativo. Tentando fallback web.";
+          console.error("Native updater check failed:", nativeError);
+          setUpdateError(
+            nativeMessage.includes("pubkey") || nativeMessage.includes("signature")
+              ? "Updater nativo não está configurado com chave pública válida. Usando fallback para checar releases."
+              : `Updater nativo indisponível: ${nativeMessage}`,
+          );
+        }
+      }
+
+      const res = await fetch("/api/settings/update/", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Não foi possível verificar atualizações");
+      }
+
+      const payload = (await res.json()) as ApiEnvelope<UpdateInfo>;
+      const data = unwrapApiResponse(payload);
+      setUpdateInfo({ ...data, source: "api" });
+
+      showStatus(
+        "success",
+        data.isUpdateAvailable
+          ? `Nova versão disponível: ${data.latestVersion}`
+          : "Você já está usando a versão mais recente.",
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido ao verificar atualizações";
+      setUpdateError(message);
+      showStatus("error", message);
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
+  const handleInstallNativeUpdate = async () => {
+    if (!nativeUpdate) {
+      showStatus("error", "Nenhuma atualização nativa pendente para instalação.");
+      return;
+    }
+
+    setInstallingUpdate(true);
+    setInstallProgress(0);
+
+    try {
+      let downloaded = 0;
+      let total = 0;
+
+      await nativeUpdate.downloadAndInstall((event: any) => {
+        const eventName = event?.event as string | undefined;
+
+        if (eventName === "Started") {
+          total = Number(event?.data?.contentLength ?? 0);
+          downloaded = 0;
+          setInstallProgress(0);
+          return;
+        }
+
+        if (eventName === "Progress") {
+          const chunk = Number(event?.data?.chunkLength ?? 0);
+          downloaded += chunk;
+
+          if (total > 0) {
+            const progress = Math.min(100, Math.round((downloaded / total) * 100));
+            setInstallProgress(progress);
+          }
+          return;
+        }
+
+        if (eventName === "Finished") {
+          setInstallProgress(100);
+        }
+      });
+
+      setNativeUpdate(null);
+      showStatus("success", "Atualização instalada com sucesso. Reiniciando o aplicativo...");
+
+      try {
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
+      } catch (restartError) {
+        const restartMessage = restartError instanceof Error ? restartError.message : "Erro desconhecido";
+        console.error("Failed to relaunch after update:", restartError);
+        setUpdateError(`Atualização instalada, mas não foi possível reiniciar automaticamente: ${restartMessage}`);
+        showStatus("success", "Atualização instalada. Reinicie manualmente o aplicativo para concluir a atualização.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao instalar atualização";
+      setUpdateError(message);
+      showStatus("error", `Falha ao instalar atualização: ${message}`);
+    } finally {
+      setInstallingUpdate(false);
     }
   };
 
@@ -237,17 +417,18 @@ export default function SettingsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-4 mb-10"
         >
-          <Link href="/library">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-            >
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <Link href="/library" aria-label="Voltar para Biblioteca">
               <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <div>
-            <h1 className="text-3xl font-bold text-white">Configurações</h1>
+            <h1 className="text-3xl font-display font-bold text-white">Configurações</h1>
             <p className="text-slate-400 text-sm mt-0.5">Gerencie armazenamento, backups e dados do aplicativo</p>
           </div>
         </motion.div>
@@ -266,7 +447,7 @@ export default function SettingsPage() {
                   <HardDrive className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Armazenamento</h2>
+                  <h2 className="text-lg font-semibold text-white font-display">Armazenamento</h2>
                   <p className="text-xs text-slate-500">Banco de dados SQLite local</p>
                 </div>
               </div>
@@ -329,9 +510,30 @@ export default function SettingsPage() {
                   <FolderOpen className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500 mb-1">Localização do banco de dados</p>
-                    <code className="text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg block break-all border border-slate-700">
-                      {info.dbPath}
-                    </code>
+                    <div className="flex gap-2">
+                      <code className="text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg block break-all border border-slate-700 flex-1">
+                        {info.dbPath}
+                      </code>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            onClick={async () => {
+                              try {
+                                await tauriService.openFileLocation(info.dbPath);
+                              } catch (error) {
+                                alert("Erro ao abrir Pasta");
+                              }
+                            }}
+                            className="rounded-md"
+                            size={"icon"}
+                            variant={"ghost"}
+                          >
+                            <FolderOpen />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Abrir Pasta do Banco</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                 </div>
               </>
@@ -352,7 +554,7 @@ export default function SettingsPage() {
                 <Shield className="w-5 h-5 text-green-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Backup e Restauração</h2>
+                <h2 className="text-lg font-semibold text-white font-display">Backup e Restauração</h2>
                 <p className="text-xs text-slate-500">Exporte ou importe todos os seus dados</p>
               </div>
             </div>
@@ -418,6 +620,91 @@ export default function SettingsPage() {
             </div>
           </motion.section>
 
+          {/* Updates */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Atualizações do Aplicativo</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Verifique se existe uma nova versão disponível para instalar.
+                </p>
+              </div>
+              <Button
+                onClick={handleCheckUpdates}
+                disabled={checkingUpdates}
+                variant="outline"
+                className="border-amber-600/60 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+              >
+                {checkingUpdates ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Clock className="w-4 h-4 mr-2" />
+                )}
+                {checkingUpdates ? "Verificando..." : "Verificar atualização"}
+              </Button>
+            </div>
+
+            <div
+              className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-2"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-sm text-slate-200">
+                Versão atual: <span className="font-semibold">{APP_VERSION}</span>
+              </p>
+              {updateInfo ? (
+                <>
+                  <p className="text-sm text-slate-300">
+                    Última versão disponível: <span className="font-semibold">{updateInfo.latestVersion}</span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Fonte da verificação: {updateInfo.source === "native" ? "Updater nativo (Tauri)" : "Fallback API"}
+                  </p>
+                  <p className={`text-sm ${updateInfo.isUpdateAvailable ? "text-emerald-300" : "text-slate-400"}`}>
+                    {updateInfo.isUpdateAvailable
+                      ? "Nova versão encontrada. Recomendado atualizar para a release mais recente."
+                      : "Seu aplicativo já está atualizado."}
+                  </p>
+
+                  {updateInfo.isUpdateAvailable && nativeUpdate && (
+                    <Button
+                      onClick={handleInstallNativeUpdate}
+                      disabled={installingUpdate}
+                      className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white"
+                    >
+                      <ArrowUpRight className="w-4 h-4 mr-2" />
+                      {installingUpdate ? "Instalando atualização..." : "Atualizar automaticamente agora"}
+                    </Button>
+                  )}
+
+                  {updateInfo.isUpdateAvailable && (
+                    <Button
+                      onClick={() => openExternalLink(updateInfo.releaseUrl)}
+                      variant="outline"
+                      className="mt-2 border-emerald-600/60 text-emerald-300 hover:bg-emerald-600/10"
+                    >
+                      <ArrowUpRight className="w-4 h-4 mr-2" />
+                      Abrir release manual
+                    </Button>
+                  )}
+
+                  {installProgress !== null && (
+                    <p className="text-xs text-amber-200">Progresso da instalação: {installProgress}%</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-slate-400">Nenhuma verificação realizada ainda nesta sessão.</p>
+              )}
+
+              {updateError && <p className="text-sm text-red-300">{updateError}</p>}
+            </div>
+          </motion.section>
+
           {/* Danger Zone */}
           <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -430,7 +717,7 @@ export default function SettingsPage() {
                 <AlertTriangle className="w-5 h-5 text-red-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-red-400">Zona de Perigo</h2>
+                <h2 className="text-lg font-semibold text-red-400 font-display">Zona de Perigo</h2>
                 <p className="text-xs text-red-400/60">Ações irreversíveis — tenha cuidado</p>
               </div>
             </div>
@@ -500,7 +787,7 @@ export default function SettingsPage() {
                 <Database className="w-7 h-7 text-yellow-400" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Critix Vault</h3>
+                <h3 className="text-lg font-bold text-white font-display">Critix Vault</h3>
                 <p className="text-sm text-slate-400">Gerenciador de biblioteca de mídia local</p>
                 <div className="flex items-center gap-4 mt-2">
                   <span className="text-xs text-slate-600 flex items-center gap-1">
@@ -510,6 +797,9 @@ export default function SettingsPage() {
                   <span className="text-xs text-slate-600 flex items-center gap-1">
                     <BarChart3 className="w-3 h-3" />
                     {totalItems} itens na biblioteca
+                  </span>
+                  <span className="text-xs text-slate-600 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />v{APP_VERSION}
                   </span>
                 </div>
               </div>

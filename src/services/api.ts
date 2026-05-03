@@ -8,9 +8,26 @@ import { logger } from "@/lib/logger";
 
 const API_BASE_URL = "/api/external";
 
+export class ExternalApiOfflineError extends Error {
+  constructor(message = "External API is offline") {
+    super(message);
+    this.name = "ExternalApiOfflineError";
+  }
+}
+
 class ApiService {
-  async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  private externalApiOnline: boolean | null = null;
+
+  setExternalApiOnlineStatus(isOnline: boolean) {
+    this.externalApiOnline = isOnline;
+  }
+
+  async request<T>(endpoint: string, options?: RequestInit, config?: { allowWhenOffline?: boolean }): Promise<T> {
     const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+    if (!config?.allowWhenOffline && this.externalApiOnline === false) {
+      throw new ExternalApiOfflineError();
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
@@ -20,13 +37,12 @@ class ApiService {
           ...options?.headers,
         },
       });
-
       if (!response.ok) {
         const details = await response.text();
         throw new Error(`API Error: ${response.status} ${response.statusText} - ${details}`);
       }
-
-      return await response.json();
+      const data = await response.json();
+      return data;
     } catch (error) {
       logger.error("API request failed", error, { endpoint: normalizedEndpoint, method: options?.method ?? "GET" });
       throw error;
@@ -38,7 +54,8 @@ class ApiService {
    */
   async checkStatus(): Promise<ApiStatus> {
     try {
-      const response = await this.request<ApiStatus>("/status");
+      const response = await this.request<ApiStatus>("/status", undefined, { allowWhenOffline: true });
+
       return { ...response, online: true };
     } catch (error) {
       logger.error("Erro ao consultar status da API", error);

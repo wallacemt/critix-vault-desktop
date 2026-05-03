@@ -4,16 +4,16 @@ import { useActions } from "@/hooks/useActions";
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 export default function DemoPage() {
-  const { handleBack, handleMediaClick, handlePlayMovie, handlePlayEpisode } = useActions();
+  const { handleBack, handleMediaClick, handlePlayMovie, handlePlaySeries } = useActions();
   return (
     <DemoLibrary
       onBack={handleBack}
-      onMediaClick={(media) => handleMediaClick(media)}
-      onMediaPlay={(media) => {
+      onMediaClick={(media) => handleMediaClick(media, true)}
+      onMediaPlay={async (media) => {
         if (media.type === "MOVIE") {
-          handlePlayMovie(media as Movie);
+          await handlePlayMovie(media as Movie);
         } else {
-          handlePlayEpisode(media as Series);
+          await handlePlaySeries(media as Series);
         }
       }}
     />

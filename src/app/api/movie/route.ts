@@ -1,24 +1,57 @@
 /**
- * Movies API Routes
- * RESTful endpoints for movie management
+ * Movie detail API Route
+ * GET /api/movie?movieId={id}
  */
 
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { errorResponse, successResponse } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
+
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/movie?movieId={movieId}
- * Get all movies or filter by folderId
- */
+function parseJsonSafe<T>(raw: string | null | undefined, fallback: T, context: { movieId: string; field: string }): T {
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    logger.warn("Campo JSON invalido em detalhe de filme", {
+      ...context,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return fallback;
+  }
+}
+
+function toGenreObjects(raw: string | null | undefined, movieId: string): Array<{ name: string }> | undefined {
+  const parsed = parseJsonSafe<unknown[]>(raw, [], { movieId, field: "genres" });
+  const normalized = parsed
+    .map((item) => {
+      if (typeof item === "string") {
+        return { name: item };
+      }
+      if (item && typeof item === "object" && "name" in item && typeof (item as { name?: unknown }).name === "string") {
+        return { name: (item as { name: string }).name };
+      }
+      return null;
+    })
+    .filter((item): item is { name: string } => item !== null);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const movieId = searchParams.get("movieId");
 
     if (!movieId) {
-      return NextResponse.json({ error: "Movie ID is required" }, { status: 400 });
+      return errorResponse(400, "BAD_REQUEST", "ID do filme e obrigatorio.");
     }
+
     const db = await prisma();
 
     const movie = await db.movie.findFirst({
@@ -26,11 +59,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!movie) {
-      return NextResponse.json({ error: "movie not found" }, { status: 404 });
+      return errorResponse(404, "NOT_FOUND", "Filme nao encontrado.");
     }
 
     const isWatched = await db.watchHistory.findFirst({ where: { mediaId: movie.id } });
-    // Transform to frontend format
+
     const transformed = {
       id: movie.id,
       title: movie.title,
@@ -48,23 +81,22 @@ export async function GET(request: NextRequest) {
       duration: movie.duration || undefined,
       trailer: movie.trailer || undefined,
       isWatched: isWatched !== null,
-      // TMDB Extended Fields
-      genres: movie.genres ? JSON.parse(movie.genres).map((genre: string) => ({ name: genre })) : undefined,
+      genres: toGenreObjects(movie.genres, movie.id),
       imdbId: movie.imdbId || undefined,
       tagline: movie.tagline || undefined,
       budget: movie.budget || undefined,
       revenue: movie.revenue || undefined,
       voteCount: movie.voteCount || undefined,
       popularity: movie.popularity || undefined,
-      images: movie.images ? JSON.parse(movie.images) : undefined,
-      videos: movie.videos ? JSON.parse(movie.videos) : undefined,
-      cast: movie.cast ? JSON.parse(movie.cast) : undefined,
-      crew: movie.crew ? JSON.parse(movie.crew) : undefined,
+      images: parseJsonSafe<unknown[]>(movie.images, [], { movieId: movie.id, field: "images" }),
+      videos: parseJsonSafe<unknown[]>(movie.videos, [], { movieId: movie.id, field: "videos" }),
+      cast: parseJsonSafe<unknown[]>(movie.cast, [], { movieId: movie.id, field: "cast" }),
+      crew: parseJsonSafe<unknown[]>(movie.crew, [], { movieId: movie.id, field: "crew" }),
     };
 
-    return NextResponse.json(transformed, { status: 200 });
+    return successResponse(transformed, 200);
   } catch (error) {
-    console.error("Failed to get movies:", error);
-    return NextResponse.json({ error: `Failed to get movies: ${error}` }, { status: 500 });
+    logger.error("Falha ao carregar detalhes do filme", error);
+    return errorResponse(500, "DATABASE_ERROR", "Nao foi possivel carregar os detalhes do filme.");
   }
 }

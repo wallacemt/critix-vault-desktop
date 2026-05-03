@@ -53,7 +53,6 @@
   /* --- Bordas e Divisores --- */
   --border-color: #333333;
 
-
   /* --- Sombras (Glow para dar o ar de cinema) --- */
   --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.3);
   --glow-primary: 0 0 15px rgba(255, 193, 7, 0.4); /* Brilho dourado */
@@ -170,8 +169,27 @@ body {
   overflow-x: hidden;
 }
 
-* {
+html {
   scroll-behavior: smooth;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Tailwind custom utilities */

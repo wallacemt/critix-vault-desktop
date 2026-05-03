@@ -4,11 +4,19 @@ import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_EXTERNAL_API = "http://127.0.0.1:8080";
 const ALLOWED_PREFIXES = ["/status", "/media/"];
 
-const getExternalApiBase = () => {
-  const raw = process.env.CRITIX_EXTERNAL_API_URL || process.env.NEXT_PUBLIC_CRITIX_API_URL || DEFAULT_EXTERNAL_API;
+const getExternalApiBase = (): string => {
+  const raw = process.env.CRITIX_EXTERNAL_API_URL?.trim() || process.env.NEXT_PUBLIC_CRITIX_API_URL?.trim();
+
+  if (!raw) {
+    logger.error("External API URL not configured. Set CRITIX_EXTERNAL_API_URL in your .env file.", null, {
+      CRITIX_EXTERNAL_API_URL: process.env.CRITIX_EXTERNAL_API_URL ?? "(not set)",
+      NEXT_PUBLIC_CRITIX_API_URL: process.env.NEXT_PUBLIC_CRITIX_API_URL ?? "(not set)",
+    });
+    throw new Error("External API URL is not configured. Set CRITIX_EXTERNAL_API_URL in your environment.");
+  }
+
   return raw.replace(/\/+$/, "");
 };
 
@@ -27,13 +35,30 @@ const forward = async (request: NextRequest, pathSegments: string[]) => {
     return errorResponse(403, "BAD_REQUEST", "External API path is not allowed", { incomingPath });
   }
 
+  let apiBase: string;
+  try {
+    apiBase = getExternalApiBase();
+  } catch (err) {
+    return errorResponse(
+      503,
+      "INTERNAL_ERROR",
+      "External API URL is not configured. Set CRITIX_EXTERNAL_API_URL in your .env file.",
+      {
+        hint: "Set CRITIX_EXTERNAL_API_URL in your .env file",
+      },
+    );
+  }
+
   const requestUrl = new URL(request.url);
-  const target = new URL(`${getExternalApiBase()}${incomingPath}`);
+  const target = new URL(`${apiBase}${incomingPath}`);
   target.search = requestUrl.search;
 
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("content-length");
+  // Force encodings supported by Node.js/undici — prevents zstd responses
+  // which Node.js cannot decompress, causing binary data to be parsed as JSON
+  headers.set("accept-encoding", "gzip, deflate, br");
 
   const init: RequestInit = {
     method: request.method,
@@ -45,6 +70,7 @@ const forward = async (request: NextRequest, pathSegments: string[]) => {
   }
 
   try {
+    logger.info(`[external-proxy] ${request.method} ${target.toString()}`);
     const response = await fetch(target, init);
     const responseHeaders = new Headers(response.headers);
     responseHeaders.delete("content-encoding");

@@ -13,6 +13,7 @@ import { X, Search, Loader2, Film, Tv, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiService } from "@/services/api";
 import { MediaSearchResult } from "@/types/api";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface EditMediaModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ interface EditMediaModalProps {
 }
 
 export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }: EditMediaModalProps) {
+  const { isOnline } = useApiConnectivity();
   const [searchQuery, setSearchQuery] = useState(currentMedia.title);
   const [results, setResults] = useState<MediaSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,11 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
   }, [isOpen, currentMedia.title]);
 
   const handleSearch = async (query: string) => {
+    if (!isOnline) {
+      setResults([]);
+      return;
+    }
+
     if (!query.trim()) return;
 
     setLoading(true);
@@ -58,6 +65,10 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
   };
 
   const handleSelect = async (result: MediaSearchResult) => {
+    if (!isOnline) {
+      return;
+    }
+
     setSelecting(true);
     try {
       await onSelectMedia(result.id, result.media_type);
@@ -105,6 +116,12 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
               Mídia atual: <span className="font-semibold text-[var(--text-primary)]">{currentMedia.title}</span>
             </p>
 
+            {!isOnline && (
+              <p className="text-sm text-amber-400 mb-4">
+                Modo offline ativo. A busca de correspondencias fica disponivel quando a conexao voltar.
+              </p>
+            )}
+
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
@@ -114,12 +131,13 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
+                disabled={!isOnline}
                 className="pl-10 bg-[var(--bg-surface-light)] border-[var(--border-color)] text-[var(--text-primary)]"
               />
               <Button
                 size="sm"
                 onClick={() => handleSearch(searchQuery)}
-                disabled={loading}
+                disabled={loading || !isOnline}
                 className="absolute right-2 top-1/2 transform -translate-y-1/2"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Buscar"}
@@ -205,7 +223,7 @@ export function EditMediaModal({ isOpen, onClose, currentMedia, onSelectMedia }:
                           <Button
                             size="sm"
                             onClick={() => handleSelect(result)}
-                            disabled={selecting}
+                            disabled={selecting || !isOnline}
                             className="bg-gradient-to-r from-[var(--color-primary)] to-amber-500"
                           >
                             {selecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}

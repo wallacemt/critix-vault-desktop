@@ -2,25 +2,83 @@ import { useFoldersContext } from "@/context/foldersContext";
 import { Media } from "@/types/media";
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMediaLibrary } from "./useMediaLibrary";
-import { folderScanService } from "@/services/folderScanService";
 import { FolderPreview } from "@/types/folder";
 import gsap from "gsap";
 import { AppTabs } from "@/types/utils";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
+import { useMediaSelection } from "./useMediaSelection";
+import { markAsWatched, removeMovie, removeSeries, setSeriesEpisodesWatchStatus, clearWatchHistory } from "@/services/databaseService";
+
+const FILTER_KEY = "critix_filter_last";
+const PRESETS_KEY = "critix_filter_presets";
+
+type FilterSnapshot = {
+  sortBy: "modified" | "title" | "rating" | "duration" | "year";
+  sortOrder: "asc" | "desc";
+  statusFilter: "all" | "watched" | "unwatched";
+  typeFilter: "all" | "movie" | "series" | "anime";
+  yearRange: "all" | "before-2000" | "2000-2009" | "2010-2019" | "2020-plus";
+  ratingRange: "all" | "8-plus" | "7-plus" | "6-plus";
+  durationRange: "all" | "short" | "medium" | "long";
+  localOnly: boolean;
+  viewMode: "grid" | "list";
+};
+
+export type FilterPreset = FilterSnapshot & { name: string };
+
+const FILTER_DEFAULTS: FilterSnapshot = {
+  sortBy: "modified",
+  sortOrder: "desc",
+  statusFilter: "all",
+  typeFilter: "all",
+  yearRange: "all",
+  ratingRange: "all",
+  durationRange: "all",
+  localOnly: false,
+  viewMode: "grid",
+};
+
+function loadFilterSnapshot(): FilterSnapshot {
+  if (typeof window === "undefined") return FILTER_DEFAULTS;
+  try {
+    const raw = localStorage.getItem(FILTER_KEY);
+    if (!raw) return FILTER_DEFAULTS;
+    return { ...FILTER_DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    return FILTER_DEFAULTS;
+  }
+}
+
+function loadFilterPresets(): FilterPreset[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as FilterPreset[];
+  } catch {
+    return [];
+  }
+}
+
 export const useLibraryLeyout = () => {
   const { folders, selectedFolder, selectFolder, removeFolder } = useFoldersContext();
+  const { isOnline } = useApiConnectivity();
+  const { selectedMediaIds, selectedCount, isSelected, toggleMediaSelection, clearSelection } = useMediaSelection();
   const [activeTab, setActiveTab] = useState<AppTabs>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => loadFilterSnapshot().viewMode);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"modified" | "title" | "rating" | "duration" | "year">("modified");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [statusFilter, setStatusFilter] = useState<"all" | "watched" | "unwatched">("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | "movie" | "series" | "anime">("all");
-  const [yearRange, setYearRange] = useState<"all" | "before-2000" | "2000-2009" | "2010-2019" | "2020-plus">("all");
-  const [ratingRange, setRatingRange] = useState<"all" | "8-plus" | "7-plus" | "6-plus">("all");
-  const [durationRange, setDurationRange] = useState<"all" | "short" | "medium" | "long">("all");
-  const [localOnly, setLocalOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<"modified" | "title" | "rating" | "duration" | "year">(() => loadFilterSnapshot().sortBy);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => loadFilterSnapshot().sortOrder);
+  const [statusFilter, setStatusFilter] = useState<"all" | "watched" | "unwatched">(() => loadFilterSnapshot().statusFilter);
+  const [typeFilter, setTypeFilter] = useState<"all" | "movie" | "series" | "anime">(() => loadFilterSnapshot().typeFilter);
+  const [yearRange, setYearRange] = useState<"all" | "before-2000" | "2000-2009" | "2010-2019" | "2020-plus">(() => loadFilterSnapshot().yearRange);
+  const [ratingRange, setRatingRange] = useState<"all" | "8-plus" | "7-plus" | "6-plus">(() => loadFilterSnapshot().ratingRange);
+  const [durationRange, setDurationRange] = useState<"all" | "short" | "medium" | "long">(() => loadFilterSnapshot().durationRange);
+  const [watchedMonthFilter, setWatchedMonthFilter] = useState<string>("all");
+  const [localOnly, setLocalOnly] = useState(() => loadFilterSnapshot().localOnly);
+  const [filterPresets, setFilterPresets] = useState<FilterPreset[]>(() => loadFilterPresets());
   const [editingMedia, setEditingMedia] = useState<Media | null>(null);
   const [deletingMedia, setDeletingMedia] = useState<Media | null>(null);
   const [isDeletingMedia, setIsDeletingMedia] = useState(false);
@@ -33,6 +91,40 @@ export const useLibraryLeyout = () => {
 
   const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia, deleteMedia, refreshMedia } =
     useMediaLibrary(selectedFolder?.id || null);
+
+  // Auto-persist filter state to localStorage whenever any filter value changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const snap: FilterSnapshot = { sortBy, sortOrder, statusFilter, typeFilter, yearRange, ratingRange, durationRange, localOnly, viewMode };
+    localStorage.setItem(FILTER_KEY, JSON.stringify(snap));
+  }, [sortBy, sortOrder, statusFilter, typeFilter, yearRange, ratingRange, durationRange, localOnly, viewMode]);
+
+  const saveFilterPreset = (name: string) => {
+    const preset: FilterPreset = { name, sortBy, sortOrder, statusFilter, typeFilter, yearRange, ratingRange, durationRange, localOnly, viewMode };
+    const updated = [...filterPresets.filter((p) => p.name !== name), preset];
+    setFilterPresets(updated);
+    if (typeof window !== "undefined") localStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+  };
+
+  const applyFilterPreset = (name: string) => {
+    const preset = filterPresets.find((p) => p.name === name);
+    if (!preset) return;
+    setSortBy(preset.sortBy);
+    setSortOrder(preset.sortOrder);
+    setStatusFilter(preset.statusFilter);
+    setTypeFilter(preset.typeFilter);
+    setYearRange(preset.yearRange);
+    setRatingRange(preset.ratingRange);
+    setDurationRange(preset.durationRange);
+    setLocalOnly(preset.localOnly);
+    setViewMode(preset.viewMode);
+  };
+
+  const deleteFilterPreset = (name: string) => {
+    const updated = filterPresets.filter((p) => p.name !== name);
+    setFilterPresets(updated);
+    if (typeof window !== "undefined") localStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+  };
 
   // Restore last viewed folder on mount
   useEffect(() => {
@@ -127,26 +219,12 @@ export const useLibraryLeyout = () => {
     setEditingMedia(null);
   };
 
-  const handleScanWithPreview = async () => {
-    if (!folders.length) return;
-
-    // Generate preview for all folders
-    const previews = await Promise.all(
-      folders.map(async (folder) => {
-        const preview = await folderScanService.previewFolder(folder.path);
-        return {
-          path: folder.path,
-          name: folder.name,
-          ...preview,
-        };
-      }),
-    );
-
-    setFolderPreviews(previews);
-    setShowScanPreview(true);
-  };
-
   const handleConfirmScan = async (selectedPaths: string[]) => {
+    if (!isOnline) {
+      alert("Modo offline ativo. Reconecte para executar scans com API externa.");
+      return;
+    }
+
     // Scan only selected folders
     for (const path of selectedPaths) {
       const folder = folders.find((f) => f.path === path);
@@ -160,6 +238,25 @@ export const useLibraryLeyout = () => {
   const handleManualEntrySuccess = () => {
     refreshMedia();
   };
+
+  const watchedMonthOptions = useMemo(() => {
+    const months = new Map<string, string>();
+
+    [...movies, ...series]
+      .filter((media) => media.isWatched && media.lastWatchedAt)
+      .forEach((media) => {
+        const watchedDate = new Date(media.lastWatchedAt as string);
+        if (!Number.isFinite(watchedDate.getTime())) return;
+
+        const value = `${watchedDate.getFullYear()}-${String(watchedDate.getMonth() + 1).padStart(2, "0")}`;
+        if (!months.has(value)) {
+          const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(watchedDate);
+          months.set(value, label.charAt(0).toUpperCase() + label.slice(1));
+        }
+      });
+
+    return [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([value, label]) => ({ value, label }));
+  }, [movies, series]);
 
   const filteredMedia = () => {
     let allMedia: Media[] = [];
@@ -269,6 +366,18 @@ export const useLibraryLeyout = () => {
       });
     }
 
+    if (activeTab === "watched" && watchedMonthFilter !== "all") {
+      allMedia = allMedia.filter((media) => {
+        if (!media.lastWatchedAt) return false;
+
+        const watchedDate = new Date(media.lastWatchedAt);
+        if (!Number.isFinite(watchedDate.getTime())) return false;
+
+        const monthKey = `${watchedDate.getFullYear()}-${String(watchedDate.getMonth() + 1).padStart(2, "0")}`;
+        return monthKey === watchedMonthFilter;
+      });
+    }
+
     // Apply sorting
     allMedia.sort((a, b) => {
       let compareA: any;
@@ -314,6 +423,61 @@ export const useLibraryLeyout = () => {
   const watchedSeries = series.filter((s) => s.isWatched);
   const totalCount = unwatchedMovies.length + unwatchedSeries.length;
 
+  const bulkSelectionAllWatched = useMemo(() => {
+    const selected = [...movies, ...series].filter((m) => selectedMediaIds.has(m.id));
+    return selected.length > 0 && selected.every((m) => m.isWatched);
+  }, [movies, series, selectedMediaIds]);
+
+  const bulkMarkSelectedAsWatched = async () => {
+    const selectedMedia = [...movies, ...series].filter((media) => selectedMediaIds.has(media.id));
+    const targetWatched = !bulkSelectionAllWatched;
+
+    for (const media of selectedMedia) {
+      if (media.type === "MOVIE") {
+        if (targetWatched && !media.isWatched) {
+          await markAsWatched(media.id, "MOVIE");
+        } else if (!targetWatched && media.isWatched) {
+          await clearWatchHistory(media.id);
+        }
+        continue;
+      }
+
+      const seriesMedia = media as Series;
+      const episodes = (seriesMedia.seasons || []).flatMap((season) =>
+        (season.episodes || []).map((episode) => ({
+          id: episode.id,
+          seasonNumber: episode.season_number,
+          episodeNumber: episode.episode_number,
+        })),
+      );
+
+      if (episodes.length > 0) {
+        await setSeriesEpisodesWatchStatus(media.id, episodes, targetWatched);
+      }
+    }
+
+    clearSelection();
+    await refreshMedia();
+  };
+
+  const bulkDeleteSelectedMedia = async () => {
+    const selectedMedia = [...movies, ...series].filter((media) => selectedMediaIds.has(media.id));
+
+    for (const media of selectedMedia) {
+      if (media.type === "MOVIE") {
+        await removeMovie(media.id);
+      } else {
+        await removeSeries(media.id);
+      }
+    }
+
+    clearSelection();
+    await refreshMedia();
+  };
+
+
+  
+
   return {
     folders,
     selectedFolder,
@@ -335,6 +499,9 @@ export const useLibraryLeyout = () => {
     setRatingRange,
     durationRange,
     setDurationRange,
+    watchedMonthFilter,
+    setWatchedMonthFilter,
+    watchedMonthOptions,
     localOnly,
     setLocalOnly,
     filteredMedia,
@@ -346,7 +513,6 @@ export const useLibraryLeyout = () => {
     deletingMedia,
     isDeletingMedia,
     handleUpdateMedia,
-    handleScanWithPreview,
     handleConfirmScan,
     handleManualEntrySuccess,
     isAutoScanning,
@@ -374,5 +540,17 @@ export const useLibraryLeyout = () => {
     folderPreviews,
     showManualEntry,
     setNewMediaNotification,
+    selectedMediaIds,
+    selectedCount,
+    isSelected,
+    toggleMediaSelection,
+    clearSelection,
+    bulkMarkSelectedAsWatched,
+    bulkDeleteSelectedMedia,
+    bulkSelectionAllWatched,
+    filterPresets,
+    saveFilterPreset,
+    applyFilterPreset,
+    deleteFilterPreset,
   };
 };

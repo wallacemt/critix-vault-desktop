@@ -8,9 +8,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  Film,
-  Tv,
-  Sparkles,
   FolderPlus,
   Play,
   Zap,
@@ -19,12 +16,15 @@ import {
   UploadCloud,
   ArrowRight,
   Folder,
+  CircleHelp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Image from "next/image";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useEffect, useRef } from "react";
-import gsap from "gsap";
 import { Folder as FolderType } from "@/types/folder";
+import type { LucideIcon } from "lucide-react";
 
 interface LandingPageProps {
   onAddFolder: () => void;
@@ -33,6 +33,97 @@ interface LandingPageProps {
   loading?: boolean;
   folders?: FolderType[];
   onGoToLibrary?: () => void;
+  onOpenHelp?: () => void;
+}
+
+interface CarouselAction {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "primary" | "neutral" | "accent" | "success";
+}
+
+function CircularActionCarousel({ actions }: { actions: CarouselAction[] }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const scrollTrack = (direction: "left" | "right") => {
+    if (!trackRef.current) return;
+    const amount = trackRef.current.clientWidth * 0.7;
+    trackRef.current.scrollBy({
+      left: direction === "right" ? amount : -amount,
+      behavior: "smooth",
+    });
+  };
+
+  const toneClasses: Record<NonNullable<CarouselAction["tone"]>, string> = {
+    primary:
+      "bg-gradient-to-br from-[var(--color-primary)] to-amber-500 text-[var(--color-on-primary)] border border-yellow-300/20 shadow-[var(--glow-primary)]",
+    neutral: "bg-[var(--bg-surface-light)]/80 text-[var(--text-primary)] border border-[var(--border-color)]",
+    accent: "bg-blue-600/20 text-blue-100 border border-blue-500/40",
+    success: "bg-emerald-600/20 text-emerald-100 border border-emerald-500/50",
+  };
+
+  return (
+    <div className="w-full max-w-xl">
+      <div className="flex  items-center justify-between mb-3">
+        <span className="text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">Acoes rapidas</span>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={() => scrollTrack("left")}
+            className="h-8 w-8 rounded-full bg-[var(--bg-surface-light)]/70 border-[var(--border-color)]"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={() => scrollTrack("right")}
+            className="h-8 w-8 rounded-full bg-[var(--bg-surface-light)]/70 border-[var(--border-color)]"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div
+        ref={trackRef}
+        className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+      >
+        {actions.map((action, index) => {
+          const Icon = action.icon;
+          const tone = action.tone ?? "neutral";
+
+          return (
+            <motion.div
+              key={action.id}
+              className="snap-center shrink-0 w-28"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.06, duration: 0.3 }}
+            >
+              <button
+                type="button"
+                onClick={action.onClick}
+                disabled={action.disabled}
+                className={`w-24 h-24 rounded-full mx-auto flex items-center justify-center transition-all duration-300 hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed ${toneClasses[tone]}`}
+              >
+                <Icon className="w-8 h-8" />
+              </button>
+              <p className="text-center text-xs text-[var(--text-secondary)] mt-2 font-medium leading-tight">
+                {action.label}
+              </p>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function LandingPage({
@@ -42,43 +133,64 @@ export function LandingPage({
   loading,
   folders,
   onGoToLibrary,
+  onOpenHelp,
 }: LandingPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8]);
 
   useEffect(() => {
-    // GSAP animations for feature cards
-    gsap.from(".feature-card", {
-      opacity: 50,
-      y: 60,
-      stagger: 0.2,
-      duration: 1,
-      ease: "power3.out",
-      delay: 0.5,
+    if (shouldReduceMotion) {
+      return;
+    }
+
+    let isActive = true;
+    const activeTweens: { kill: () => void }[] = [];
+
+    void import("gsap").then(({ default: gsap }) => {
+      if (!isActive) return;
+
+      activeTweens.push(
+        gsap.from(".feature-card", {
+          opacity: 50,
+          y: 60,
+          stagger: 0.2,
+          duration: 1,
+          ease: "power3.out",
+          delay: 0.5,
+        }),
+      );
+
+      activeTweens.push(
+        gsap.to(".logo-float", {
+          y: -10,
+          duration: 2,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut",
+        }),
+      );
+
+      activeTweens.push(
+        gsap.to(".glow-pulse", {
+          opacity: 0.6,
+          scale: 1.05,
+          duration: 2,
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut",
+        }),
+      );
     });
 
-    // Floating animation for logo
-    gsap.to(".logo-float", {
-      y: -10,
-      duration: 2,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
-
-    // Glow pulse animation
-    gsap.to(".glow-pulse", {
-      opacity: 0.6,
-      scale: 1.05,
-      duration: 2,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
-  }, []);
+    return () => {
+      isActive = false;
+      activeTweens.forEach((tween) => tween.kill());
+    };
+  }, [shouldReduceMotion]);
 
   const features = [
     {
@@ -110,27 +222,43 @@ export function LandingPage({
       <div className="absolute inset-1 z-1 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute -top-1/2 - -left-1/2 w-full h-full bg-gradient-to-br from-blue-600/5 to-transparent rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 90, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "linear",
-          }}
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  scale: [1, 1.2, 1],
+                  rotate: [0, 90, 0],
+                }
+          }
+          transition={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  duration: 20,
+                  repeat: Infinity,
+                  ease: "linear",
+                }
+          }
         />
         <motion.div
           className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-600/5 to-transparent rounded-full blur-3xl"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            rotate: [90, 0, 90],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: "linear",
-          }}
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  scale: [1.2, 1, 1.2],
+                  rotate: [90, 0, 90],
+                }
+          }
+          transition={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  duration: 25,
+                  repeat: Infinity,
+                  ease: "linear",
+                }
+          }
         />
       </div>
 
@@ -142,35 +270,28 @@ export function LandingPage({
           transition={{ duration: 1 }}
         >
           {/* Hero Section */}
-          <motion.div className="text-center mb-16" style={{ opacity, scale }}>
+          <motion.div className="text-center mb-16 mt-16" style={{ opacity, scale }}>
             {/* Logo with floating animation */}
             <motion.div
-              className="logo-float relative flex items-center justify-center w-96 h-40 mx-auto mb-8"
+              className="logo-float flex hover:scale-105 transition-all items-center justify-center group cursor-pointer mx-auto mb-8"
               initial={{ opacity: 0, y: -30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: "easeOut" }}
             >
-              <div className="glow-pulse absolute inset-0 rounded-3xl blur-2xl" />
               <Image
-                src="/images/logo-short.png"
-                alt="Critix Vault Logo"
-                fill
-                className="object-contain drop-shadow-2xl"
+                src="/images/logo-full.png"
+                width={300}
+                height={300}
+                alt="Critix Logo"
+                title="Critix"
+                className="drop-shadow-2xl"
                 priority
               />
-            </motion.div>
-
-            {/* Title */}
-            <motion.h1
-              className="text-6xl md:text-7xl font-bold text-[var(--text-primary)] mb-6 font-display"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.8 }}
-            >
-              <span className="bg-gradient-to-r from-[var(--color-primary)] via-yellow-400 to-amber-500 bg-clip-text text-transparent">
-                Critix Vault
+              <span className="w-3 h-3 bg-amber-400 rounded-tl-full rounded-bl-full rounded-tr-full" />
+              <span className="font-display font-bold text-[var(--text-primary)] text-8xl ml-1">
+                <span className="text-[var(--color-primary)] animate-pulse">V</span>ault
               </span>
-            </motion.h1>
+            </motion.div>
 
             {/* Subtitle */}
             <motion.p
@@ -231,40 +352,45 @@ export function LandingPage({
                             <p className="text-sm font-medium text-[var(--text-primary)] truncate">{folder.name}</p>
                             <p className="text-xs text-[var(--text-muted)] truncate">{folder.path}</p>
                           </div>
-                          <span className="text-xs text-[var(--text-secondary)] flex-shrink-0">
-                            {folder.mediaCount} mídia{folder.mediaCount !== 1 ? "s" : ""}
-                          </span>
                         </motion.div>
                       ))}
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                      {onGoToLibrary && (
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            size="lg"
-                            onClick={onGoToLibrary}
-                            className="w-full sm:w-auto bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-[var(--glow-primary)] transition-all duration-300 text-lg px-8 py-6"
-                          >
-                            <ArrowRight className="w-5 h-5 mr-2" />
-                            Ir para Biblioteca
-                          </Button>
-                        </motion.div>
-                      )}
-                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                        <Button
-                          size="lg"
-                          variant="outline"
-                          onClick={onAddFolder}
-                          disabled={loading}
-                          className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-[var(--color-primary)]/50 text-[var(--text-primary)] font-semibold text-lg px-8 py-6"
-                        >
-                          <FolderPlus className="w-5 h-5 mr-2" />
-                          {loading ? "Adicionando..." : "Adicionar Pasta"}
-                        </Button>
-                      </motion.div>
-                    </div>
+                    <CircularActionCarousel
+                      actions={[
+                        ...(onGoToLibrary
+                          ? [
+                              {
+                                id: "go-library",
+                                label: "Ir para Biblioteca",
+                                icon: ArrowRight,
+                                onClick: onGoToLibrary,
+                                tone: "primary" as const,
+                              },
+                            ]
+                          : []),
+                        ...(onOpenHelp
+                          ? [
+                              {
+                                id: "open-help",
+                                label: "Ajuda e FAQ",
+                                icon: CircleHelp,
+                                onClick: onOpenHelp,
+                                tone: "accent" as const,
+                              },
+                            ]
+                          : []),
+                        {
+                          id: "add-folder",
+                          label: loading ? "Adicionando..." : "Adicionar Pasta",
+                          icon: FolderPlus,
+                          onClick: onAddFolder,
+                          disabled: loading,
+                          tone: "neutral" as const,
+                        },
+                      ]}
+                    />
                   </>
                 ) : (
                   <>
@@ -287,61 +413,66 @@ export function LandingPage({
                       </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                        <Button
-                          size="lg"
-                          onClick={onAddFolder}
-                          disabled={loading}
-                          className="w-full sm:w-auto bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold shadow-[var(--glow-primary)] transition-all duration-300 text-lg px-8 py-6"
-                        >
-                          <FolderPlus className="w-5 h-5 mr-2" />
-                          {loading ? "Adicionando..." : "Adicionar Pasta"}
-                        </Button>
-                      </motion.div>
+                    {onLoadBackup && (
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json,application/json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) onLoadBackup(file);
+                          e.target.value = "";
+                        }}
+                      />
+                    )}
 
-                      {onViewDemo && (
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            size="lg"
-                            variant="outline"
-                            onClick={onViewDemo}
-                            className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-[var(--color-primary)]/50 text-[var(--text-primary)] font-semibold text-lg px-8 py-6"
-                          >
-                            <Play className="w-5 h-5 mr-2" />
-                            Ver Demo
-                          </Button>
-                        </motion.div>
-                      )}
-
-                      {onLoadBackup && (
-                        <>
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".json,application/json"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) onLoadBackup(file);
-                              e.target.value = "";
-                            }}
-                          />
-                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                            <Button
-                              size="lg"
-                              variant="outline"
-                              onClick={() => fileInputRef.current?.click()}
-                              disabled={loading}
-                              className="w-full sm:w-auto bg-[var(--bg-surface-light)]/50 border-[var(--border-color)] hover:bg-[var(--bg-surface-light)] hover:border-emerald-500/50 text-[var(--text-primary)] font-semibold text-lg px-8 py-6"
-                            >
-                              <UploadCloud className="w-5 h-5 mr-2 text-emerald-400" />
-                              Carregar Backup
-                            </Button>
-                          </motion.div>
-                        </>
-                      )}
-                    </div>
+                    <CircularActionCarousel
+                      actions={[
+                        {
+                          id: "add-folder",
+                          label: loading ? "Adicionando..." : "Adicionar Pasta",
+                          icon: FolderPlus,
+                          onClick: onAddFolder,
+                          disabled: loading,
+                          tone: "primary" as const,
+                        },
+                        ...(onViewDemo
+                          ? [
+                              {
+                                id: "view-demo",
+                                label: "Ver Demo",
+                                icon: Play,
+                                onClick: onViewDemo,
+                                tone: "neutral" as const,
+                              },
+                            ]
+                          : []),
+                        ...(onOpenHelp
+                          ? [
+                              {
+                                id: "open-help",
+                                label: "Ajuda e FAQ",
+                                icon: CircleHelp,
+                                onClick: onOpenHelp,
+                                tone: "accent" as const,
+                              },
+                            ]
+                          : []),
+                        ...(onLoadBackup
+                          ? [
+                              {
+                                id: "load-backup",
+                                label: "Carregar Backup",
+                                icon: UploadCloud,
+                                onClick: () => fileInputRef.current?.click(),
+                                disabled: loading,
+                                tone: "success" as const,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </>
                 )}
               </div>
@@ -359,7 +490,7 @@ export function LandingPage({
                   whileHover={{ y: -8, scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <Card className="bg-surface-crx/80 z-20 border-[var(--border-color)]  p-8 h-full relative overflow-hidden group">
+                  <Card className="bg-surface-crx/80 rounded-xl z-20 border-[var(--border-color)]  p-8 h-full relative overflow-hidden group">
                     {/* Hover gradient effect */}
                     <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} `} />
 

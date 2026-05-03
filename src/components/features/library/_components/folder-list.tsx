@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Folder as FolderIcon, X } from "lucide-react";
 import { getMovies, getSeries } from "@/services/databaseService";
 import { useEffect, useState } from "react";
+import { SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface FolderListProps {
   folders: Folder[];
@@ -14,6 +16,8 @@ interface FolderListProps {
 }
 export function FolderList({ folders, selectedFolder, handleFolderSelect, removeFolder }: FolderListProps) {
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   // Calculate unwatched media count for each folder
   useEffect(() => {
@@ -41,7 +45,7 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
   }, [folders]);
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar">
+    <SidebarMenuItem className="flex-1 overflow-y-auto custom-scrollbar">
       {/* Folders List */}
       <div className="p-4 space-y-2">
         {folders.length === 0 ? (
@@ -50,54 +54,69 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
             <p className="text-sm text-[var(--text-muted)] font-sans">Nenhuma pasta adicionada</p>
           </motion.div>
         ) : (
-          folders.map((folder) => (
-            <div key={folder.id}>
+          folders.map((folder) => {
+            const count = folderCounts[folder.id] ?? folder.mediaCount;
+
+            const folderCard = (
               <div
                 className={cn(
-                  "group flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300 relative overflow-hidden",
+                  "group relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-xl p-4 transition-all duration-300 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2",
                   selectedFolder?.id === folder.id
-                    ? "bg-gradient-to-r from-[var(--color-primary)]/20 to-amber-500/20 border border-[var(--color-primary)]/30"
-                    : "hover:bg-[var(--bg-surface-light)] border border-transparent",
+                    ? "border border-[var(--color-primary)]/30 bg-gradient-to-r from-[var(--color-primary)]/20 to-amber-500/20"
+                    : "border border-transparent hover:bg-[var(--bg-surface-light)]",
                 )}
                 onClick={() => handleFolderSelect(folder)}
               >
                 {selectedFolder?.id === folder.id && (
                   <motion.div
-                    className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[var(--color-primary)] to-amber-500"
+                    className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-[var(--color-primary)] to-amber-500 group-data-[collapsible=icon]:hidden"
                     layoutId="selected-folder"
                     transition={{ type: "spring", damping: 20 }}
                   />
                 )}
 
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600/20 to-purple-600/20 flex items-center justify-center flex-shrink-0">
-                  <FolderIcon className="w-5 h-5 text-[var(--color-primary)]" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600/20 to-purple-600/20">
+                  <FolderIcon className="h-5 w-5 text-[var(--color-primary)]" />
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[var(--text-primary)] truncate font-display">
+                <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                  <p className="truncate font-display text-sm font-semibold text-[var(--text-primary)]">
                     {folder.name}
                   </p>
-                  <p className="text-xs text-[var(--text-secondary)] truncate font-sans">
-                    {folderCounts[folder.id] ?? folder.mediaCount} itens
-                  </p>
+                  <p className="truncate font-sans text-xs text-[var(--text-secondary)]">{count} itens</p>
                 </div>
 
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400"
+                  className="h-8 w-8 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100 group-data-[collapsible=icon]:hidden"
                   onClick={(e) => {
                     e.stopPropagation();
                     removeFolder(folder.id);
                   }}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
-          ))
+            );
+
+            return (
+              <div key={folder.id}>
+                {isCollapsed ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>{folderCard}</TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {folder.name} ({count} itens)
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  folderCard
+                )}
+              </div>
+            );
+          })
         )}
       </div>
-    </div>
+    </SidebarMenuItem>
   );
 }

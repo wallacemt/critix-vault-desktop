@@ -4,35 +4,24 @@
  */
 
 "use client";
-import { Button } from "@/components/ui/button";
-import { Folder, FolderPlus, Scan, Settings, Home, CircleHelp } from "lucide-react";
+import { ArrowUp, Folder, Scan } from "lucide-react";
 import { Media } from "@/types/media";
 import { StreamingGrid } from "./_components/streaming-grid";
 import { MediaGridSkeleton } from "@/components/ui/media-skeleton";
 import { InlineError } from "@/components/ui/error-state";
 import { motion, AnimatePresence } from "framer-motion";
-
-import { FolderList } from "./_components/folder-list";
-import { FolderMediaHeader } from "./_components/folder-media-header";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { NewMediaNotification } from "@/components/features/library/_components/new-media-notification";
-import Link from "next/link";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarProvider,
-  SidebarSeparator,
-} from "@/components/ui/sidebar";
-import { ScanPreviewDialog } from "@/components/features/library/_components/scan-preview-dialog";
+
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ManualMediaEntryDialog } from "@/components/features/library/_components/manual-media-entry-dialog";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { useLibraryLeyout } from "@/hooks/useLibraryLeyout";
+import { AppSidebar } from "@/components/ui/app-sidebar";
+import { FolderMediaHeader } from "./_components/folder-media-header";
+import { tauriService } from "@/services/tauri";
+import { BulkActionsBar } from "./_components/BulkActionsBar";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -62,14 +51,15 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     setRatingRange,
     durationRange,
     setDurationRange,
+    watchedMonthFilter,
+    watchedMonthOptions,
+    setWatchedMonthFilter,
     localOnly,
     setLocalOnly,
     filteredMedia,
     handleFolderSelect,
     handleEditMedia,
     handleUpdateMedia,
-    handleScanWithPreview,
-    handleConfirmScan,
     handleManualEntrySuccess,
     isAutoScanning,
     viewMode,
@@ -84,15 +74,24 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     unwatchedMovies,
     watchedSeries,
     unwatchedSeries,
-    series,
+
     loading,
     error,
     newMediaNotification,
     editingMedia,
     setEditingMedia,
-    showScanPreview,
-    setShowScanPreview,
-    folderPreviews,
+    selectedMediaIds,
+    selectedCount,
+    toggleMediaSelection,
+    clearSelection,
+    bulkMarkSelectedAsWatched,
+    bulkDeleteSelectedMedia,
+    bulkSelectionAllWatched,
+    filterPresets,
+    saveFilterPreset,
+    applyFilterPreset,
+    deleteFilterPreset,
+
     showManualEntry,
     setNewMediaNotification,
     handleDeleteMedia,
@@ -101,100 +100,136 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     deletingMedia,
     isDeletingMedia,
   } = useLibraryLeyout();
+  useEffect(() => {
+    if (selectedCount === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSelection();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedCount, clearSelection]);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // selectedFolder is a dependency: the scroll container only mounts when a folder is selected,
+  // so the ref is null on first render — re-running when folder changes attaches the listener correctly.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 100);
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [selectedFolder]);
+
+  const scrollToTop = () => scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Refs: direct DOM manipulation avoids React re-renders during drag
+  const selRectEl = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ startX: number; startY: number } | null>(null);
+  const isDragging = useRef(false);
+  const media = filteredMedia();
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (e.button !== 0 || !toggleMediaSelection) return;
+
+      const target = e.target as HTMLElement;
+      // Don't initiate rubber-band from inside a card — right-click handles that
+      if (target.closest("[data-media-id]")) return;
+      // Don't initiate from interactive elements
+      if (target.closest('button, a, input, [role="button"]')) return;
+
+      e.preventDefault();
+      dragState.current = { startX: e.clientX, startY: e.clientY };
+      isDragging.current = false;
+
+      // Disable text selection for the entire drag
+      document.body.style.userSelect = "none";
+
+      const handleMove = (ev: MouseEvent) => {
+        if (!dragState.current || !selRectEl.current) return;
+
+        const dx = ev.clientX - dragState.current.startX;
+        const dy = ev.clientY - dragState.current.startY;
+
+        // Only enter drag mode after 5px movement
+        if (!isDragging.current && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+        isDragging.current = true;
+
+        // Direct DOM update — no React setState, no re-render
+        const el = selRectEl.current;
+        el.style.display = "block";
+        el.style.left = `${Math.min(dragState.current.startX, ev.clientX)}px`;
+        el.style.top = `${Math.min(dragState.current.startY, ev.clientY)}px`;
+        el.style.width = `${Math.abs(dx)}px`;
+        el.style.height = `${Math.abs(dy)}px`;
+      };
+
+      const handleUp = (ev: MouseEvent) => {
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseup", handleUp);
+
+        // Restore text selection
+        document.body.style.userSelect = "";
+
+        // Hide rect
+        if (selRectEl.current) selRectEl.current.style.display = "none";
+
+        if (!isDragging.current || !dragState.current) {
+          dragState.current = null;
+          isDragging.current = false;
+          return;
+        }
+
+        const selX = Math.min(dragState.current.startX, ev.clientX);
+        const selY = Math.min(dragState.current.startY, ev.clientY);
+        const selW = Math.abs(ev.clientX - dragState.current.startX);
+        const selH = Math.abs(ev.clientY - dragState.current.startY);
+
+        // Select all cards whose bounding box intersects the selection rect
+        if (selW > 5 || selH > 5) {
+          document.querySelectorAll("[data-media-id]").forEach((el) => {
+            const rect = el.getBoundingClientRect();
+            const intersects =
+              rect.right > selX && rect.left < selX + selW && rect.bottom > selY && rect.top < selY + selH;
+
+            if (!intersects) return;
+            const mediaId = el.getAttribute("data-media-id");
+            const found = media.find((m) => m.id === mediaId);
+            if (found && !selectedMediaIds?.has(found.id)) {
+              toggleMediaSelection(found.id);
+            }
+          });
+        }
+
+        dragState.current = null;
+        isDragging.current = false;
+      };
+
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleUp);
+    },
+    [media, toggleMediaSelection, selectedMediaIds],
+  );
+
   return (
     <SidebarProvider defaultOpen={true}>
-      {/* ShadCN Sidebar */}
-      <Sidebar variant="floating" collapsible="offcanvas" className="border-r border-[var(--border-color)]">
-        <SidebarHeader className="p-6 border-b border-[var(--border-color)]">
-          <h2 className="text-xl font-display mb-4">Biblioteca</h2>
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-            <Button
-              onClick={onAddFolder}
-              size="lg"
-              className="w-full bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-on-primary-crx font-semibold font-display  text-md shadow-lg py-2.5 px-4 rounded-md flex items-center justify-center gap-2 transition-colors"
-            >
-              <FolderPlus className="w-4 h-4 mr-2" />
-              Adicionar Pasta
-            </Button>
-          </motion.div>
-        </SidebarHeader>
+      <AppSidebar
+        {...{
+          onAddFolder,
+          folders,
+          selectedFolder,
+          handleFolderSelect,
 
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs text-[var(--text-secondary)] px-4 py-2">
-              Pastas Monitoradas
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <FolderList
-                folders={folders}
-                handleFolderSelect={handleFolderSelect}
-                selectedFolder={selectedFolder!}
-                removeFolder={removeFolder}
-              />
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-
-        <SidebarFooter>
-          {/* Footer Stats */}
-          {unwatchedMovies.length + unwatchedSeries.length > 0 && (
-            <motion.div
-              className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-surface-light)]/50"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{unwatchedMovies.length}</p>
-                  <p className="text-xs text-[var(--text-secondary)] font-sans">Filmes</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-[var(--text-primary)] font-display">{unwatchedSeries.length}</p>
-                  <p className="text-xs text-[var(--text-secondary)] font-sans">Séries</p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Settings Link */}
-          <SidebarSeparator />
-          <div className="p-4 space-y-1">
-            <Link href="/landing?home=true">
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
-              >
-                <Home className="w-4 h-4 mr-2" />
-                Início
-              </Button>
-            </Link>
-            <Link href="/settings">
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Configurações
-              </Button>
-            </Link>
-            <Link href="/help">
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)]"
-              >
-                <CircleHelp className="w-4 h-4 mr-2" />
-                Ajuda e FAQ
-              </Button>
-            </Link>
-          </div>
-        </SidebarFooter>
-      </Sidebar>
+          removeFolder,
+        }}
+      />
 
       {/* Main Content with SidebarInset */}
       <SidebarInset className="flex-1 flex flex-col overflow-x-hidden">
         {selectedFolder ? (
           <motion.div
+            ref={scrollContainerRef}
             className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar"
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
@@ -226,6 +261,9 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 setRatingRange,
                 durationRange,
                 setDurationRange,
+                watchedMonthFilter,
+                watchedMonthOptions,
+                setWatchedMonthFilter,
                 localOnly,
                 setLocalOnly,
                 totalCount,
@@ -233,23 +271,35 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 watchedMoviesCount: watchedMovies.length,
                 seriesCount: unwatchedSeries.length,
                 watchedSeriesCount: watchedSeries.length,
-                onScanWithPreview: handleScanWithPreview,
+
+                filterPresets,
+                onSaveFilterPreset: saveFilterPreset,
+                onApplyFilterPreset: applyFilterPreset,
+                onDeleteFilterPreset: deleteFilterPreset,
                 onManualEntry: () => setShowManualEntry(true),
                 onOpenFolder: async () => {
                   if (selectedFolder) {
                     try {
-                      const { openPath } = await import("@tauri-apps/plugin-opener");
-                      await openPath(selectedFolder.path);
-                    } catch (e) {
-                      console.error("Failed to open folder:", e);
+                      console.log(selectedFolder);
+                      await tauriService.openFileLocation(selectedFolder.path);
+                    } catch (error) {
+                      console.error("Error opening folder:", error);
+                      alert(`Erro ao abrir pasta: ${error}`);
                     }
                   }
                 },
               }}
             />
+
             {/* Content Area */}
-            <div className="flex-1">
-              <div className="p-6">
+            <div className="flex-1 p-2">
+              {/* Selection rectangle — hidden by default, updated via direct DOM style */}
+              <div
+                ref={selRectEl}
+                style={{ display: "none", position: "fixed", pointerEvents: "none", zIndex: 5 }}
+                className="border-2 border-amber-400 bg-amber-400/10 rounded-sm"
+              />
+              <div className="p-4 pb-24">
                 <AnimatePresence mode="wait">
                   {scanning && (
                     <motion.div
@@ -301,7 +351,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                         onMediaPlay={onMediaPlay}
                         onMediaEdit={handleEditMedia}
                         onMediaDelete={handleDeleteMedia}
+                        selectedMediaIds={selectedMediaIds}
+                        onToggleMediaSelection={toggleMediaSelection}
                         viewMode={viewMode}
+                        handleMouseDown={handleMouseDown}
                         emptyMessage={
                           searchQuery
                             ? `Nenhum resultado para "${searchQuery}"`
@@ -343,7 +396,35 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             </div>
           </motion.div>
         )}
+        {/* Bulk actions bar — fixed floating, outside animated container to avoid transform stacking context */}
+        <AnimatePresence>
+          {selectedCount > 0 && (
+            <BulkActionsBar
+              selectedCount={selectedCount}
+              onClearSelection={clearSelection}
+              onMarkWatched={bulkMarkSelectedAsWatched}
+              onDelete={bulkDeleteSelectedMedia}
+              allWatched={bulkSelectionAllWatched}
+            />
+          )}
+        </AnimatePresence>
 
+        {/* Scroll to top — appears after scrolling 300px */}
+        <AnimatePresence>
+          {showScrollTop && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.18 }}
+              onClick={scrollToTop}
+              className=" fixed bottom-6 right-6 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-[0_6px_20px_rgba(0,0,0,0.35)] hover:brightness-110"
+              aria-label="Voltar ao topo"
+            >
+              <ArrowUp className="h-5 w-5" />
+            </motion.button>
+          )}
+        </AnimatePresence>
         {/* New Media Notification */}
         {newMediaNotification && (
           <NewMediaNotification
@@ -379,14 +460,6 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             onSelectMedia={handleUpdateMedia}
           />
         )}
-
-        {/* Scan Preview Dialog */}
-        <ScanPreviewDialog
-          isOpen={showScanPreview}
-          onClose={() => setShowScanPreview(false)}
-          onConfirm={handleConfirmScan}
-          folders={folderPreviews}
-        />
 
         {/* Manual Media Entry Dialog */}
         {selectedFolder && (

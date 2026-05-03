@@ -4,15 +4,25 @@ import { LibraryLayout } from "@/components/features/library/LibraryLayout";
 import { useActions } from "@/hooks/useActions";
 import { useFoldersContext } from "@/context/foldersContext";
 import { Movie } from "@/types/movie";
+import { Series } from "@/types/serie";
 import { LoaderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function LibraryPage() {
   const { folders, isLoading } = useFoldersContext();
-  const { handleAddFolder, handleMediaClick, handlePlayMovie, scanning, scanProgress } = useActions();
+  const { handleAddFolder, handleMediaClick, handlePlayMovie, handlePlaySeries, scanning, scanProgress } = useActions();
   const router = useRouter();
   const shouldRedirectToLanding = !isLoading && (!folders || folders.length === 0);
+
+  const notifySeriesPlayStatus = (status: "completed" | "no-episodes") => {
+    if (status === "completed") {
+      alert("Serie concluida. Nao ha proximo episodio disponivel para reproduzir.");
+      return;
+    }
+
+    alert("Nao ha episodios disponiveis localmente para esta serie.");
+  };
 
   useEffect(() => {
     if (shouldRedirectToLanding) {
@@ -33,9 +43,48 @@ export default function LibraryPage() {
         <LibraryLayout
           onAddFolder={handleAddFolder}
           onMediaClick={handleMediaClick}
-          onMediaPlay={(media) => {
+          onMediaPlay={async (media) => {
             if (media.type === "MOVIE") {
-              handlePlayMovie(media as Movie);
+              await handlePlayMovie(media as Movie);
+              return;
+            }
+
+            try {
+              const result = await handlePlaySeries(media as Series);
+
+              if (result.status === "needs-season-selection") {
+                const rawSeason = window.prompt(
+                  `Escolha a temporada para iniciar (${result.availableSeasons.join(", ")}):`,
+                  String(result.availableSeasons[0] ?? ""),
+                );
+
+                if (!rawSeason) {
+                  return;
+                }
+
+                const selectedSeason = Number(rawSeason);
+                if (!Number.isInteger(selectedSeason)) {
+                  alert("Temporada invalida. Informe um numero de temporada.");
+                  return;
+                }
+
+                const playWithSeason = await handlePlaySeries(media as Series, { seasonNumber: selectedSeason });
+
+                if (playWithSeason.status === "invalid-season") {
+                  alert(`Temporada invalida. Escolha apenas entre: ${playWithSeason.availableSeasons.join(", ")}.`);
+                } else if (playWithSeason.status === "completed" || playWithSeason.status === "no-episodes") {
+                  notifySeriesPlayStatus(playWithSeason.status);
+                }
+
+                return;
+              }
+
+              if (result.status === "completed" || result.status === "no-episodes") {
+                notifySeriesPlayStatus(result.status);
+              }
+            } catch (error) {
+              console.error("Failed to start series playback from library card:", error);
+              alert("Nao foi possivel iniciar a reproducao da serie.");
             }
           }}
         />

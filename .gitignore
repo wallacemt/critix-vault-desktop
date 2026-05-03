@@ -18,6 +18,7 @@ dist-ssr
 /src-tauri/resources/server/node_modules
 /src-tauri/resources/server/.next
 /src-tauri/resources/server/public
+resources
 /src-tauri/resources/server/prisma/critix.db
 /src-tauri/resources/*
 /tmp-smoke-data

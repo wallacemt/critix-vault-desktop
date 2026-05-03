@@ -188,11 +188,19 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
 
     std::fs::create_dir_all(&data_dir).ok();
 
-    // Copy prisma schema & migrations to data dir if not present
+    // Sync prisma schema & migrations to data dir on every startup.
+    // This keeps older AppData installs up to date with new bundled migrations.
     let data_prisma_dir = data_dir.join("prisma");
     let source_prisma_dir = server_dir.join("prisma");
-    if !data_prisma_dir.exists() && source_prisma_dir.exists() {
-        copy_dir_recursive(&source_prisma_dir, &data_prisma_dir).ok();
+    if source_prisma_dir.exists() {
+        if let Err(err) = copy_dir_recursive(&source_prisma_dir, &data_prisma_dir) {
+            eprintln!(
+                "[critix] Falha ao sincronizar prisma para AppData ({} -> {}): {}",
+                source_prisma_dir.display(),
+                data_prisma_dir.display(),
+                err
+            );
+        }
     }
 
     let db_path = data_dir.join("critix.db");

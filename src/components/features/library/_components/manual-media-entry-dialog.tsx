@@ -18,6 +18,7 @@ import { tauriService } from "@/services/tauri";
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 import { MediaSearchResult } from "@/types/api";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface SearchResult {
   id: string;
@@ -45,6 +46,7 @@ export function ManualMediaEntryDialog({
   folderId,
   folderPath: _folderPath,
 }: ManualMediaEntryDialogProps) {
+  const { isOnline } = useApiConnectivity();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -53,6 +55,11 @@ export function ManualMediaEntryDialog({
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSearch = async () => {
+    if (!isOnline) {
+      alert("Modo offline ativo. A busca manual de midia fica disponivel quando a conexao voltar.");
+      return;
+    }
+
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
@@ -105,6 +112,11 @@ export function ManualMediaEntryDialog({
   };
 
   const handleSave = async () => {
+    if (!isOnline) {
+      alert("Modo offline ativo. Nao e possivel buscar detalhes para salvar esta midia agora.");
+      return;
+    }
+
     if (!selectedMedia || !selectedFile) {
       alert("Selecione uma mídia e um arquivo");
       return;
@@ -269,6 +281,12 @@ export function ManualMediaEntryDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {!isOnline && (
+            <p className="text-sm text-amber-500">
+              Modo offline ativo. Busca e enriquecimento de metadados estao temporariamente bloqueados.
+            </p>
+          )}
+
           {/* Search Section */}
           <div className="space-y-2">
             <Label>Buscar Mídia</Label>
@@ -278,9 +296,9 @@ export function ManualMediaEntryDialog({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                disabled={isSearching}
+                disabled={isSearching || !isOnline}
               />
-              <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
+              <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim() || !isOnline}>
                 {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               </Button>
             </div>
@@ -375,7 +393,7 @@ export function ManualMediaEntryDialog({
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={!selectedMedia || !selectedFile || isSaving}>
+          <Button onClick={handleSave} disabled={!selectedMedia || !selectedFile || isSaving || !isOnline}>
             {isSaving ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

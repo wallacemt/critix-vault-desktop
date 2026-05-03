@@ -2,6 +2,46 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+fn is_allowed_external_url(url: &str) -> bool {
+    ["https://", "http://", "mailto:", "tel:"]
+        .iter()
+        .any(|prefix| url.starts_with(prefix))
+}
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    let sanitized = url.trim();
+    if !is_allowed_external_url(sanitized) {
+        return Err("Unsupported URL protocol".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", sanitized])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {e}"))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(sanitized)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(sanitized)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {e}"))?;
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn select_media_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;

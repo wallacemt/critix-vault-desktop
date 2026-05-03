@@ -17,11 +17,15 @@ import {
   removeSeries,
   saveMovies,
   saveSeries,
-  getAllWatchedMediaIds,
+  getWatchHistory,
+  markAsWatched,
+  setSeriesEpisodesWatchStatus,
+  type WatchHistory,
 } from "@/services/databaseService";
 import { Movie } from "@/types/movie";
 import { Series } from "@/types/serie";
 import { Media } from "@/types/media";
+import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 /**
  * Hook to manage media library for a specific folder
@@ -35,6 +39,7 @@ export function useMediaLibrary(folderId: string | null) {
   const [scanProgress, setScanProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const { folders } = useFoldersContext();
+  const { isOnline } = useApiConnectivity();
 
   const loadMediaFromStorage = useCallback(async () => {
     if (!folderId) {
@@ -46,13 +51,22 @@ export function useMediaLibrary(folderId: string | null) {
 
     setLoading(true);
     try {
-      // Load media and watch history in parallel (single request for all watched IDs)
-      const [allMovies, allSeries, watchedIds] = await Promise.all([getMovies(), getSeries(), getAllWatchedMediaIds()]);
+      // Load media and watch history in parallel.
+      const [allMovies, allSeries, watchHistory] = await Promise.all([getMovies(), getSeries(), getWatchHistory()]);
 
       console.log("📦 All movies in database:", allMovies.length);
       console.log("📦 All series in database:", allSeries.length);
       console.log("🔍 Filtering for folderId:", folderId);
-      console.log("👁️ Watched media IDs:", watchedIds.size);
+
+      const movieHistoryById = new Map<string, WatchHistory[]>();
+      const seriesHistoryById = new Map<string, WatchHistory[]>();
+
+      for (const entry of watchHistory) {
+        const targetMap = entry.mediaType === "MOVIE" ? movieHistoryById : seriesHistoryById;
+        const entries = targetMap.get(entry.mediaId) || [];
+        entries.push(entry);
+        targetMap.set(entry.mediaId, entries);
+      }
 
       // Filter by folder and enrich with watch status
       const filteredMovies = allMovies
@@ -61,13 +75,26 @@ export function useMediaLibrary(folderId: string | null) {
           if (match) console.log("✅ Movie matched:", movie.title);
           return match;
         })
-        .map((movie) => ({
-          ...movie,
-          isWatched: watchedIds.has(movie.id),
-        }));
+        .map((movie) => {
+          const history = movieHistoryById.get(movie.id) || [];
+          const watchedHistory = history.filter((entry) => entry.completed && !entry.episodeId);
 
-      // For series, we need to check if ALL episodes are watched, not just ANY episode
-      const { getWatchHistory } = await import("@/services/databaseService");
+          const lastWatchedAt = watchedHistory.reduce<string | undefined>((latest, entry) => {
+            const entryWatchedAt = new Date(entry.watchedAt as unknown as string).getTime();
+            if (!Number.isFinite(entryWatchedAt)) return latest;
+
+            if (!latest) return new Date(entryWatchedAt).toISOString();
+
+            const latestMs = new Date(latest).getTime();
+            return entryWatchedAt > latestMs ? new Date(entryWatchedAt).toISOString() : latest;
+          }, undefined);
+
+          return {
+            ...movie,
+            isWatched: watchedHistory.length > 0,
+            lastWatchedAt,
+          };
+        });
 
       const filteredSeriesPromises = allSeries
         .filter((s) => {
@@ -78,29 +105,48 @@ export function useMediaLibrary(folderId: string | null) {
         .map(async (seriesItem) => {
           // Calculate total episodes in the series
           const totalEpisodes = seriesItem.seasons.reduce((sum, season) => sum + (season.episodes?.length || 0), 0);
+          const history = seriesHistoryById.get(seriesItem.id) || [];
+          const watchedEpisodeKeys = new Set(
+            history
+              .filter((entry) => entry.completed && entry.episodeId)
+              .map((entry) => `${entry.seasonNumber}-${entry.episodeNumber}`),
+          );
+
+          const lastWatchedAt = history.reduce<string | undefined>((latest, entry) => {
+            const entryWatchedAt = new Date(entry.watchedAt as unknown as string).getTime();
+            if (!Number.isFinite(entryWatchedAt)) return latest;
+
+            if (!latest) return new Date(entryWatchedAt).toISOString();
+
+            const latestMs = new Date(latest).getTime();
+            return entryWatchedAt > latestMs ? new Date(entryWatchedAt).toISOString() : latest;
+          }, undefined);
 
           // If no episodes, can't be watched
           if (totalEpisodes === 0) {
             return {
               ...seriesItem,
               isWatched: false,
+              lastWatchedAt,
             };
           }
 
-          // Get watch history for this series
-          const watchHistory = await getWatchHistory(seriesItem.id);
-
-          // Count unique watched episodes
-          const watchedEpisodes = new Set(
-            watchHistory.filter((h) => h.completed && h.episodeId).map((h) => `${h.seasonNumber}-${h.episodeNumber}`),
-          );
+          const seasons = seriesItem.seasons.map((season) => ({
+            ...season,
+            episodes: (season.episodes || []).map((episode) => ({
+              ...episode,
+              isWatched: watchedEpisodeKeys.has(`${episode.season_number}-${episode.episode_number}`),
+            })),
+          }));
 
           // Series is watched only if ALL episodes are watched
-          const isWatched = watchedEpisodes.size === totalEpisodes && totalEpisodes > 0;
+          const isWatched = watchedEpisodeKeys.size === totalEpisodes && totalEpisodes > 0;
 
           return {
             ...seriesItem,
+            seasons,
             isWatched,
+            lastWatchedAt,
           };
         });
 
@@ -113,7 +159,7 @@ export function useMediaLibrary(folderId: string | null) {
       setSeries(filteredSeries);
       setError(null);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load media";
+      const errorMessage = err instanceof Error ? err.message : "Nao foi possivel carregar as midias.";
       setError(errorMessage);
       setMovies([]);
       setSeries([]);
@@ -124,6 +170,11 @@ export function useMediaLibrary(folderId: string | null) {
 
   const scanFolder = async (folderPath: string) => {
     if (!folderId) return;
+
+    if (!isOnline) {
+      setError("Modo offline ativo. Reconecte para escanear pastas e buscar correspondencias online.");
+      return;
+    }
 
     // Get existing media for this folder (for intelligent rescan)
     const allMovies = await getMovies();
@@ -176,15 +227,36 @@ export function useMediaLibrary(folderId: string | null) {
       const missingSeries = existingSeries.filter((s) => !foundSeriesIds.has(s.id));
 
       if (missingMovies.length > 0 || missingSeries.length > 0) {
-        console.log("📝 Missing media (will mark as watched):");
-        console.log(`  - Missing movies: ${missingMovies.length}`);
+        console.log("📝 Missing media (marking as watched automatically):");
         missingMovies.forEach((m) => console.log(`    🗑️  ${m.title}`));
-        console.log(`  - Missing series: ${missingSeries.length}`);
         missingSeries.forEach((s) => console.log(`    🗑️  ${s.title}`));
 
-        // TODO Task 2: Mark as watched
-        // For now, just keep them in the database
-        console.log("⏳ Task 2: Marking as watched not yet implemented - keeping in database");
+        for (const movie of missingMovies) {
+          try {
+            await markAsWatched(movie.id, "MOVIE");
+            console.log(`✅ Auto-marked missing movie as watched: ${movie.title}`);
+          } catch (err) {
+            console.error(`Failed to auto-mark movie as watched: ${movie.title}`, err);
+          }
+        }
+
+        for (const s of missingSeries) {
+          const episodes = (s.seasons || []).flatMap((season) =>
+            (season.episodes || []).map((episode) => ({
+              id: episode.id,
+              seasonNumber: episode.season_number,
+              episodeNumber: episode.episode_number,
+            })),
+          );
+          if (episodes.length > 0) {
+            try {
+              await setSeriesEpisodesWatchStatus(s.id, episodes, true);
+              console.log(`✅ Auto-marked missing series as watched: ${s.title}`);
+            } catch (err) {
+              console.error(`Failed to auto-mark series as watched: ${s.title}`, err);
+            }
+          }
+        }
       }
 
       // IMPORTANT: Keep ALL existing media + add only new ones
@@ -240,7 +312,7 @@ export function useMediaLibrary(folderId: string | null) {
       // Reload from database
       await loadMediaFromStorage();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to scan folder";
+      const errorMessage = err instanceof Error ? err.message : "Nao foi possivel escanear a pasta.";
       console.error("❌ Scan error:", errorMessage);
       setError(errorMessage);
     } finally {
@@ -262,6 +334,10 @@ export function useMediaLibrary(folderId: string | null) {
     async (originalMedia: Media, newMediaId: string, newMediaType: "movie" | "tv"): Promise<void> => {
       if (!folderId) return;
 
+      if (!isOnline) {
+        throw new Error("Modo offline ativo. Reconecte para atualizar dados da midia.");
+      }
+
       try {
         console.log(`🔄 Updating media: ${originalMedia.title} -> ID: ${newMediaId} (${newMediaType})`);
 
@@ -269,7 +345,7 @@ export function useMediaLibrary(folderId: string | null) {
         const details = await apiService.getMediaDetailsById(newMediaId, newMediaType);
 
         if (!details) {
-          throw new Error("Failed to fetch media details");
+          throw new Error("Nao foi possivel buscar os detalhes da midia.");
         }
 
         const apiData = details as any;
@@ -400,7 +476,7 @@ export function useMediaLibrary(folderId: string | null) {
         throw error;
       }
     },
-    [folderId, loadMediaFromStorage],
+    [folderId, isOnline, loadMediaFromStorage],
   );
 
   const deleteMedia = async (media: Media): Promise<void> => {

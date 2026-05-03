@@ -20,11 +20,11 @@ function LendingPageContent() {
 
   // Only redirect to library on initial load (not when user explicitly navigated here)
   useEffect(() => {
-    if (!isHomePage && !isLoading && folders && folders.length > 0) {
+    if (!isHomePage && !isLoading && !scanning && folders && folders.length > 0) {
       console.log("📁 User has folders, redirecting to library...");
       router.push("/library");
     }
-  }, [folders, isLoading, router, isHomePage]);
+  }, [folders, isLoading, router, isHomePage, scanning]);
 
   const handleLoadBackup = async (file: File) => {
     setImportError(null);
@@ -33,7 +33,7 @@ function LendingPageContent() {
       const text = await file.text();
       const json = JSON.parse(text);
 
-      const res = await fetch("/api/settings/backup", {
+      const res = await fetch("/api/settings/backup/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(json),
@@ -60,6 +60,10 @@ function LendingPageContent() {
     router.push("/library");
   };
 
+  const handleGoToHelp = () => {
+    router.push("/help");
+  };
+
   // Show loading while checking folders
   if (isLoading) {
     return (
@@ -71,7 +75,7 @@ function LendingPageContent() {
   }
 
   // If user has folders and NOT on home page, show loading while redirect happens
-  if (!isHomePage && folders && folders.length > 0) {
+  if (!isHomePage && !scanning && folders && folders.length > 0) {
     return (
       <div className="flex items-center flex-col justify-center flex-1 h-screen w-full bg-[var(--bg-body)]">
         <LoaderIcon className="animate-spin size-6 text-[var(--color-primary)]" />
@@ -96,6 +100,7 @@ function LendingPageContent() {
         loading={scanning || importLoading}
         folders={hasFolders ? folders : undefined}
         onGoToLibrary={hasFolders ? handleGoToLibrary : undefined}
+        onOpenHelp={handleGoToHelp}
       />
       <ScanningProgress progress={scanProgress} isOpen={scanning} />
     </>

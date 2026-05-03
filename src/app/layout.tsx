@@ -29,7 +29,7 @@ const moonjelly = localFont({
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-br" className={`${moonjelly.variable} dark`}>
+    <html lang="pt-br" className={`${moonjelly.variable} dark`} style={{userSelect: 'none'}}>
       <FoldersProvider>
         <ApiConnectivityProvider>
           <TooltipProvider>

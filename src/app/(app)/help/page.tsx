@@ -9,7 +9,7 @@ import { openExternalLink } from "@/lib/external-link";
 
 const issuesUrl = "https://github.com/wallacemt/critix-vault-desktop/issues/new/choose";
 const discussionsUrl = "https://github.com/wallacemt/critix-vault-desktop/wiki";
-const showcaseVideoUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+const showcaseVideoUrl = "https://youtu.be/s1gv2e1HoUo";
 
 function getYouTubeEmbedUrl(url: string): string | null {
   try {

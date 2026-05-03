@@ -5,7 +5,8 @@ import { useMediaContext } from "@/context/mediaContext";
 import { apiService } from "@/services/api";
 import { markAsWatched, markEpisodeAsWatched } from "@/services/databaseService";
 import { fetchMediaImages, fetchSeasonDetails } from "@/services/mediaService";
-import { CheckCircle2, Loader2, MonitorPlay, Tv2 } from "lucide-react";
+import { tauriService } from "@/services/tauri";
+import { CheckCircle2, Loader2, MonitorPlay, SkipForward, Tv2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -13,12 +14,32 @@ import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 export default function WatchingPage() {
   const router = useRouter();
-  const { movie, serie, watchSession, setCurrentMovie, setCurrentSerie, clearWatchSession } = useMediaContext();
+  const { movie, serie, watchSession, setCurrentMovie, setCurrentSerie, setWatchSession, clearWatchSession } = useMediaContext();
   const { isOnline } = useApiConnectivity();
   const skipEmptySessionRedirectRef = useRef(false);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(watchSession?.backdrop || null);
   const [isResolvingImage, setIsResolvingImage] = useState(false);
   const [isMarkingWatched, setIsMarkingWatched] = useState(false);
+
+  const nextEpisode = useMemo(() => {
+    if (!serie || watchSession?.type !== "episode") return null;
+    if (watchSession.seasonNumber == null || watchSession.episodeNumber == null) return null;
+
+    const playable = serie.seasons
+      .flatMap((s) => s.episodes)
+      .filter((ep) => Boolean(ep.available && ep.filePath))
+      .sort((a, b) =>
+        a.season_number !== b.season_number ? a.season_number - b.season_number : a.episode_number - b.episode_number,
+      );
+
+    return (
+      playable.find(
+        (ep) =>
+          ep.season_number > watchSession.seasonNumber! ||
+          (ep.season_number === watchSession.seasonNumber && ep.episode_number > watchSession.episodeNumber!),
+      ) ?? null
+    );
+  }, [serie, watchSession]);
 
   const destinationPath = useMemo(() => {
     if (!watchSession) return "/library";
@@ -183,6 +204,56 @@ export default function WatchingPage() {
     }
   };
 
+  const handleNextEpisode = async () => {
+    if (!watchSession || watchSession.type !== "episode") return;
+    setIsMarkingWatched(true);
+    try {
+      const seriesId = watchSession.mediaId || serie?.id;
+      if (!seriesId || !watchSession.episodeId || watchSession.seasonNumber == null || watchSession.episodeNumber == null) {
+        throw new Error("Dados do episódio atual não encontrados.");
+      }
+
+      await markEpisodeAsWatched(seriesId, watchSession.episodeId, watchSession.seasonNumber, watchSession.episodeNumber);
+
+      if (serie && serie.id === seriesId) {
+        const updatedSeasons = serie.seasons.map((season) => ({
+          ...season,
+          episodes: season.episodes.map((ep) =>
+            ep.id === watchSession.episodeId ? { ...ep, isWatched: true } : ep,
+          ),
+        }));
+        setCurrentSerie({ ...serie, seasons: updatedSeasons });
+      }
+
+      if (!nextEpisode || !nextEpisode.filePath) {
+        skipEmptySessionRedirectRef.current = true;
+        clearWatchSession();
+        router.replace(destinationPath);
+        return;
+      }
+
+      await tauriService.openMedia(nextEpisode.filePath);
+      setWatchSession({
+        type: "episode",
+        mediaId: seriesId,
+        title: serie?.title ?? watchSession.title,
+        returnPath: watchSession.returnPath,
+        episodeId: nextEpisode.id,
+        episodeTitle: nextEpisode.title,
+        seasonNumber: nextEpisode.season_number,
+        episodeNumber: nextEpisode.episode_number,
+        backdrop: nextEpisode.still_path
+          ? `https://image.tmdb.org/t/p/original${nextEpisode.still_path}`
+          : serie?.backdrop,
+      });
+    } catch (error) {
+      console.error("Failed to advance to next episode:", error);
+      alert("Não foi possível avançar para o próximo episódio.");
+    } finally {
+      setIsMarkingWatched(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black">
       {backgroundImage ? (
@@ -243,7 +314,7 @@ export default function WatchingPage() {
             </p>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${nextEpisode ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}>
             <Button
               variant="outline"
               onClick={handleBackToMedia}
@@ -263,6 +334,21 @@ export default function WatchingPage() {
               )}
               Já assisti
             </Button>
+            {nextEpisode && (
+              <Button
+                onClick={handleNextEpisode}
+                disabled={isMarkingWatched}
+                className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white"
+              >
+                {isMarkingWatched ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <SkipForward className="w-4 h-4 mr-2" />
+                )}
+                Próximo S{String(nextEpisode.season_number).padStart(2, "0")}E
+                {String(nextEpisode.episode_number).padStart(2, "0")}
+              </Button>
+            )}
           </div>
         </motion.div>
       </div>

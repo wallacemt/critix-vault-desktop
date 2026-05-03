@@ -23,4 +23,5 @@ export interface Media {
   isWatched?: boolean; // Loaded from watch history
   createdAt?: string;
   updatedAt?: string;
+  lastWatchedAt?: string;
 }

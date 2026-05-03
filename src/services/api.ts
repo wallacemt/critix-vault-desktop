@@ -37,13 +37,12 @@ class ApiService {
           ...options?.headers,
         },
       });
-
       if (!response.ok) {
         const details = await response.text();
         throw new Error(`API Error: ${response.status} ${response.statusText} - ${details}`);
       }
-
-      return await response.json();
+      const data = await response.json();
+      return data;
     } catch (error) {
       logger.error("API request failed", error, { endpoint: normalizedEndpoint, method: options?.method ?? "GET" });
       throw error;
@@ -56,6 +55,7 @@ class ApiService {
   async checkStatus(): Promise<ApiStatus> {
     try {
       const response = await this.request<ApiStatus>("/status", undefined, { allowWhenOffline: true });
+
       return { ...response, online: true };
     } catch (error) {
       logger.error("Erro ao consultar status da API", error);

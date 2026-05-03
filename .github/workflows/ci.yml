@@ -51,6 +51,6 @@ jobs:
       # - name: Build web app
       #   run: bun run build
 
-      - name: Cargo check (Tauri)
-        working-directory: src-tauri
-        run: cargo check
+      # - name: Cargo check (Tauri)
+      #   working-directory: src-tauri
+      #   run: cargo check

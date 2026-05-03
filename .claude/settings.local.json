@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(bun run *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "PowerShell(cd \"e:\\\\WorkSpace\\\\PESONAL_PROJECTS\\\\CRITIX\\\\critix_vault_desktop\"; git diff main...realese/1.1.9 -- src/app/\\(app\\)/settings/page.tsx | Select-String \"^\\\\+\" | Select-Object -First 60)"
     ]
   }
 }

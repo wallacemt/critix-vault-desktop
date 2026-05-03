@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       where: { id: { in: uniqueFolderIds } },
       select: { id: true },
     });
-    const existingFolderIds = new Set(existingFolders.map((f) => f.id));
+    const existingFolderIds = new Set(existingFolders.map((f: { id: string }) => f.id));
 
     const validSeries = seriesList.filter((series) => {
       if (!existingFolderIds.has(series.folderId)) {

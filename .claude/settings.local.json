@@ -3,7 +3,12 @@
     "allow": [
       "Bash(bun run *)",
       "Bash(npx tsc *)",
-      "PowerShell(cd \"e:\\\\WorkSpace\\\\PESONAL_PROJECTS\\\\CRITIX\\\\critix_vault_desktop\"; git diff main...realese/1.1.9 -- src/app/\\(app\\)/settings/page.tsx | Select-String \"^\\\\+\" | Select-Object -First 60)"
+      "PowerShell(cd \"e:\\\\WorkSpace\\\\PESONAL_PROJECTS\\\\CRITIX\\\\critix_vault_desktop\"; git diff main...realese/1.1.9 -- src/app/\\(app\\)/settings/page.tsx | Select-String \"^\\\\+\" | Select-Object -First 60)",
+      "Bash(grep -rn \"\\\\.map\\\\s*\\(\\\\s*\\([a-zA-Z_$]\" \"e:/WorkSpace/PESONAL_PROJECTS/CRITIX/critix_vault_desktop/src/app/api\" --include=\"*.ts\")",
+      "Bash(grep -rn \"\\\\.filter\\\\s*\\(\\\\s*\\([a-zA-Z_$]\" \"e:/WorkSpace/PESONAL_PROJECTS/CRITIX/critix_vault_desktop/src/app/api\" --include=\"*.ts\")",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/search_patterns.sh)",
+      "Bash(bash /tmp/search_patterns.sh)"
     ]
   }
 }

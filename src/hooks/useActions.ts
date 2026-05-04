@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
@@ -101,17 +102,19 @@ export function useActions() {
     }
 
     await tauriService.openMedia(episode.filePath);
-    setSerie(seriesToPlay);
-    setWatchSession({
-      type: "episode",
-      mediaId: seriesToPlay.id,
-      title: seriesToPlay.title,
-      returnPath: pathname,
-      episodeId: episode.id,
-      episodeTitle: episode.title,
-      seasonNumber: episode.season_number,
-      episodeNumber: episode.episode_number,
-      backdrop: episode.still_path ? `https://image.tmdb.org/t/p/original${episode.still_path}` : seriesToPlay.backdrop,
+    flushSync(() => {
+      setSerie(seriesToPlay);
+      setWatchSession({
+        type: "episode",
+        mediaId: seriesToPlay.id,
+        title: seriesToPlay.title,
+        returnPath: pathname,
+        episodeId: episode.id,
+        episodeTitle: episode.title,
+        seasonNumber: episode.season_number,
+        episodeNumber: episode.episode_number,
+        backdrop: episode.still_path ? `https://image.tmdb.org/t/p/original${episode.still_path}` : seriesToPlay.backdrop,
+      });
     });
 
     router.push("/watching");
@@ -199,12 +202,14 @@ export function useActions() {
   const handlePlayMovie = async (movie: Movie) => {
     try {
       await tauriService.openMedia(movie.filePath);
-      setWatchSession({
-        type: "movie",
-        mediaId: movie.id,
-        title: movie.title,
-        returnPath: pathname,
-        backdrop: movie.backdrop || movie.poster,
+      flushSync(() => {
+        setWatchSession({
+          type: "movie",
+          mediaId: movie.id,
+          title: movie.title,
+          returnPath: pathname,
+          backdrop: movie.backdrop || movie.poster,
+        });
       });
       router.push("/watching");
     } catch (error) {

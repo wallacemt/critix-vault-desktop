@@ -1,0 +1,261 @@
+name: MSIX Store Build
+
+# Triggered manually or on version tags.
+# Produces a signed-ready .msix file for Microsoft Store submission.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (four-part, e.g. 1.1.13.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: msix-${{ github.ref_name }}${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  build-msix:
+    name: Build MSIX package for Store
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    env:
+      CI: true
+      BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      NEXT_PUBLIC_CRITIX_API_URL: ${{ secrets.BACKEND_URL }}
+      CRITIX_EXTERNAL_API_URL: ${{ secrets.BACKEND_URL }}
+
+    steps:
+      # ──────────────────────────────────────────────
+      # 1. Setup
+      # ──────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: meta
+        shell: pwsh
+        run: |
+          $ver = "${{ github.event.inputs.version }}"
+          if ([string]::IsNullOrWhiteSpace($ver)) {
+            # Derive from git tag (strip leading "v")
+            $ver = "${{ github.ref_name }}" -replace '^v', ''
+            # Ensure four-part semver (x.y.z -> x.y.z.0)
+            if ($ver -match '^\d+\.\d+\.\d+$') { $ver = "$ver.0" }
+          }
+          if ($ver -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            Write-Error "Version must be four-part (e.g. 1.1.13.0). Got: $ver"
+            exit 1
+          }
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          Write-Host "Building MSIX version: $ver"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # ──────────────────────────────────────────────
+      # 2. Bundle portable Node.js (fixes Store sandbox crash)
+      #    node.exe is placed in resources/server/ so server.rs
+      #    finds it via find_node_executable() at runtime.
+      # ──────────────────────────────────────────────
+      - name: Download portable Node.js LTS (x64)
+        shell: pwsh
+        run: |
+          $nodeVersion = "20.19.2"
+          $url = "https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-win-x64.zip"
+          $zip  = "$env:TEMP\node-portable.zip"
+          $dest = "$env:TEMP\node-portable"
+
+          Write-Host "Downloading Node.js $nodeVersion portable..."
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+
+          $nodeExe = Get-ChildItem -Path $dest -Recurse -Filter "node.exe" |
+                     Where-Object { $_.FullName -notmatch 'node_modules' } |
+                     Select-Object -First 1
+
+          if (-not $nodeExe) {
+            Write-Error "node.exe not found in downloaded archive."
+            exit 1
+          }
+
+          $resourcesDir = "src-tauri\resources\server"
+          New-Item -ItemType Directory -Path $resourcesDir -Force | Out-Null
+          Copy-Item $nodeExe.FullName "$resourcesDir\node.exe" -Force
+          Write-Host "Bundled node.exe -> $resourcesDir\node.exe ($([math]::Round((Get-Item "$resourcesDir\node.exe").Length / 1MB, 1)) MB)"
+
+      # ──────────────────────────────────────────────
+      # 3. Build the Tauri app
+      # ──────────────────────────────────────────────
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bunx prisma generate
+
+      - name: Build desktop app (nsis + msi)
+        run: bun run tauri:build -- --ci
+
+      # ──────────────────────────────────────────────
+      # 4. Extract app files from the MSI
+      #    Administrative install unpacks files to a staging dir
+      #    without writing to the real system.
+      # ──────────────────────────────────────────────
+      - name: Extract app files from MSI
+        id: extract
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "src-tauri\target\release\bundle\msi" -Filter "*.msi" |
+                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $msi) {
+            Write-Error "No .msi found in bundle/msi. Ensure 'msi' is in tauri.conf.json targets."
+            exit 1
+          }
+          Write-Host "Found MSI: $($msi.FullName)"
+
+          $staging = "$env:TEMP\critix-msix-stage"
+          Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $staging | Out-Null
+
+          # Administrative install extracts files without touching the real system
+          Start-Process msiexec.exe -ArgumentList "/a `"$($msi.FullName)`" TARGETDIR=`"$staging`" /qn" -Wait -NoNewWindow
+
+          # Locate the actual app directory inside the staging tree
+          $appExe = Get-ChildItem -Path $staging -Recurse -Filter "critix-vault.exe" | Select-Object -First 1
+          if (-not $appExe) {
+            Write-Error "critix-vault.exe not found after MSI extraction. Staging contents:"
+            Get-ChildItem $staging -Recurse | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+
+          $appDir = $appExe.DirectoryName
+          Write-Host "App directory: $appDir"
+          "app_dir=$appDir" >> $env:GITHUB_OUTPUT
+
+      # ──────────────────────────────────────────────
+      # 5. Create MSIX package directory structure
+      # ──────────────────────────────────────────────
+      - name: Create MSIX package structure
+        shell: pwsh
+        run: |
+          $version   = "${{ steps.meta.outputs.version }}"
+          $publisher = "${{ secrets.MSIX_PUBLISHER_CN }}"
+          $appDir    = "${{ steps.extract.outputs.app_dir }}"
+          $pkgDir    = "$env:TEMP\critix-msix-pkg"
+
+          if ([string]::IsNullOrWhiteSpace($publisher)) {
+            Write-Error "Secret MSIX_PUBLISHER_CN is not set. Add it in Settings > Secrets."
+            Write-Host  "  It looks like: CN=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+            Write-Host  "  Find it in Partner Center > Account settings > Legal info > Publisher CN"
+            exit 1
+          }
+
+          Remove-Item $pkgDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $pkgDir | Out-Null
+
+          # Copy all app files to the root of the MSIX package
+          Write-Host "Copying app files from $appDir ..."
+          Copy-Item "$appDir\*" $pkgDir -Recurse -Force
+
+          # ── Assets directory ────────────────────────────────────────────
+          $assetsDir = "$pkgDir\Assets"
+          New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
+
+          # Convert PNG icons to required MSIX asset sizes using .NET
+          Add-Type -AssemblyName System.Drawing
+
+          $iconSrc = "src-tauri\icons\128x128.png"
+          if (-not (Test-Path $iconSrc)) { $iconSrc = "src-tauri\icons\32x32.png" }
+
+          function Resize-Image($src, $dst, $w, $h) {
+            $orig   = [System.Drawing.Image]::FromFile((Resolve-Path $src))
+            $bmp    = New-Object System.Drawing.Bitmap($w, $h)
+            $g      = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $g.DrawImage($orig, 0, 0, $w, $h)
+            $g.Dispose(); $orig.Dispose()
+            $bmp.Save($dst, [System.Drawing.Imaging.ImageFormat]::Png)
+            $bmp.Dispose()
+          }
+
+          Resize-Image $iconSrc "$assetsDir\StoreLogo.png"           50   50
+          Resize-Image $iconSrc "$assetsDir\Square44x44Logo.png"     44   44
+          Resize-Image $iconSrc "$assetsDir\Square150x150Logo.png"  150  150
+          Resize-Image $iconSrc "$assetsDir\Wide310x150Logo.png"    310  150
+          Resize-Image $iconSrc "$assetsDir\SplashScreen.png"       620  300
+
+          # ── AppxManifest.xml ─────────────────────────────────────────────
+          $manifest = Get-Content "src-tauri\packaging\AppxManifest.xml" -Raw
+          $manifest = $manifest -replace '\$PUBLISHER_CN\$', $publisher
+          $manifest = $manifest -replace '\$VERSION\$',      $version
+          $manifest | Set-Content "$pkgDir\AppxManifest.xml" -Encoding utf8
+
+          Write-Host "MSIX package directory ready: $pkgDir"
+          Write-Host "Contents:"
+          Get-ChildItem $pkgDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+      # ──────────────────────────────────────────────
+      # 6. Pack with makeappx.exe (Windows SDK)
+      # ──────────────────────────────────────────────
+      - name: Pack MSIX
+        shell: pwsh
+        run: |
+          # Locate makeappx.exe from any installed Windows SDK
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "makeappx.exe" -ErrorAction SilentlyContinue |
+                      Where-Object { $_.FullName -match 'x64' } |
+                      Sort-Object FullName -Descending |
+                      Select-Object -First 1
+
+          if (-not $makeappx) {
+            Write-Error "makeappx.exe not found. Ensure Windows SDK is installed on the runner."
+            exit 1
+          }
+          Write-Host "Using makeappx: $($makeappx.FullName)"
+
+          $version = "${{ steps.meta.outputs.version }}"
+          $pkgDir  = "$env:TEMP\critix-msix-pkg"
+          $outDir  = "src-tauri\target\release\bundle\msix"
+          New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+
+          $outFile = "$outDir\CritixVault_${version}_x64.msix"
+          & $makeappx.FullName pack /d $pkgDir /p $outFile /o /nv
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "makeappx failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+          Write-Host "MSIX created: $outFile ($([math]::Round((Get-Item $outFile).Length / 1MB, 1)) MB)"
+
+      # ──────────────────────────────────────────────
+      # 7. Upload artifacts
+      # ──────────────────────────────────────────────
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CritixVault-${{ steps.meta.outputs.version }}-msix
+          path: src-tauri/target/release/bundle/msix/*.msix
+          if-no-files-found: error
+
+      - name: Upload NSIS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CritixVault-${{ steps.meta.outputs.version }}-nsis
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: warn

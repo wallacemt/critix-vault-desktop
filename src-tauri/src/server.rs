@@ -28,6 +28,40 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
 
 static SERVER_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 
+/// Finds the Node.js executable to use.
+/// Prefers a bundled node.exe (safe for MSIX/Store sandbox where system PATH is restricted).
+/// Falls back to the system "node" command.
+#[cfg_attr(debug_assertions, allow(dead_code))]
+fn find_node_executable() -> std::path::PathBuf {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+
+    if let Some(ref dir) = exe_dir {
+        // Tauri array resources layout: {install_dir}/resources/server/node.exe
+        let candidate = dir.join("resources").join("server").join("node.exe");
+        if candidate.exists() {
+            println!("[critix] Using bundled node: {}", candidate.display());
+            return candidate;
+        }
+        // Tauri object resources layout: {install_dir}/server/node.exe
+        let candidate = dir.join("server").join("node.exe");
+        if candidate.exists() {
+            println!("[critix] Using bundled node: {}", candidate.display());
+            return candidate;
+        }
+        // Bundled next to the executable
+        let candidate = dir.join("node.exe");
+        if candidate.exists() {
+            println!("[critix] Using bundled node: {}", candidate.display());
+            return candidate;
+        }
+    }
+
+    println!("[critix] Bundled node.exe not found — falling back to system node");
+    std::path::PathBuf::from("node")
+}
+
 fn validate_server_bundle(server_dir: &std::path::Path) -> Result<(), String> {
     let server_js = server_dir.join("server.js");
     if !server_js.exists() {
@@ -84,15 +118,10 @@ fn validate_server_bundle(server_dir: &std::path::Path) -> Result<(), String> {
 pub const SERVER_PORT: u16 = 1422;
 
 /// Retorna o caminho para o arquivo de log do servidor.
+/// Uses %TEMP% so it works under the MSIX sandbox (install dir is read-only).
 #[allow(dead_code)]
 fn get_log_file() -> Result<File, String> {
-    // Salva log no diretório do executável ou temp
-    let log_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-        .unwrap_or_else(std::env::temp_dir);
-
-    let log_path = log_dir.join("critix-server.log");
+    let log_path = std::env::temp_dir().join("critix-server.log");
     OpenOptions::new()
         .create(true)
         .write(true)
@@ -220,7 +249,8 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
 
     println!("[critix] External API base: {}", external_api_url);
 
-    let mut cmd = Command::new("node");
+    let node_exe = find_node_executable();
+    let mut cmd = Command::new(&node_exe);
     cmd.arg(&server_js)
         .env("PORT", SERVER_PORT.to_string())
         .env("NODE_ENV", "production")

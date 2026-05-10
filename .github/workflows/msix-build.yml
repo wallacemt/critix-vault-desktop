@@ -71,6 +71,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       # ──────────────────────────────────────────────
+      # 1b. Validate MSIX_PUBLISHER_CN before spending build time
+      # ──────────────────────────────────────────────
+      - name: Validate MSIX_PUBLISHER_CN secret
+        shell: pwsh
+        env:
+          MSIX_PUBLISHER_CN: ${{ secrets.MSIX_PUBLISHER_CN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MSIX_PUBLISHER_CN)) {
+            Write-Host "ERROR: Secret MSIX_PUBLISHER_CN is not configured."
+            Write-Host "  Find it: Partner Center > Account settings > Legal info > Publisher CN"
+            Write-Host "  Add it:  GitHub repo > Settings > Secrets > Actions > New secret"
+            Write-Host "  Name: MSIX_PUBLISHER_CN  |  Value: CN=XXXX-XXXX-..."
+            exit 1
+          }
+          Write-Host "MSIX_PUBLISHER_CN is set."
+
+      # ──────────────────────────────────────────────
       # 2. Bundle portable Node.js (fixes Store sandbox crash)
       #    node.exe is placed in resources/server/ so server.rs
       #    finds it via find_node_executable() at runtime.
@@ -196,11 +213,12 @@ jobs:
             $bmp.Dispose()
           }
 
-          Resize-Image $iconSrc "$assetsDir\StoreLogo.png"           50   50
-          Resize-Image $iconSrc "$assetsDir\Square44x44Logo.png"     44   44
-          Resize-Image $iconSrc "$assetsDir\Square150x150Logo.png"  150  150
-          Resize-Image $iconSrc "$assetsDir\Wide310x150Logo.png"    310  150
-          Resize-Image $iconSrc "$assetsDir\SplashScreen.png"       620  300
+          Resize-Image $iconSrc "$assetsDir\StoreLogo.png"                        50   50
+          Resize-Image $iconSrc "$assetsDir\CRITIXVAULT-Square44x44Logo.png"    44   44
+          Resize-Image $iconSrc "$assetsDir\CRITIXVAULT-Square71x71Logo.png"    71   71
+          Resize-Image $iconSrc "$assetsDir\CRITIXVAULT-Square150x150Logo.png" 150  150
+          Resize-Image $iconSrc "$assetsDir\CRITIXVAULT-Square310x310Logo.png" 310  310
+          Resize-Image $iconSrc "$assetsDir\CRITIXVAULT-Wide310x150Logo.png"   310  150
 
           # ── AppxManifest.xml ─────────────────────────────────────────────
           $manifest = Get-Content "src-tauri\packaging\AppxManifest.xml" -Raw

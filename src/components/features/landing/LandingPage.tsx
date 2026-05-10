@@ -287,10 +287,7 @@ export function LandingPage({
                 className="drop-shadow-2xl"
                 priority
               />
-              <span className="w-3 h-3 bg-amber-400 rounded-tl-full rounded-bl-full rounded-tr-full" />
-              <span className="font-display font-bold text-[var(--text-primary)] text-8xl ml-1">
-                <span className="text-[var(--color-primary)] animate-pulse">V</span>ault
-              </span>
+             
             </motion.div>
 
             {/* Subtitle */}

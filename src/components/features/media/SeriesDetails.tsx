@@ -17,7 +17,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Play, Calendar, Star, Edit, Loader2, FolderOpen, Trash2, CheckCircle2, Eye } from "lucide-react";
+import {
+  ArrowLeft,
+  Play,
+  Calendar,
+  Star,
+  Edit,
+  Loader2,
+  FolderOpen,
+  Trash2,
+  CheckCircle2,
+  Eye,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
 import { rematchSeriesEpisodes, fetchSeasonDetails, fetchMediaImages } from "@/services/mediaService";
@@ -71,7 +84,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   const [selectedSeasonToStart, setSelectedSeasonToStart] = useState<string>("");
   const router = useRouter();
   const { serie: series, setCurrentSerie: onSeriesUpdate } = useMediaContext();
-  const { handlePlayEpisode: onPlayEpisode, handlePlaySeries } = useActions();
+  const { handlePlayEpisode: onPlayEpisode, handlePlaySeries, playError, clearPlayError } = useActions();
   const { isOnline } = useApiConnectivity();
   const seriesSeasons = Array.isArray(series?.seasons) ? series.seasons : [];
   const [filePath, setFilePath] = useState("");
@@ -145,8 +158,15 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
 
               const episodes: Episode[] = seasonDetails.episodes.map((ep) => {
                 const filePath = existingEpFilePaths.get(ep.episode_number);
+                // Preserve the existing episode ID to keep watch history entries
+                // consistent. TMDB returns numeric IDs but our watch history was
+                // saved with synthetic "seriesId-sXeY" IDs — mixing them causes
+                // toggle operations to create duplicate/conflicting entries.
+                const existingId = existingSeason?.episodes.find(
+                  (e) => e.episode_number === ep.episode_number,
+                )?.id;
                 return {
-                  id: ep.id,
+                  id: existingId ?? `${series.id}-s${ep.season_number}e${ep.episode_number}`,
                   name: ep.name,
                   title: ep.name,
                   overview: ep.overview,
@@ -330,6 +350,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
   };
 
   const handlePlaySeriesClick = async () => {
+    clearPlayError();
     setIsStartingSeriesPlayback(true);
     try {
       const result = await handlePlaySeries(series);
@@ -548,9 +569,11 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
       const refreshedEpisodes: Episode[] = seasonDetails.episodes.map((episode) => {
         const existing = existingByEpisode.get(episode.episode_number);
         const filePath = existing?.filePath;
+        // Preserve existing ID to avoid breaking watch history entries
+        const id = existing?.id ?? `${series.id}-s${episode.season_number}e${episode.episode_number}`;
 
         return {
-          id: episode.id,
+          id,
           name: episode.name,
           title: episode.name,
           overview: episode.overview,
@@ -925,6 +948,13 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
 
               {/* Actions */}
               {!demoMode && (
+                <div className="flex flex-col gap-3">
+                  {playError && (
+                    <div className="flex items-start gap-3 rounded-xl bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-200">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+                      <span className="flex-1">{playError}</span>
+                    </div>
+                  )}
                 <div className="flex gap-3 flex-wrap">
                   <Button
                     size="lg"
@@ -934,10 +964,12 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                   >
                     {isStartingSeriesPlayback ? (
                       <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : playError ? (
+                      <RefreshCw className="w-5 h-5 mr-2" />
                     ) : (
                       <Play className="w-5 h-5 mr-2 fill-current" />
                     )}
-                    Assistir
+                    {playError ? "Tentar Novamente" : "Assistir"}
                   </Button>
 
                   {series.videos && series.videos.length > 0 && (
@@ -1003,6 +1035,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                       <span className="text-sm text-white">{rematchStatus}</span>
                     </motion.div>
                   )}
+                </div>
                 </div>
               )}
             </div>

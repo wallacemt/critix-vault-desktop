@@ -58,11 +58,8 @@ export function AppSidebar({
             href="/library"
             className="flex items-center transition-all hover:scale-105 group-data-[collapsible=icon]:hidden cursor-pointer"
           >
-            <Image src={"/images/logo-full.png"} width={100} height={100} alt="Critix Logo" title="Critix" />
-            <span className="h-3 w-3 rounded-tl-full rounded-tr-full rounded-bl-full bg-amber-400" />
-            <span className="font-display text-4xl font-bold text-text-primary">
-              <span className="animate-pulse text-primary">V</span>ault
-            </span>
+            <Image src={"/images/logo-full.png"} width={150} height={150} alt="Critix Logo" title="Critix" />
+            
           </Link>
         </div>
 

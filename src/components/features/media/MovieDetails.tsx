@@ -19,6 +19,8 @@ import {
   X,
   Trash2,
   Pencil,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
@@ -52,7 +54,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const [isRefreshingGallery, setIsRefreshingGallery] = useState(false);
 
   const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
-  const { handlePlayMovie: onPlay } = useActions();
+  const { handlePlayMovie: onPlay, playError, clearPlayError } = useActions();
   const { isOnline } = useApiConnectivity();
 
   const router = useRouter();
@@ -136,7 +138,6 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
   const handleMarkAsWatched = async () => {
     if (currentMovie.isWatched) {
       await watchHistoryService.unmarkMovieWatched(currentMovie.id);
-      await refreshMedia(currentMovie.id, currentMovie.type);
     } else {
       await watchHistoryService.markMovieWatched(
         currentMovie.id,
@@ -145,13 +146,11 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
         currentMovie.duration,
       );
     }
+    await refreshMedia(currentMovie.id, currentMovie.type);
   };
 
   const handlePlay = () => {
-    if (currentMovie.isWatched) {
-      alert("Você já assistiu este filme. Desmarque como assistido para reproduzir novamente.");
-      return;
-    }
+    clearPlayError();
     onPlay(currentMovie);
   };
   const handleDelete = async () => {
@@ -334,16 +333,31 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
 
               {/* Actions */}
               {!demoMode && (
+                <div className="flex flex-col gap-3">
+                  {playError && (
+                    <div className="flex items-start gap-3 rounded-xl bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-200">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+                      <span className="flex-1">{playError}</span>
+                    </div>
+                  )}
                 <div className="flex gap-3 flex-wrap">
                   <Button
                     size="lg"
                     onClick={handlePlay}
                     variant={"ghost"}
-                    disabled={currentMovie.isWatched}
-                    className=" bg-primary-crx flex items-center justify-center rounded-2xl text-slate-900 hover:backdrop-blur-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    className=" bg-primary-crx flex items-center justify-center rounded-2xl text-slate-900 hover:backdrop-blur-xl shadow-lg"
                   >
-                    <Play className="w-5 h-5 mr-2 fill-current" />
-                    {currentMovie.isWatched ? "Já Assistido" : "Assistir Agora"}
+                    {playError ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 mr-2" />
+                        Tentar Novamente
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-5 h-5 mr-2 fill-current" />
+                        {currentMovie.isWatched ? "Assistir Novamente" : "Assistir Agora"}
+                      </>
+                    )}
                   </Button>
                   <Button
                     size="lg"
@@ -393,6 +407,7 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                     <Trash2 className="w-5 h-5 mr-2" />
                     Excluir
                   </Button>
+                </div>
                 </div>
               )}
             </div>

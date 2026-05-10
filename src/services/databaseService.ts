@@ -13,6 +13,85 @@ function apiPath(path: string): string {
   return `${API_BASE}/${normalized}/`;
 }
 
+// ---------------------------------------------------------------------------
+// localStorage watch-history shadow cache
+// Provides resilience against SQLite resets (e.g. MSIX updates on Windows).
+// We store a compact list of completed watch entries keyed by mediaId/episodeId
+// and restore them when the database comes up empty.
+// ---------------------------------------------------------------------------
+
+const LS_WATCH_KEY = "critix_watch_shadow";
+
+type WatchShadowEntry = {
+  mediaId: string;
+  mediaType: string;
+  episodeId?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+};
+
+function loadWatchShadow(): WatchShadowEntry[] {
+  try {
+    const raw = localStorage.getItem(LS_WATCH_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as WatchShadowEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function saveWatchShadow(entries: WatchShadowEntry[]): void {
+  try {
+    localStorage.setItem(LS_WATCH_KEY, JSON.stringify(entries));
+  } catch {
+    // localStorage may be unavailable in SSR or private mode — ignore
+  }
+}
+
+function addToWatchShadow(entry: WatchShadowEntry): void {
+  const all = loadWatchShadow();
+  const isDuplicate = all.some(
+    (e) =>
+      e.mediaId === entry.mediaId &&
+      e.mediaType === entry.mediaType &&
+      (entry.episodeId ? e.episodeId === entry.episodeId : !e.episodeId),
+  );
+  if (!isDuplicate) {
+    all.push(entry);
+    saveWatchShadow(all);
+  }
+}
+
+function removeFromWatchShadow(mediaId: string, episodeId?: string): void {
+  const all = loadWatchShadow();
+  const filtered = all.filter((e) => {
+    if (e.mediaId !== mediaId) return true;
+    if (episodeId) return e.episodeId !== episodeId;
+    return false;
+  });
+  saveWatchShadow(filtered);
+}
+
+async function restoreWatchHistoryFromShadow(shadow: WatchShadowEntry[]): Promise<void> {
+  console.warn("⚠️ Watch history appears empty — restoring from local backup...");
+  for (const entry of shadow) {
+    try {
+      await addWatchHistory({
+        mediaId: entry.mediaId,
+        mediaType: entry.mediaType as "MOVIE" | "SERIES" | "ANIME",
+        episodeId: entry.episodeId,
+        seasonNumber: entry.seasonNumber,
+        episodeNumber: entry.episodeNumber,
+        completed: true,
+        progress: 100,
+      });
+    } catch {
+      // Best-effort restore — individual failures are non-fatal
+    }
+  }
+  console.log("✅ Watch history restored from local backup");
+}
+
 type ApiEnvelope<T> =
   | T
   | {
@@ -229,6 +308,8 @@ export type WatchHistory = {
   episodeNumber?: number | null;
 };
 
+let _shadowRestoreChecked = false;
+
 export async function getWatchHistory(mediaId?: string, limit?: number): Promise<WatchHistory[]> {
   const params = new URLSearchParams();
   if (mediaId) params.append("mediaId", mediaId);
@@ -245,7 +326,22 @@ export async function getWatchHistory(mediaId?: string, limit?: number): Promise
     throw await parseApiError(response, "Nao foi possivel carregar o historico de assistidos.");
   }
 
-  return response.json();
+  const history = (await response.json()) as WatchHistory[];
+
+  // On the first full fetch (no filter), if the DB is empty but local backup
+  // has entries, restore silently so watched state survives a DB reset.
+  if (!mediaId && !_shadowRestoreChecked) {
+    _shadowRestoreChecked = true;
+    const shadow = loadWatchShadow();
+    if (history.length === 0 && shadow.length > 0) {
+      await restoreWatchHistoryFromShadow(shadow);
+      // Re-fetch after restore
+      const retryResponse = await fetch(url, { method: "GET", cache: "no-store" });
+      if (retryResponse.ok) return (await retryResponse.json()) as WatchHistory[];
+    }
+  }
+
+  return history;
 }
 
 export async function addWatchHistory(data: WatchHistoryInput): Promise<WatchHistory> {
@@ -259,7 +355,20 @@ export async function addWatchHistory(data: WatchHistoryInput): Promise<WatchHis
     throw await parseApiError(response, "Nao foi possivel registrar no historico de assistidos.");
   }
 
-  return response.json();
+  const result = (await response.json()) as WatchHistory;
+
+  // Mirror completed entries to localStorage for resilience
+  if (data.completed) {
+    addToWatchShadow({
+      mediaId: data.mediaId,
+      mediaType: data.mediaType,
+      episodeId: data.episodeId,
+      seasonNumber: data.seasonNumber,
+      episodeNumber: data.episodeNumber,
+    });
+  }
+
+  return result;
 }
 
 export async function markAsWatched(mediaId: string, mediaType: "MOVIE" | "SERIES" | "ANIME"): Promise<WatchHistory> {
@@ -296,6 +405,8 @@ export async function clearWatchHistory(mediaId: string): Promise<void> {
   if (!response.ok) {
     throw await parseApiError(response, "Nao foi possivel limpar o historico de assistidos.");
   }
+
+  removeFromWatchShadow(mediaId);
 }
 
 export async function toggleWatchStatus(mediaId: string, mediaType: "MOVIE" | "SERIES" | "ANIME"): Promise<boolean> {
@@ -381,6 +492,7 @@ export async function toggleEpisodeWatchStatus(
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
     });
+    removeFromWatchShadow(seriesId, normalizedEpisodeId);
     return false;
   } else {
     await markEpisodeAsWatched(seriesId, normalizedEpisodeId, seasonNumber, episodeNumber);

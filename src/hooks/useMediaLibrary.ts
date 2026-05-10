@@ -195,6 +195,9 @@ export function useMediaLibrary(folderId: string | null) {
       const result = await folderScanService.scanAndMatchFolder(folderId, folderPath, (progress) => {
         const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
         setScanProgress(percent);
+        if ((progress.status === "error" || progress.status === "empty") && progress.error) {
+          setError(progress.error);
+        }
       });
 
       console.log("✅ Scan complete:", result);

@@ -30,12 +30,13 @@ interface EpisodeFile {
 }
 
 export interface ScanProgress {
-  status: "scanning" | "matching" | "complete" | "error";
+  status: "scanning" | "matching" | "complete" | "error" | "empty";
   totalFiles: number;
   processedFiles: number;
   matchedMedia: number;
   currentFile?: string;
   error?: string;
+  unmatchedCount?: number;
 }
 
 export interface ScanResult {
@@ -114,8 +115,40 @@ class FolderScanService {
         currentFile: folderPath,
       });
 
-      const files = await this.scanFolderRecursive(folderPath);
+      let files: string[];
+      try {
+        files = await this.scanFolderRecursive(folderPath);
+      } catch (scanError) {
+        const errorMessage =
+          scanError instanceof Error ? scanError.message : "Erro ao acessar a pasta. Verifique as permissões.";
+        onProgress?.({
+          status: "error",
+          totalFiles: 0,
+          processedFiles: 0,
+          matchedMedia: 0,
+          error: errorMessage,
+        });
+        throw new Error(errorMessage);
+      }
+
       const mediaFiles = files.filter((file) => this.isMediaFile(file));
+
+      if (mediaFiles.length === 0) {
+        console.log(`⚠️ No media files found in folder: ${folderPath}`);
+        onProgress?.({
+          status: "empty",
+          totalFiles: 0,
+          processedFiles: 0,
+          matchedMedia: 0,
+          error: "Nenhum arquivo de mídia encontrado nesta pasta. Verifique se a pasta contém arquivos .mkv, .mp4, .avi, etc.",
+        });
+        return {
+          movies: [],
+          series: [],
+          unmatchedFiles: [],
+          totalProcessed: 0,
+        };
+      }
 
       // Step 2: Filter out files that are already in the database (optimization)
       const existingFilePaths = new Set([
@@ -237,11 +270,17 @@ class FolderScanService {
         result.totalProcessed++;
       }
 
+      const matchedCount = result.movies.length + result.series.length;
       onProgress?.({
-        status: "complete",
+        status: matchedCount === 0 ? "empty" : "complete",
         totalFiles: totalToProcess,
         processedFiles: totalToProcess,
-        matchedMedia: result.movies.length + result.series.length,
+        matchedMedia: matchedCount,
+        unmatchedCount: result.unmatchedFiles.length,
+        error:
+          matchedCount === 0
+            ? "Nenhuma mídia foi identificada. Verifique sua conexão com a internet (necessária para buscar informações dos filmes/séries)."
+            : undefined,
       });
 
       return result;
@@ -574,15 +613,8 @@ class FolderScanService {
    * Recursively scan folder for all files
    */
   private async scanFolderRecursive(path: string): Promise<string[]> {
-    // This will be implemented in Rust for better performance
-    // For now, we'll use the existing scan_folder command
-    try {
-      const files = await tauriService.scanFolder(path);
-      return files;
-    } catch (error) {
-      console.error("Failed to scan folder:", error);
-      return [];
-    }
+    const files = await tauriService.scanFolder(path);
+    return files;
   }
 
   /**

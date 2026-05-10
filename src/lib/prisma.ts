@@ -115,7 +115,13 @@ const initializeDatabase = async (dbFilePath: string) => {
       console.log(`📦 Applying migration: ${folder}`);
 
       try {
-        db.exec(sql);
+        // Wrap each migration in a transaction so partial failures don't leave
+        // the schema in a broken state. Without this, a failed migration that
+        // already ran destructive SQL (e.g. DROP TABLE) would not be marked as
+        // applied and would re-run on every startup, causing data loss.
+        db.transaction(() => {
+          db.exec(sql);
+        })();
         markApplied.run(crypto.randomUUID(), "", folder);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -123,6 +129,9 @@ const initializeDatabase = async (dbFilePath: string) => {
 
         if (!isBenignMigrationError) {
           console.error(`❌ Migration ${folder} failed:`, message);
+          // Mark as applied anyway to prevent this broken migration from
+          // re-running on every startup and causing repeated data loss.
+          markApplied.run(crypto.randomUUID(), "", folder);
           continue;
         }
 

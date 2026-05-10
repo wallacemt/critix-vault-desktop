@@ -95,6 +95,7 @@ export function useActions() {
   const pathname = usePathname();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+  const [playError, setPlayError] = useState<string | null>(null);
 
   const playEpisodeForSeries = async (seriesToPlay: Series, episode: Episode) => {
     if (!episode.filePath) {
@@ -131,7 +132,7 @@ export function useActions() {
   const handleAddFolder = async () => {
     try {
       if (!isOnline) {
-        alert("Modo offline ativo. Reconecte para escanear e associar midias automaticamente.");
+        alert("Modo offline ativo. Reconecte para escanear e associar mídias automaticamente.");
         return;
       }
 
@@ -145,7 +146,17 @@ export function useActions() {
         return;
       }
 
-      const preScanFiles = await tauriService.scanFolder(selectedPath);
+      let preScanFiles: string[] = [];
+      try {
+        preScanFiles = await tauriService.scanFolder(selectedPath);
+      } catch {
+        setScanning(false);
+        alert(
+          "Não foi possível acessar a pasta selecionada. Verifique se você tem permissão de leitura nessa pasta e tente novamente.",
+        );
+        return;
+      }
+
       if (preScanFiles.length === 0) {
         await registerEasterEggClue("empty-scan");
       }
@@ -157,6 +168,8 @@ export function useActions() {
       const existingMovies = await getMovies();
       const existingSeries = await getSeries();
 
+      let scanErrorMessage: string | undefined;
+
       // Scan the folder for media files using RUST
       const result = await folderScanService.scanAndMatchFolder(
         folder.id,
@@ -164,6 +177,9 @@ export function useActions() {
         (progress) => {
           const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
           setScanProgress(percent);
+          if (progress.status === "error" || progress.status === "empty") {
+            scanErrorMessage = progress.error;
+          }
         },
         existingMovies,
         existingSeries,
@@ -179,11 +195,23 @@ export function useActions() {
 
       setScanning(false);
 
+      if (result.movies.length === 0 && result.series.length === 0) {
+        const message =
+          scanErrorMessage ||
+          "Nenhuma mídia foi encontrada nesta pasta. Certifique-se de que a pasta contém arquivos de vídeo (.mkv, .mp4, .avi) e que há conexão com a internet.";
+        alert(message);
+      }
+
       // Redirect to library
       router.push("/library");
     } catch (error) {
       console.error("Failed to add folder:", error);
       setScanning(false);
+      const message =
+        error instanceof Error
+          ? `Erro ao escanear pasta: ${error.message}`
+          : "Erro inesperado ao escanear a pasta. Tente novamente.";
+      alert(message);
     }
   };
   const handleViewDemo = () => {
@@ -200,6 +228,7 @@ export function useActions() {
   };
 
   const handlePlayMovie = async (movie: Movie) => {
+    setPlayError(null);
     try {
       await tauriService.openMedia(movie.filePath);
       flushSync(() => {
@@ -214,6 +243,11 @@ export function useActions() {
       router.push("/watching");
     } catch (error) {
       console.error("Failed to play movie:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível abrir o arquivo. Verifique se o arquivo existe e se há um player instalado.";
+      setPlayError(message);
     }
   };
 
@@ -320,5 +354,7 @@ export function useActions() {
     handleViewDemo,
     scanning,
     scanProgress,
+    playError,
+    clearPlayError: () => setPlayError(null),
   };
 }

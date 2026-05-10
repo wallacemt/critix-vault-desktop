@@ -2,19 +2,14 @@
 <!--
   AppxManifest.xml for Critix Vault Microsoft Store submission.
 
-  Before packaging, replace the following placeholders:
-    $PUBLISHER_CN$  — full Publisher CN string from your Partner Center account
-                      (e.g. "CN=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-    $VERSION$       — four-part version matching tauri.conf.json (e.g. 1.1.13.0)
-
-  The CI workflow (msix-build.yml) substitutes these automatically via
-  the MSIX_PUBLISHER_CN and VERSION secrets/inputs.
+  Placeholders replaced by scripts/build-msix.ps1 and msix-build.yml:
+    $PUBLISHER_CN$  : Publisher CN from Partner Center (e.g. "CN=XXXX-...")
+    $VERSION$       : four-part version, e.g. 1.1.14.0
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  IgnorableNamespaces="uap">
 
   <Identity
     Name="WallaceSantana.CritixVault"
@@ -25,41 +20,40 @@
   <Properties>
     <DisplayName>Critix Vault</DisplayName>
     <PublisherDisplayName>Wallace Santana</PublisherDisplayName>
+    <Description>Gerenciador de pastas com midias avancado</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
-  <Dependencies>
-    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersion="10.0.99999.0" />
-  </Dependencies>
-
   <Resources>
-    <Resource Language="pt-BR" />
-    <Resource Language="en-US" />
+    <Resource Language="en-us" />
+    <Resource Language="pt-br" />
   </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+    <PackageDependency
+      Name="Microsoft.WindowsAppRuntime.1.4"
+      MinVersion="4000.1010.1349.0"
+      Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
 
   <Applications>
     <Application
-      Id="critix_vault"
+      Id="CRITIXVAULT"
       Executable="critix-vault.exe"
-      EntryPoint="Windows.FullTrustApplication">
+      EntryPoint="Windows.PartialTrustApplication">
       <uap:VisualElements
-        DisplayName="Critix Vault"
-        Description="Seu gerenciador de pastas com medias favorito"
         BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#1a1a1a" />
+        DisplayName="CritixVault"
+        Description="CritixVault"
+        Square150x150Logo="Assets\CRITIXVAULT-Square150x150Logo.png"
+        Square44x44Logo="Assets\CRITIXVAULT-Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\CRITIXVAULT-Wide310x150Logo.png"
+          Square310x310Logo="Assets\CRITIXVAULT-Square310x310Logo.png"
+          Square71x71Logo="Assets\CRITIXVAULT-Square71x71Logo.png" />
       </uap:VisualElements>
     </Application>
   </Applications>
-
-  <Capabilities>
-    <!-- Required for desktop bridge (full-trust process) -->
-    <rescap:Capability Name="runFullTrust" />
-    <!-- Network access for the embedded Next.js server -->
-    <Capability Name="internetClient" />
-    <Capability Name="privateNetworkClientServer" />
-  </Capabilities>
 
 </Package>

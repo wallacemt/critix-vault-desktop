@@ -18,7 +18,6 @@ mod models;
 mod server;
 mod storage;
 
-#[cfg(not(debug_assertions))]
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

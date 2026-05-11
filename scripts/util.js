@@ -51,7 +51,6 @@ export const loadingHtml = `<!DOCTYPE html>
       object-fit: cover;
     }
 
-    /* fallback: texto se a imagem não carregar */
     .logo-wrapper .logo-text {
       font-size: 2.2rem;
       font-weight: 900;
@@ -83,6 +82,7 @@ export const loadingHtml = `<!DOCTYPE html>
       flex-direction: column;
       align-items: center;
       gap: 12px;
+      min-height: 80px;
     }
 
     .spinner {
@@ -102,6 +102,54 @@ export const loadingHtml = `<!DOCTYPE html>
       letter-spacing: 0.02em;
     }
 
+    .error-area {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      max-width: 380px;
+      text-align: center;
+    }
+
+    .error-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #3a1a00;
+      border: 2px solid #c0610a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .error-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f0a050;
+    }
+
+    .error-message {
+      font-size: 0.78rem;
+      color: #6e6e6e;
+      line-height: 1.5;
+    }
+
+    .retry-btn {
+      margin-top: 4px;
+      padding: 8px 22px;
+      background: #c0610a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .retry-btn:hover { background: #e07020; }
+
     .version {
       position: fixed;
       bottom: 20px;
@@ -118,6 +166,7 @@ export const loadingHtml = `<!DOCTYPE html>
         alt="Critix Vault Logo"
         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
       />
+      <span class="logo-text" style="display:none">CV</span>
     </div>
 
     <div class="title">
@@ -125,11 +174,52 @@ export const loadingHtml = `<!DOCTYPE html>
       <p>Sua Biblioteca Local Aprimorada</p>
     </div>
 
-    <div class="loading-area">
+    <div id="loading-area" class="loading-area">
       <div class="spinner"></div>
-      <span class="loading-text">Iniciando o servidor...</span>
+      <span class="loading-text" id="loading-text">Iniciando o servidor...</span>
+    </div>
+
+    <div id="error-area" class="error-area">
+      <div class="error-icon">&#9888;</div>
+      <span class="error-title">Falha ao iniciar o servidor</span>
+      <p class="error-message" id="error-message">
+        O servidor interno nao respondeu a tempo. Feche e reabra o aplicativo.
+        Se o problema persistir, reinstale o aplicativo.
+      </p>
+      <button class="retry-btn" onclick="location.reload()">Tentar Novamente</button>
     </div>
   </div>
 
+  <script>
+    var _startTimeout;
+
+    function showError(msg) {
+      clearTimeout(_startTimeout);
+      var la = document.getElementById('loading-area');
+      var ea = document.getElementById('error-area');
+      if (la) la.style.display = 'none';
+      if (ea) {
+        ea.style.display = 'flex';
+        if (msg) {
+          var em = document.getElementById('error-message');
+          if (em) em.textContent = msg;
+        }
+      }
+    }
+
+    function updateLoadingText(text) {
+      var el = document.getElementById('loading-text');
+      if (el) el.textContent = text;
+    }
+
+    // Exposed for Rust to call via window.eval()
+    window.__critix_server_error = showError;
+    window.__critix_loading_text = updateLoadingText;
+
+    // Safety net: if the server never redirects after 90 s, show an error
+    _startTimeout = setTimeout(function() {
+      showError('O servidor interno nao respondeu em 90 segundos. Isso pode ser causado por uma verificacao de antivirus ou falta de permissao. Feche e reabra o aplicativo.');
+    }, 90000);
+  </script>
 </body>
 </html>`;

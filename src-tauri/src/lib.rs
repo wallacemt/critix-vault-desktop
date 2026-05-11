@@ -40,25 +40,47 @@ pub fn run() {
             {
                 let app_handle = _app.handle().clone();
                 std::thread::spawn(move || {
+                    let show_error = |handle: &tauri::AppHandle, msg: &str| {
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let safe_msg = msg.replace('\'', "\\'").replace('\n', " ").replace('\r', "");
+                            let _ = window.eval(&format!(
+                                "typeof window.__critix_server_error === 'function' && window.__critix_server_error('{safe_msg}')"
+                            ));
+                        }
+                    };
+
                     if let Err(e) = server::start_nextjs_server_internal() {
                         eprintln!("[critix] Erro ao iniciar servidor: {e}");
+                        show_error(&app_handle, &format!("Nao foi possivel iniciar o servidor interno: {e}"));
                         return;
                     }
                     println!(
                         "[critix] Servidor Next.js iniciado na porta {}",
                         server::SERVER_PORT
                     );
+
+                    // Informa a tela de loading que o servidor está iniciando
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.eval(
+                            "typeof window.__critix_loading_text === 'function' && window.__critix_loading_text('Aguardando servidor ficar pronto...')"
+                        );
+                    }
+
                     // Aguarda a porta aceitar conexões antes de redirecionar
                     if !server::wait_for_server() {
                         eprintln!(
                             "[critix] Servidor não ficou disponível. Abortando redirecionamento."
+                        );
+                        show_error(
+                            &app_handle,
+                            "O servidor interno nao ficou disponivel. Verifique se o antivirus nao esta bloqueando o aplicativo e tente novamente.",
                         );
                         return;
                     }
                     if let Some(window) = app_handle.get_webview_window("main") {
                         let url = format!("http://127.0.0.1:{}", server::SERVER_PORT);
                         let _: Result<(), _> =
-                            window.eval(&format!("window.location.replace('{}')", url));
+                            window.eval(&format!("window.location.replace('{url}')"));
                     }
                 });
             }

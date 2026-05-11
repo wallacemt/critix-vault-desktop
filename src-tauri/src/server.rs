@@ -284,7 +284,7 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
     Ok(())
 }
 
-/// Aguarda o servidor ficar disponível na porta (máx ~30 s).
+/// Aguarda o servidor ficar disponível na porta (máx ~90 s).
 /// Retorna `true` se o servidor respondeu, `false` se deu timeout.
 pub fn wait_for_server() -> bool {
     use std::net::{SocketAddr, TcpStream};
@@ -294,7 +294,7 @@ pub fn wait_for_server() -> bool {
         .parse()
         .expect("invalid socket address");
 
-    for _ in 0..60 {
+    for _ in 0..180 {
         // Verifica se o processo ainda está rodando
         {
             let mut lock = SERVER_PROCESS.lock().unwrap();
@@ -322,7 +322,7 @@ pub fn wait_for_server() -> bool {
         std::thread::sleep(Duration::from_millis(500));
     }
     eprintln!(
-        "[critix] Timeout aguardando servidor na porta {}",
+        "[critix] Timeout aguardando servidor na porta {} (90 s esgotados)",
         SERVER_PORT
     );
     false

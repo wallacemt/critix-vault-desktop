@@ -107,7 +107,7 @@ export const loadingHtml = `<!DOCTYPE html>
       flex-direction: column;
       align-items: center;
       gap: 14px;
-      max-width: 380px;
+      max-width: 460px;
       text-align: center;
     }
 
@@ -135,6 +135,55 @@ export const loadingHtml = `<!DOCTYPE html>
       line-height: 1.5;
     }
 
+    .error-detail-wrap {
+      width: 100%;
+      text-align: left;
+    }
+
+    .error-detail-wrap summary {
+      font-size: 0.72rem;
+      color: #4a4a4a;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .error-detail-wrap summary::before {
+      content: '\\25B6';
+      font-size: 0.6rem;
+      transition: transform 0.2s;
+    }
+
+    .error-detail-wrap[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .error-detail-box {
+      margin-top: 8px;
+      padding: 10px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      color: #5a5a5a;
+      font-family: 'Consolas', 'Courier New', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 180px;
+      overflow-y: auto;
+      user-select: text;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
     .retry-btn {
       margin-top: 4px;
       padding: 8px 22px;
@@ -149,6 +198,20 @@ export const loadingHtml = `<!DOCTYPE html>
     }
 
     .retry-btn:hover { background: #e07020; }
+
+    .copy-btn {
+      margin-top: 4px;
+      padding: 8px 16px;
+      background: transparent;
+      color: #6e6e6e;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .copy-btn:hover { border-color: #6e6e6e; color: #b0b0b0; }
 
     .version {
       position: fixed;
@@ -166,7 +229,6 @@ export const loadingHtml = `<!DOCTYPE html>
         alt="Critix Vault Logo"
         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
       />
-      <span class="logo-text" style="display:none">CV</span>
     </div>
 
     <div class="title">
@@ -183,27 +245,55 @@ export const loadingHtml = `<!DOCTYPE html>
       <div class="error-icon">&#9888;</div>
       <span class="error-title">Falha ao iniciar o servidor</span>
       <p class="error-message" id="error-message">
-        O servidor interno nao respondeu a tempo. Feche e reabra o aplicativo.
-        Se o problema persistir, reinstale o aplicativo.
+        O servidor interno nao iniciou corretamente. Feche e reabra o aplicativo.
       </p>
-      <button class="retry-btn" onclick="location.reload()">Tentar Novamente</button>
+
+      <details class="error-detail-wrap" id="error-detail-wrap" style="display:none">
+        <summary>Detalhes t&#233;cnicos</summary>
+        <pre class="error-detail-box" id="error-detail-box"></pre>
+      </details>
+
+      <div class="btn-row">
+        <button class="retry-btn" onclick="location.reload()">Tentar Novamente</button>
+        <button class="copy-btn" id="copy-btn" onclick="copyDetail()" style="display:none">Copiar Detalhes</button>
+      </div>
     </div>
   </div>
 
   <script>
     var _startTimeout;
+    var _detailText = '';
 
-    function showError(msg) {
+    function showError(msg, detail) {
       clearTimeout(_startTimeout);
       var la = document.getElementById('loading-area');
       var ea = document.getElementById('error-area');
       if (la) la.style.display = 'none';
-      if (ea) {
-        ea.style.display = 'flex';
-        if (msg) {
-          var em = document.getElementById('error-message');
-          if (em) em.textContent = msg;
-        }
+      if (ea) ea.style.display = 'flex';
+
+      if (msg) {
+        var em = document.getElementById('error-message');
+        if (em) em.textContent = msg;
+      }
+
+      if (detail) {
+        _detailText = detail;
+        var dw = document.getElementById('error-detail-wrap');
+        var db = document.getElementById('error-detail-box');
+        var cb = document.getElementById('copy-btn');
+        if (dw) dw.style.display = 'block';
+        if (db) db.textContent = detail;
+        if (cb) cb.style.display = 'inline-block';
+      }
+    }
+
+    function copyDetail() {
+      if (!_detailText) return;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(_detailText).then(function() {
+          var btn = document.getElementById('copy-btn');
+          if (btn) { btn.textContent = 'Copiado!'; setTimeout(function(){ btn.textContent = 'Copiar Detalhes'; }, 2000); }
+        });
       }
     }
 
@@ -216,10 +306,13 @@ export const loadingHtml = `<!DOCTYPE html>
     window.__critix_server_error = showError;
     window.__critix_loading_text = updateLoadingText;
 
-    // Safety net: if the server never redirects after 90 s, show an error
+    // Safety net: if Rust never calls back after 95 s, show generic error
     _startTimeout = setTimeout(function() {
-      showError('O servidor interno nao respondeu em 90 segundos. Isso pode ser causado por uma verificacao de antivirus ou falta de permissao. Feche e reabra o aplicativo.');
-    }, 90000);
+      showError(
+        'O servidor interno nao respondeu em 90 segundos.',
+        'Nenhum detalhe disponivel — o processo pode ter sido bloqueado antes de gravar o log.\nCaminho do log: %TEMP%\\critix-server.log'
+      );
+    }, 95000);
   </script>
 </body>
 </html>`;

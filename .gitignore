@@ -38,3 +38,4 @@ scripts
 next-env.d.ts
 .env
 .env.production
+.claude

@@ -44,6 +44,8 @@ export interface ScanResult {
   series: Series[];
   unmatchedFiles: string[];
   totalProcessed: number;
+  /** Todos os arquivos de mídia encontrados na pasta (antes de qualquer filtro de banco de dados). */
+  foundFilePaths: string[];
 }
 
 export interface FolderPreview {
@@ -103,7 +105,9 @@ class FolderScanService {
       series: [],
       unmatchedFiles: [],
       totalProcessed: 0,
+      foundFilePaths: [],
     };
+    // mediaFiles é preenchido logo após o scan e atualiza result.foundFilePaths
 
     try {
       // Step 1: Scan folder for media files
@@ -132,6 +136,8 @@ class FolderScanService {
       }
 
       const mediaFiles = files.filter((file) => this.isMediaFile(file));
+      // Registra todos os paths encontrados antes de qualquer filtro de banco de dados.
+      result.foundFilePaths = mediaFiles;
 
       if (mediaFiles.length === 0) {
         console.log(`⚠️ No media files found in folder: ${folderPath}`);
@@ -147,18 +153,25 @@ class FolderScanService {
           series: [],
           unmatchedFiles: [],
           totalProcessed: 0,
+          foundFilePaths: [],
         };
       }
 
-      // Step 2: Filter out files that are already in the database (optimization)
+      // Step 2: Filter out files that are already in the database (optimization).
+      // Normalize separators + lowercase so Windows path case/slash differences don't break the diff.
+      const normPath = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+
       const existingFilePaths = new Set([
-        ...existingMovies.map((m) => m.filePath),
+        ...existingMovies.flatMap((m) => (m.filePath ? [normPath(m.filePath)] : [])),
         ...existingSeries.flatMap(
-          (s) => s.seasons?.flatMap((season) => season.episodes?.map((ep) => ep.filePath) || []) || [],
+          (s) =>
+            s.seasons?.flatMap((season) =>
+              season.episodes?.flatMap((ep) => (ep.filePath ? [normPath(ep.filePath as string)] : [])) || [],
+            ) || [],
         ),
       ]);
 
-      const newMediaFiles = mediaFiles.filter((file) => !existingFilePaths.has(file));
+      const newMediaFiles = mediaFiles.filter((file) => !existingFilePaths.has(normPath(file)));
 
       console.log(`📊 Scan optimization:`);
       console.log(`  - Total media files found: ${mediaFiles.length}`);
@@ -174,11 +187,14 @@ class FolderScanService {
           processedFiles: 0,
           matchedMedia: existingMovies.length + existingSeries.length,
         });
+        // foundFilePaths contém TODOS os arquivos encontrados na pasta —
+        // essencial para a detecção correta de mídias ausentes em useMediaLibrary.
         return {
           movies: [],
           series: [],
           unmatchedFiles: [],
           totalProcessed: 0,
+          foundFilePaths: mediaFiles,
         };
       }
 

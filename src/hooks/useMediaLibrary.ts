@@ -191,72 +191,87 @@ export function useMediaLibrary(folderId: string | null) {
 
       console.log("🔍 Starting folder scan:", folderPath);
 
-      // Scan the folder using Rust + API
-      const result = await folderScanService.scanAndMatchFolder(folderId, folderPath, (progress) => {
-        const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
-        setScanProgress(percent);
-        if ((progress.status === "error" || progress.status === "empty") && progress.error) {
-          setError(progress.error);
-        }
-      });
+      // Scan the folder using Rust + API — pass existing media so the service
+      // skips files already in the database (incremental scan).
+      const result = await folderScanService.scanAndMatchFolder(
+        folderId,
+        folderPath,
+        (progress) => {
+          const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;
+          setScanProgress(percent);
+          if ((progress.status === "error" || progress.status === "empty") && progress.error) {
+            setError(progress.error);
+          }
+        },
+        existingMovies,
+        existingSeries,
+      );
 
       console.log("✅ Scan complete:", result);
 
-      // Smart rescan: detect new media and mark missing media as watched
-      console.log("📊 Rescan analysis:");
-      console.log(`  - Existing movies: ${existingMovies.length}`);
-      console.log(`  - Existing series: ${existingSeries.length}`);
-      console.log(`  - Found movies: ${result.movies.length}`);
-      console.log(`  - Found series: ${result.series.length}`);
+      const normPath = (p: string) => p.replace(/\\/g, "/").toLowerCase();
 
-      // Create lookup maps for found media (by ID)
-      const foundMovieIds = new Set(result.movies.map((m) => m.id));
-      const foundSeriesIds = new Set(result.series.map((s) => s.id));
-
-      // Find truly new media (not in existing)
+      // Find truly new media (not yet in database for this folder)
       const existingMovieIds = new Set(existingMovies.map((m) => m.id));
       const existingSeriesIds = new Set(existingSeries.map((s) => s.id));
       const newMovies = result.movies.filter((m) => !existingMovieIds.has(m.id));
       const newSeries = result.series.filter((s) => !existingSeriesIds.has(s.id));
 
-      console.log("✨ New media to add:");
-      console.log(`  - New movies: ${newMovies.length}`);
-      newMovies.forEach((m) => console.log(`    📽️  ${m.title}`));
-      console.log(`  - New series: ${newSeries.length}`);
-      newSeries.forEach((s) => console.log(`    📺 ${s.title}`));
+      console.log("📊 Rescan analysis:");
+      console.log(`  - Existing movies: ${existingMovies.length}, Existing series: ${existingSeries.length}`);
+      console.log(`  - New movies: ${newMovies.length}, New series: ${newSeries.length}`);
+      console.log(`  - Files found in folder: ${result.foundFilePaths.length}`);
 
-      // Find missing media (was in folder, not found anymore)
-      const missingMovies = existingMovies.filter((m) => !foundMovieIds.has(m.id));
-      const missingSeries = existingSeries.filter((s) => !foundSeriesIds.has(s.id));
+      // Detect truly missing media using FILE PATHS — not IDs from scan result.
+      // result.movies/series only contains newly matched files (existing are skipped
+      // by the scan optimisation), so comparing IDs would falsely flag ALL existing
+      // media as "missing". Instead, compare the actual paths that exist on disk.
+      //
+      // Only run this check when the folder was actually readable (foundFilePaths > 0).
+      // An empty foundFilePaths means the folder scan failed or the folder is empty,
+      // so we skip the missing-detection to avoid nuking the whole library.
+      if (result.foundFilePaths.length > 0) {
+        const scannedPaths = new Set(result.foundFilePaths.map(normPath));
 
-      if (missingMovies.length > 0 || missingSeries.length > 0) {
-        console.log("📝 Missing media (marking as watched automatically):");
-        missingMovies.forEach((m) => console.log(`    🗑️  ${m.title}`));
-        missingSeries.forEach((s) => console.log(`    🗑️  ${s.title}`));
+        const missingMovies = existingMovies.filter((m) => m.filePath && !scannedPaths.has(normPath(m.filePath)));
 
-        for (const movie of missingMovies) {
-          try {
-            await markAsWatched(movie.id, "MOVIE");
-            console.log(`✅ Auto-marked missing movie as watched: ${movie.title}`);
-          } catch (err) {
-            console.error(`Failed to auto-mark movie as watched: ${movie.title}`, err);
-          }
-        }
+        const missingSeries = existingSeries.filter((s) => {
+          const episodePaths = (s.seasons || [])
+            .flatMap((season) => (season.episodes || []).map((ep) => ep.filePath))
+            .filter(Boolean) as string[];
+          // A série só está "ausente" se TODOS os seus episódios sumiram da pasta.
+          return episodePaths.length > 0 && episodePaths.every((p) => !scannedPaths.has(normPath(p)));
+        });
 
-        for (const s of missingSeries) {
-          const episodes = (s.seasons || []).flatMap((season) =>
-            (season.episodes || []).map((episode) => ({
-              id: episode.id,
-              seasonNumber: episode.season_number,
-              episodeNumber: episode.episode_number,
-            })),
-          );
-          if (episodes.length > 0) {
+        if (missingMovies.length > 0 || missingSeries.length > 0) {
+          console.log("📝 Missing media (marking as watched automatically):");
+          missingMovies.forEach((m) => console.log(`    🗑️  ${m.title}`));
+          missingSeries.forEach((s) => console.log(`    🗑️  ${s.title}`));
+
+          for (const movie of missingMovies) {
             try {
-              await setSeriesEpisodesWatchStatus(s.id, episodes, true);
-              console.log(`✅ Auto-marked missing series as watched: ${s.title}`);
+              await markAsWatched(movie.id, "MOVIE");
+              console.log(`✅ Auto-marked missing movie as watched: ${movie.title}`);
             } catch (err) {
-              console.error(`Failed to auto-mark series as watched: ${s.title}`, err);
+              console.error(`Failed to auto-mark movie as watched: ${movie.title}`, err);
+            }
+          }
+
+          for (const s of missingSeries) {
+            const episodes = (s.seasons || []).flatMap((season) =>
+              (season.episodes || []).map((episode) => ({
+                id: episode.id,
+                seasonNumber: episode.season_number,
+                episodeNumber: episode.episode_number,
+              })),
+            );
+            if (episodes.length > 0) {
+              try {
+                await setSeriesEpisodesWatchStatus(s.id, episodes, true);
+                console.log(`✅ Auto-marked missing series as watched: ${s.title}`);
+              } catch (err) {
+                console.error(`Failed to auto-mark series as watched: ${s.title}`, err);
+              }
             }
           }
         }

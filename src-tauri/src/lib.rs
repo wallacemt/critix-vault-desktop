@@ -40,18 +40,38 @@ pub fn run() {
             {
                 let app_handle = _app.handle().clone();
                 std::thread::spawn(move || {
-                    let show_error = |handle: &tauri::AppHandle, msg: &str| {
+                    // Envia mensagem de erro + detalhes técnicos para a janela via JS.
+                    let show_error = |handle: &tauri::AppHandle, msg: &str, detail: &str| {
                         if let Some(window) = handle.get_webview_window("main") {
-                            let safe_msg = msg.replace('\'', "\\'").replace('\n', " ").replace('\r', "");
+                            // Usa JSON stringify para escapar corretamente qualquer caractere.
+                            let msg_json = serde_json::to_string(msg).unwrap_or_else(|_| "\"Erro desconhecido\"".to_string());
+                            let detail_json = serde_json::to_string(detail).unwrap_or_else(|_| "\"\"".to_string());
                             let _ = window.eval(&format!(
-                                "typeof window.__critix_server_error === 'function' && window.__critix_server_error('{safe_msg}')"
+                                "typeof window.__critix_server_error==='function' && window.__critix_server_error({msg_json},{detail_json})"
                             ));
+                        }
+                    };
+
+                    // Coleta o log do servidor para diagnóstico (tentativa — pode estar vazio).
+                    let collect_log = || -> String {
+                        let log_path = server::get_log_path();
+                        let log = server::read_server_log(1200).unwrap_or_default();
+                        let path_str = log_path.to_string_lossy().into_owned();
+                        if log.trim().is_empty() {
+                            format!("Log vazio ou nao encontrado.\nCaminho: {path_str}")
+                        } else {
+                            format!("Log ({path_str}):\n\n{log}")
                         }
                     };
 
                     if let Err(e) = server::start_nextjs_server_internal() {
                         eprintln!("[critix] Erro ao iniciar servidor: {e}");
-                        show_error(&app_handle, &format!("Nao foi possivel iniciar o servidor interno: {e}"));
+                        let detail = collect_log();
+                        show_error(
+                            &app_handle,
+                            "Nao foi possivel iniciar o servidor interno.",
+                            &format!("Causa: {e}\n\n{detail}"),
+                        );
                         return;
                     }
                     println!(
@@ -59,28 +79,40 @@ pub fn run() {
                         server::SERVER_PORT
                     );
 
-                    // Informa a tela de loading que o servidor está iniciando
+                    // Informa a tela de loading que o servidor está inicializando
                     if let Some(window) = app_handle.get_webview_window("main") {
                         let _ = window.eval(
-                            "typeof window.__critix_loading_text === 'function' && window.__critix_loading_text('Aguardando servidor ficar pronto...')"
+                            "typeof window.__critix_loading_text==='function' && window.__critix_loading_text('Aguardando servidor ficar pronto...')"
                         );
                     }
 
                     // Aguarda a porta aceitar conexões antes de redirecionar
-                    if !server::wait_for_server() {
-                        eprintln!(
-                            "[critix] Servidor não ficou disponível. Abortando redirecionamento."
-                        );
-                        show_error(
-                            &app_handle,
-                            "O servidor interno nao ficou disponivel. Verifique se o antivirus nao esta bloqueando o aplicativo e tente novamente.",
-                        );
-                        return;
-                    }
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let url = format!("http://127.0.0.1:{}", server::SERVER_PORT);
-                        let _: Result<(), _> =
-                            window.eval(&format!("window.location.replace('{url}')"));
+                    match server::wait_for_server() {
+                        server::ServerWaitResult::Ready => {
+                            if let Some(window) = app_handle.get_webview_window("main") {
+                                let url = format!("http://127.0.0.1:{}", server::SERVER_PORT);
+                                let _: Result<(), _> =
+                                    window.eval(&format!("window.location.replace('{url}')"));
+                            }
+                        }
+                        server::ServerWaitResult::ProcessCrashed { exit_code } => {
+                            eprintln!("[critix] Servidor encerrou antes de ficar pronto (exit={exit_code:?}).");
+                            let detail = collect_log();
+                            show_error(
+                                &app_handle,
+                                "O servidor interno encerrou inesperadamente.",
+                                &format!("Codigo de saida: {}\n\n{detail}", exit_code.map_or("?".to_string(), |c| c.to_string())),
+                            );
+                        }
+                        server::ServerWaitResult::Timeout => {
+                            eprintln!("[critix] Timeout: servidor nao respondeu em 90 s.");
+                            let detail = collect_log();
+                            show_error(
+                                &app_handle,
+                                "O servidor interno nao respondeu em 90 segundos.",
+                                &format!("A porta {} nao ficou disponivel.\n\n{detail}", server::SERVER_PORT),
+                            );
+                        }
                     }
                 });
             }

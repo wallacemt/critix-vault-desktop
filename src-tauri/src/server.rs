@@ -284,9 +284,18 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
     Ok(())
 }
 
+/// Resultado detalhado de wait_for_server().
+pub enum ServerWaitResult {
+    /// Servidor respondeu na porta — ok.
+    Ready,
+    /// O processo Node.js encerrou antes de abrir a porta.
+    ProcessCrashed { exit_code: Option<i32> },
+    /// Timeout esgotado sem resposta.
+    Timeout,
+}
+
 /// Aguarda o servidor ficar disponível na porta (máx ~90 s).
-/// Retorna `true` se o servidor respondeu, `false` se deu timeout.
-pub fn wait_for_server() -> bool {
+pub fn wait_for_server() -> ServerWaitResult {
     use std::net::{SocketAddr, TcpStream};
     use std::time::Duration;
 
@@ -301,15 +310,16 @@ pub fn wait_for_server() -> bool {
             if let Some(ref mut child) = *lock {
                 match child.try_wait() {
                     Ok(Some(status)) => {
+                        let code = status.code();
                         eprintln!(
-                            "[critix] Servidor encerrou prematuramente com status: {}",
-                            status
+                            "[critix] Servidor encerrou prematuramente com status: {:?}",
+                            code
                         );
-                        return false;
+                        return ServerWaitResult::ProcessCrashed { exit_code: code };
                     }
                     Err(e) => {
                         eprintln!("[critix] Erro ao verificar status do servidor: {}", e);
-                        return false;
+                        return ServerWaitResult::ProcessCrashed { exit_code: None };
                     }
                     Ok(None) => {} // Processo ainda rodando — ok
                 }
@@ -317,7 +327,7 @@ pub fn wait_for_server() -> bool {
         }
 
         if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
-            return true;
+            return ServerWaitResult::Ready;
         }
         std::thread::sleep(Duration::from_millis(500));
     }
@@ -325,7 +335,25 @@ pub fn wait_for_server() -> bool {
         "[critix] Timeout aguardando servidor na porta {} (90 s esgotados)",
         SERVER_PORT
     );
-    false
+    ServerWaitResult::Timeout
+}
+
+/// Retorna o caminho do arquivo de log do servidor.
+pub fn get_log_path() -> std::path::PathBuf {
+    std::env::temp_dir().join("critix-server.log")
+}
+
+/// Lê o log do servidor (últimas `max_bytes` bytes, como texto).
+/// Retorna None se o arquivo não existir ou não puder ser lido.
+pub fn read_server_log(max_bytes: usize) -> Option<String> {
+    let path = get_log_path();
+    let raw = std::fs::read(&path).ok()?;
+    let slice = if raw.len() > max_bytes {
+        &raw[raw.len() - max_bytes..]
+    } else {
+        &raw[..]
+    };
+    Some(String::from_utf8_lossy(slice).into_owned())
 }
 
 /// Para o servidor Next.js (chamado quando o app fecha)

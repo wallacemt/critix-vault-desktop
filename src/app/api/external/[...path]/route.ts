@@ -71,7 +71,7 @@ const forward = async (request: NextRequest, pathSegments: string[]) => {
 
   try {
     logger.info(`[external-proxy] ${request.method} ${target.toString()}`);
-    const response = await fetch(target, init);
+    const response = await fetch(target, { ...init, signal: AbortSignal.timeout(5_000) });
     const responseHeaders = new Headers(response.headers);
     responseHeaders.delete("content-encoding");
     responseHeaders.delete("transfer-encoding");

@@ -54,7 +54,11 @@ class ApiService {
    */
   async checkStatus(): Promise<ApiStatus> {
     try {
-      const response = await this.request<ApiStatus>("/status", undefined, { allowWhenOffline: true });
+      const response = await this.request<ApiStatus>(
+        "/status",
+        { signal: AbortSignal.timeout(8_000) },
+        { allowWhenOffline: true },
+      );
 
       return { ...response, online: true };
     } catch (error) {

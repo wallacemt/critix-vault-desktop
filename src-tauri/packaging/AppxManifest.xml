@@ -10,7 +10,8 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
+  IgnorableNamespaces="uap rescap desktop2">
 
   <Identity
     Name="WallaceSantana.CritixVault"
@@ -60,6 +61,28 @@
   <Capabilities>
     <!-- Required for Desktop Bridge apps that spawn Win32 child processes (node.exe) -->
     <rescap:Capability Name="runFullTrust" />
+    <!--
+      Required for WebView2 to connect to http://127.0.0.1:1422 (the embedded Next.js server).
+      WebView2 renderer processes run inside an AppContainer that blocks loopback by default,
+      even when the host process has runFullTrust. This capability lifts that restriction.
+      Approved for MS Store submission (non-restricted).
+    -->
+    <Capability Name="privateNetworkClientServer" />
   </Capabilities>
+
+  <!--
+    Package-level firewall rule for the bundled node.exe.
+    Windows Firewall silently blocks outbound TCP from node.exe for non-admin MSIX users
+    until a rule is created. Declaring it here causes Windows to register the rule at
+    install time — no admin prompt, no manual interaction required.
+    Requires runFullTrust (already declared). Supported since Windows 10 1709.
+  -->
+  <Extensions>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="resources\server\node.exe">
+        <desktop2:Rule Direction="out" IPProtocol="TCP" Profile="all" />
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+  </Extensions>
 
 </Package>

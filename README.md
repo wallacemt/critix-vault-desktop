@@ -4,108 +4,116 @@
 
 <img src="public/images/logo-full.png" alt="Critix Vault" width="280" />
 
-### Sua biblioteca de filmes e series com cara de streaming
+### Sua biblioteca pessoal de filmes e séries — com cara de streaming
 
-[![Status](https://img.shields.io/badge/status-em%20evolucao-22c55e)](#)
-[![Desktop](https://img.shields.io/badge/plataforma-desktop-0ea5e9)](#)
-[![Idioma](https://img.shields.io/badge/idioma-pt--BR-f59e0b)](#)
-[![Licenca](https://img.shields.io/badge/licenca-MIT-64748b)](LICENSE)
+[![Status](https://img.shields.io/badge/status-ativo-22c55e)](#)
+[![Plataforma](https://img.shields.io/badge/plataforma-desktop-0ea5e9)](#)
+[![Licença](https://img.shields.io/badge/licença-MIT-64748b)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-bem%20vindos-brightgreen)](CONTRIBUTING.md)
+[![Contribuições](https://img.shields.io/badge/contribuições-abertas-orange)](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## Visao Geral
+## O que é o Critix Vault?
 
-O Critix Vault organiza as pastas que voce ja tem no computador e transforma isso em uma biblioteca bonita, rapida e facil de navegar.
+O **Critix Vault** transforma as pastas de filmes e séries que você já tem no computador em uma biblioteca visual bonita, rápida e fácil de navegar — sem precisar renomear arquivos, mover pastas ou assinar nenhum serviço.
 
-Sem precisar renomear tudo manualmente, o app encontra filmes e series, cria as capas, separa temporadas e deixa tudo pronto para abrir e assistir.
-
----
-
-## O Que Voce Pode Fazer
-
-- Adicionar pastas da sua colecao com poucos cliques.
-- Escanear e montar biblioteca automaticamente.
-- Visualizar filmes e series em layout moderno.
-- Abrir detalhes com informacoes completas da midia.
-- Corrigir dados e caminhos quando precisar.
-- Editar episodios individualmente ou em lote por temporada.
-- Marcar episodios e temporadas como assistidos.
-- Fazer backup e restaurar sua biblioteca.
-- Usar modo demonstracao para testar o app.
+O app escaneia seus diretórios, busca informações e capas automaticamente, separa temporadas, e entrega uma experiência de catálogo similar à de plataformas de streaming — só que com o seu próprio acervo.
 
 ---
 
-## Experiencia
+## Funcionalidades
 
-| Destaque               | Como isso ajuda no dia a dia                   |
-| ---------------------- | ---------------------------------------------- |
-| Biblioteca visual      | Facilita achar rapidamente o que assistir      |
-| Organizacao por pasta  | Voce continua usando sua estrutura atual       |
-| Edicao avancada        | Corrige episodios e caminhos sem dor de cabeca |
-| Historico de assistido | Mantem o controle do que ja foi visto          |
-| Fluxo simples          | Menos tempo organizando, mais tempo assistindo |
+- Adicionar pastas da coleção com poucos cliques
+- Escaneamento automático e montagem da biblioteca
+- Layout visual moderno para filmes e séries
+- Detalhes completos de cada mídia (sinopse, elenco, gênero, etc.)
+- Correção manual de dados e caminhos quando necessário
+- Edição individual ou em lote por temporada
+- Marcação de episódios e temporadas como assistidos
+- Backup e restauração da biblioteca
+- Modo demonstração para explorar o app sem arquivos reais
 
 ---
 
 ## Capturas de Tela
 
-> Dica: para atualizar esta secao, substitua as imagens em public/images/readme mantendo os mesmos nomes.
+> Para atualizar esta seção, substitua as imagens em `public/images/readme/` mantendo os mesmos nomes de arquivo.
 
-| Biblioteca                                             | Catalogo                                              |
-| ------------------------------------------------------ | ----------------------------------------------------- |
-| ![Biblioteca](public/images/readme/library-movies.png) | ![Catalogo](public/images/readme/library-movie-2.png) |
+| Biblioteca | Catálogo |
+| --- | --- |
+| ![Biblioteca](public/images/readme/library-movies.png) | ![Catálogo](public/images/readme/library-movie-2.png) |
 
-| Config                                         | Help                                       |
-| ---------------------------------------------- | ------------------------------------------ |
-| ![Biblioteca](public/images/readme/config.png) | ![Catalogo](public/images/readme/help.png) |
+| Configurações | Ajuda |
+| --- | --- |
+| ![Config](public/images/readme/config.png) | ![Help](public/images/readme/help.png) |
 
-| Serie Screen                                         | Movie Screen                                       |
-| ---------------------------------------------------- | -------------------------------------------------- |
-| ![Biblioteca](public/images/readme/serie-screen.png) | ![Catalogo](public/images/readme/movie-screen.png) |
+| Tela de Série | Tela de Filme |
+| --- | --- |
+| ![Série](public/images/readme/serie-screen.png) | ![Filme](public/images/readme/movie-screen.png) |
 
-| Destaques                                   | Interface                                             |
-| ------------------------------------------- | ----------------------------------------------------- |
+| Destaques | Interface |
+| --- | --- |
 | ![Destaques](public/images/readme/home.png) | ![Interface](public/images/readme/library-series.png) |
 
 ---
 
 ## Primeiros Passos
 
-Se voce quer apenas usar e testar:
+1. Baixe o instalador na [página de releases](../../releases)
+2. Abra o app e clique em **Adicionar Pasta**
+3. Aguarde o escaneamento inicial
+4. Pronto — sua biblioteca começa a aparecer
 
-1. Abra o app.
-2. Clique em Adicionar Pasta.
-3. Aguarde o escaneamento inicial.
-4. Pronto, sua biblioteca comeca a aparecer.
-
----
-
-## Documentacao
-
-- Guia tecnico principal: [docs/tech/TECHNICAL_OVERVIEW.md](docs/tech/TECHNICAL_OVERVIEW.md)
-- Guia de releases e versionamento: [docs/tech/RELEASES_AND_VERSIONS.md](docs/tech/RELEASES_AND_VERSIONS.md)
+Quer testar antes de apontar suas pastas reais? Ative o **Modo Demonstração** nas configurações.
 
 ---
 
-## Contribuicao
+## Stack Técnica
 
-Contribuicoes sao bem-vindas.
-
-1. Faça um fork do projeto.
-2. Crie uma branch para sua melhoria.
-3. Envie seu pull request com uma descricao objetiva.
-
----
-
-## Creditos
-
-- Criado por Wallace Santana.
-- Integrado com [Critix API](https://github.com/wallacemt/critix-backend) e [TMDB](https://www.themoviedb.org/).
+| Camada | Tecnologia |
+| --- | --- |
+| Frontend | Next.js + React + Tailwind CSS |
+| Desktop | Tauri (Rust) |
+| Dados de mídia | TMDB API + Critix API |
+| Banco local | SQLite via Tauri |
 
 ---
 
-## Licenca
+## Documentação
 
-Projeto sob licenca MIT. Veja [LICENSE](LICENSE).
+- Visão geral técnica: [docs/tech/TECHNICAL_OVERVIEW.md](docs/tech/TECHNICAL_OVERVIEW.md)
+- Releases e versionamento: [docs/tech/RELEASES_AND_VERSIONS.md](docs/tech/RELEASES_AND_VERSIONS.md)
+
+---
+
+## Contribuindo
+
+O Critix Vault é open source e contribuições são muito bem-vindas — desde uma correção de typo até uma nova funcionalidade completa.
+
+Se você quer ajudar, comece pelo guia de contribuição:
+
+**[Leia o CONTRIBUTING.md](CONTRIBUTING.md)**
+
+Algumas formas de contribuir agora mesmo:
+
+- Reportar bugs ou comportamentos inesperados via [Issues](../../issues)
+- Sugerir melhorias de UX ou novas funcionalidades
+- Melhorar a documentação
+- Adicionar suporte a novos idiomas
+- Abrir um PR com uma correção ou melhoria
+
+---
+
+## Créditos
+
+- Criado por [Wallace Santana](https://github.com/wallacemt)
+- Dados de mídia via [TMDB](https://www.themoviedb.org/) e [Critix API](https://github.com/wallacemt/critix-backend)
+
+---
+
+## Licença
+
+MIT — veja [LICENSE](LICENSE) para detalhes.

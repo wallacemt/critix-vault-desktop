@@ -294,16 +294,33 @@ pub enum ServerWaitResult {
     Timeout,
 }
 
-/// Aguarda o servidor ficar disponível na porta (máx ~90 s).
+/// Aguarda o servidor ficar disponível e pronto para servir requisições (máx ~3 min).
+///
+/// Usa um HTTP health-check em vez de apenas verificar se a porta TCP está aberta.
+/// O check TCP simples retorna "pronto" assim que o socket abre, mas o servidor pode
+/// ainda estar inicializando o Prisma/better-sqlite3 (que bloqueia o event loop do
+/// Node.js durante o scan do Windows Defender na primeira execução). O resultado seria
+/// o WebView2 navegar para um servidor que não consegue responder, causando loading
+/// infinito. O health-check HTTP só retorna quando o servidor processa a requisição.
 pub fn wait_for_server() -> ServerWaitResult {
-    use std::net::{SocketAddr, TcpStream};
     use std::time::Duration;
 
-    let addr: SocketAddr = format!("127.0.0.1:{}", SERVER_PORT)
-        .parse()
-        .expect("invalid socket address");
+    let health_url = format!("http://127.0.0.1:{}/api/health", SERVER_PORT);
 
-    for _ in 0..180 {
+    // Cria o cliente HTTP uma vez — timeout de 12 s por tentativa cobre o caso em que
+    // a porta está aberta mas o event loop está bloqueado (scan do Defender).
+    // Após o timeout, a tentativa é descartada e o loop reinicia; quando o Defender
+    // terminar o scan o servidor responde e o loop encerra.
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .connect_timeout(Duration::from_secs(2))
+        .build()
+        .unwrap_or_default();
+
+    // Até ~3 minutos: 240 iterações × (até 12 s timeout + 0,5 s sleep).
+    // Na prática a maioria das iterações é "connection refused" (retorna em <1 ms),
+    // então o loop fica rápido enquanto o servidor ainda não abriu a porta.
+    for attempt in 0..240u32 {
         // Verifica se o processo ainda está rodando
         {
             let mut lock = SERVER_PROCESS.lock().unwrap();
@@ -326,13 +343,28 @@ pub fn wait_for_server() -> ServerWaitResult {
             }
         }
 
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
-            return ServerWaitResult::Ready;
+        match client.get(&health_url).send() {
+            Ok(resp) => {
+                // Qualquer resposta HTTP (200 ou 500) significa que o servidor está
+                // processando requisições — pronto para receber o WebView2.
+                println!("[critix] Servidor pronto (tentativa {}, status {})", attempt + 1, resp.status());
+                return ServerWaitResult::Ready;
+            }
+            Err(e) if e.is_timeout() => {
+                // Porta aberta mas event loop bloqueado (scan do Defender em andamento).
+                // Aguarda e tenta novamente — não é um crash.
+                eprintln!("[critix] Health-check timeout (tentativa {}): {}", attempt + 1, e);
+            }
+            Err(_) => {
+                // Conexão recusada — servidor ainda não abriu a porta. Normal durante startup.
+            }
         }
+
         std::thread::sleep(Duration::from_millis(500));
     }
+
     eprintln!(
-        "[critix] Timeout aguardando servidor na porta {} (90 s esgotados)",
+        "[critix] Timeout aguardando servidor na porta {} (~3 min esgotados)",
         SERVER_PORT
     );
     ServerWaitResult::Timeout

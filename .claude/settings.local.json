@@ -23,7 +23,9 @@
       "Bash(xargs grep -l \"prisma\\\\|database\\\\|DATABASE_URL\")",
       "Bash(bunx tsc *)",
       "Bash(bunx prisma *)",
-      "Bash(bunx eslint *)"
+      "Bash(bunx eslint *)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs"
     ]
   }
 }

@@ -16,6 +16,8 @@ interface StreamingGridProps {
   onMediaPlay?: (media: Media) => void;
   onMediaEdit?: (media: Media) => void;
   onMediaDelete?: (media: Media) => void;
+  onMediaToggleHidden?: (media: Media) => Promise<void> | void;
+  onMediaWatchedChange?: () => Promise<void> | void;
   selectedMediaIds?: Set<string>;
   onToggleMediaSelection?: (media: string) => void;
   viewMode?: "grid" | "list";
@@ -30,6 +32,8 @@ export function StreamingGrid({
   onMediaPlay,
   onMediaEdit,
   onMediaDelete,
+  onMediaToggleHidden,
+  onMediaWatchedChange,
   selectedMediaIds,
   onToggleMediaSelection,
   viewMode = "grid",
@@ -76,6 +80,8 @@ export function StreamingGrid({
               onPlay={onMediaPlay}
               onEdit={onMediaEdit}
               onDelete={onMediaDelete}
+              onToggleHidden={onMediaToggleHidden}
+              onWatchedChange={onMediaWatchedChange}
               selected={selectedMediaIds?.has(item.id)}
               onToggleSelect={onToggleMediaSelection}
               viewMode={viewMode}

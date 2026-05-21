@@ -31,7 +31,7 @@ import { useApiConnectivity } from "@/context/apiConnectivityContext";
  * Hook to manage media library for a specific folder
  * Reads from database (persistent storage) and filters by folderId
  */
-export function useMediaLibrary(folderId: string | null) {
+export function useMediaLibrary(folderId: string | null, showHidden: boolean = false) {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(false);
@@ -75,6 +75,7 @@ export function useMediaLibrary(folderId: string | null) {
           if (match) console.log("✅ Movie matched:", movie.title);
           return match;
         })
+        .filter((movie) => showHidden || !movie.isHidden)
         .map((movie) => {
           const history = movieHistoryById.get(movie.id) || [];
           const watchedHistory = history.filter((entry) => entry.completed && !entry.episodeId);
@@ -102,6 +103,7 @@ export function useMediaLibrary(folderId: string | null) {
           if (match) console.log("✅ Series matched:", s.title);
           return match;
         })
+        .filter((s) => showHidden || !s.isHidden)
         .map(async (seriesItem) => {
           // Calculate total episodes in the series
           const totalEpisodes = seriesItem.seasons.reduce((sum, season) => sum + (season.episodes?.length || 0), 0);
@@ -166,7 +168,7 @@ export function useMediaLibrary(folderId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [folderId]);
+  }, [folderId, showHidden]);
 
   const scanFolder = async (folderPath: string) => {
     if (!folderId) return;

@@ -424,6 +424,33 @@ export async function toggleWatchStatus(mediaId: string, mediaType: "MOVIE" | "S
   }
 }
 
+export async function setMediaHidden(
+  mediaId: string,
+  mediaType: "MOVIE" | "SERIES" | "ANIME",
+  isHidden: boolean,
+): Promise<void> {
+  const apiType = mediaType === "MOVIE" ? "MOVIE" : "SERIES";
+  const response = await fetch(`${API_BASE}/media/${encodeURIComponent(mediaId)}/hide`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: apiType, isHidden }),
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response, "Nao foi possivel atualizar a visibilidade.");
+  }
+}
+
+export async function toggleMediaHidden(
+  mediaId: string,
+  mediaType: "MOVIE" | "SERIES" | "ANIME",
+  currentlyHidden: boolean,
+): Promise<boolean> {
+  const next = !currentlyHidden;
+  await setMediaHidden(mediaId, mediaType, next);
+  return next;
+}
+
 export async function isMediaWatched(
   mediaId: string,
   mediaType: "MOVIE" | "SERIES" | "ANIME" = "MOVIE",

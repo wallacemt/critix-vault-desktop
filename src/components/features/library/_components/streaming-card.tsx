@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X, Trash2 } from "lucide-react";
+import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X, Trash2, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { setSeriesEpisodesWatchStatus, toggleWatchStatus } from "@/services/databaseService";
@@ -24,6 +24,8 @@ interface StreamingCardProps {
   onPlay?: (media: Media) => void;
   onEdit?: (media: Media) => void;
   onDelete?: (media: Media) => void;
+  onToggleHidden?: (media: Media) => Promise<void> | void;
+  onWatchedChange?: () => Promise<void> | void;
   selected?: boolean;
   onToggleSelect?: (media: string) => void;
   viewMode?: "grid" | "list";
@@ -36,6 +38,8 @@ export function StreamingCard({
   onPlay,
   onEdit,
   onDelete,
+  onToggleHidden,
+  onWatchedChange,
   selected = false,
   onToggleSelect,
   viewMode = "grid",
@@ -44,8 +48,9 @@ export function StreamingCard({
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const { refreshFolders } = useFoldersContext();
-  // Use the isWatched property that comes with the media data
-  const [isWatched, setIsWatched] = useState(media.isWatched ?? false);
+  // Derive directly from props so card stays in sync with refreshMedia() reloads
+  const isWatched = media.isWatched ?? false;
+  const isHidden = media.isHidden ?? false;
 
   const getMediaIcon = (type: MediaType) => {
     switch (type) {
@@ -76,9 +81,9 @@ export function StreamingCard({
     e.stopPropagation();
 
     if (media.type === "MOVIE") {
-      const newStatus = await toggleWatchStatus(media.id, media.type);
+      await toggleWatchStatus(media.id, media.type);
       await refreshFolders();
-      setIsWatched(newStatus);
+      await onWatchedChange?.();
       return;
     }
 
@@ -106,7 +111,13 @@ export function StreamingCard({
 
     await setSeriesEpisodesWatchStatus(media.id, episodes, nextStatus);
     await refreshFolders();
-    setIsWatched(nextStatus);
+    await onWatchedChange?.();
+  };
+
+  const handleToggleHidden = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onToggleHidden) return;
+    await onToggleHidden(media);
   };
 
   if (viewMode === "list") {
@@ -151,7 +162,7 @@ export function StreamingCard({
                 <img
                   src={media.poster}
                   alt={media.title}
-                  className="w-full h-full object-cover"
+                  className={cn("w-full h-full object-cover", isHidden && "opacity-20")}
                   onError={() => setImageError(true)}
                 />
               ) : (
@@ -182,6 +193,12 @@ export function StreamingCard({
                   {media.type !== "MOVIE" && (currentEpisode || isWatched) && (
                     <Badge className="shrink-0 border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
                       {isWatched ? "Concluída" : `T${currentEpisode?.seasonNumber}:E${currentEpisode?.episodeNumber}`}
+                    </Badge>
+                  )}
+                  {isHidden && (
+                    <Badge className="shrink-0 border-amber-500/40 bg-amber-500/15 text-amber-300">
+                      <EyeOff className="w-3 h-3 mr-1" />
+                      Oculta
                     </Badge>
                   )}
                 </div>
@@ -278,6 +295,32 @@ export function StreamingCard({
                     </>
                   )}
                 </Button>
+                {onToggleHidden && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleToggleHidden}
+                    className={cn(
+                      "border-[var(--border-color)]",
+                      isHidden
+                        ? "bg-amber-600/20 hover:bg-amber-600/30 border-amber-500/30 text-amber-300"
+                        : "bg-[var(--bg-surface-light)] hover:bg-amber-600/20",
+                    )}
+                    title={isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
+                  >
+                    {isHidden ? (
+                      <>
+                        <Eye className="w-4 h-4 mr-1" />
+                        Mostrar
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-4 h-4 mr-1" />
+                        Ocultar
+                      </>
+                    )}
+                  </Button>
+                )}
                 {onEdit && (
                   <Button
                     size="sm"
@@ -321,12 +364,12 @@ export function StreamingCard({
       animate={{ opacity: 1, scale: selected ? 0.95 : 1 }}
       whileHover={{ scale: selected ? 0.95 : 1.05 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      style={selected ? { filter: "drop-shadow(0 0 14px rgba(251,191,36,0.9))" } : undefined}
+      style={selected ? { filter: "drop-shadow(0 0 14px rgba(251,191,36,0.9))" } : undefined }
     >
       <Card
         className={cn(
           "group relative overflow-hidden rounded-lg  bg-surface-crx  cursor-pointer transition-all duration-300 hover:border-amber-400/50 hover:shadow-2xl hover:shadow-amber-400/20 -p-2",
-          selected && "border-2 border-amber-400",
+          selected && "border-2 border-amber-400",isHidden && "opacity-60"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -357,7 +400,7 @@ export function StreamingCard({
             <motion.img
               src={media.poster}
               alt={media.title}
-              className="w-full h-full object-cover"
+              className={cn("w-full h-full object-cover")}
               onError={() => setImageError(true)}
               whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.3 }}
@@ -425,6 +468,19 @@ export function StreamingCard({
             </motion.div>
           )}
 
+          {isHidden && (
+            <motion.div
+              className="absolute top-3 right-3"
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <Badge className="text-xs backdrop-blur-sm bg-amber-500/80 text-white border-amber-300">
+                <EyeOff className="w-3 h-3 mr-1" />
+                Oculta
+              </Badge>
+            </motion.div>
+          )}
+
           {/* Hover Actions */}
           <AnimatePresence>
             {isHovered && (
@@ -465,6 +521,24 @@ export function StreamingCard({
                     {isWatched ? <X className="w-5 h-5" /> : <Check className="w-5 h-5" />}
                   </Button>
                 </motion.div>
+                {onToggleHidden && (
+                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.18 }}>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className={cn(
+                        "w-10 h-10 rounded-full backdrop-blur-sm transition-colors border",
+                        isHidden
+                          ? "bg-amber-600/80 hover:bg-amber-500 border-amber-300 text-white"
+                          : "bg-[var(--bg-surface)]/90 hover:bg-amber-600 hover:text-white border-[var(--border-color)]",
+                      )}
+                      onClick={handleToggleHidden}
+                      title={isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
+                    >
+                      {isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </Button>
+                  </motion.div>
+                )}
                 {onEdit && (
                   <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}>
                     <Button

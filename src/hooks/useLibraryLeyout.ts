@@ -9,7 +9,7 @@ import gsap from "gsap";
 import { AppTabs } from "@/types/utils";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
 import { useMediaSelection } from "./useMediaSelection";
-import { markAsWatched, removeMovie, removeSeries, setSeriesEpisodesWatchStatus, clearWatchHistory } from "@/services/databaseService";
+import { markAsWatched, removeMovie, removeSeries, setSeriesEpisodesWatchStatus, clearWatchHistory, setMediaHidden } from "@/services/databaseService";
 
 const FILTER_KEY = "critix_filter_last";
 const PRESETS_KEY = "critix_filter_presets";
@@ -88,9 +88,16 @@ export const useLibraryLeyout = () => {
   const [folderPreviews, setFolderPreviews] = useState<FolderPreview[]>([]);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [historyRestored, setHistoryRestored] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   const { movies, series, loading, error, scanning, scanProgress, scanFolder, updateMedia, deleteMedia, refreshMedia } =
-    useMediaLibrary(selectedFolder?.id || null);
+    useMediaLibrary(selectedFolder?.id || null, showHidden);
+
+  const handleToggleHidden = async (media: Media) => {
+    const next = !media.isHidden;
+    await setMediaHidden(media.id, media.type, next);
+    await refreshMedia();
+  };
 
   // Auto-persist filter state to localStorage whenever any filter value changes
   useEffect(() => {
@@ -552,5 +559,9 @@ export const useLibraryLeyout = () => {
     saveFilterPreset,
     applyFilterPreset,
     deleteFilterPreset,
+    showHidden,
+    setShowHidden,
+    handleToggleHidden,
+    refreshMedia,
   };
 };

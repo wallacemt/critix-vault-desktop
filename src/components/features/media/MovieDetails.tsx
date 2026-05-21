@@ -21,6 +21,8 @@ import {
   Pencil,
   RefreshCw,
   AlertTriangle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
@@ -28,7 +30,7 @@ import { tauriService } from "@/services/tauri";
 import { fetchMediaImages } from "@/services/mediaService";
 import { watchHistoryService } from "@/services/watchHistoryService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
-import { removeMovie, saveMovies } from "@/services/databaseService";
+import { removeMovie, saveMovies, setMediaHidden } from "@/services/databaseService";
 import { MovieEditDialog } from "./_components/movie-edit-dialog";
 import { CastSection } from "./_components/cast-section";
 import { TrailerModal } from "./_components/trailer-modal";
@@ -397,6 +399,28 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
                   >
                     <Pencil className="w-5 h-5 mr-2" />
                     Editar
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={async () => {
+                      const next = !currentMovie.isHidden;
+                      await setMediaHidden(currentMovie.id, "MOVIE", next);
+                      setCurrentMovie({ ...currentMovie, isHidden: next });
+                    }}
+                    className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl text-amber-300 hover:text-amber-200"
+                  >
+                    {currentMovie.isHidden ? (
+                      <>
+                        <Eye className="w-5 h-5 mr-2" />
+                        Mostrar
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-5 h-5 mr-2" />
+                        Ocultar
+                      </>
+                    )}
                   </Button>
                   <Button
                     size="lg"

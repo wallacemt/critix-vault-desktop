@@ -20,7 +20,7 @@ import { useLibraryLeyout } from "@/hooks/useLibraryLeyout";
 import { AppSidebar } from "@/components/ui/app-sidebar";
 import { FolderMediaHeader } from "./_components/folder-media-header";
 import { tauriService } from "@/services/tauri";
-import { BulkActionsBar } from "./_components/BulkActionsBar";
+import { BulkActionsBar } from "./_components/bulk-actions-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface LibraryLayoutProps {
@@ -99,6 +99,10 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     handleCancelDelete,
     deletingMedia,
     isDeletingMedia,
+    showHidden,
+    setShowHidden,
+    handleToggleHidden,
+    refreshMedia,
   } = useLibraryLeyout();
   useEffect(() => {
     if (selectedCount === 0) return;
@@ -266,6 +270,8 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                 setWatchedMonthFilter,
                 localOnly,
                 setLocalOnly,
+                showHidden,
+                setShowHidden,
                 totalCount,
                 unwatchedMoviesCount: unwatchedMovies.length,
                 watchedMoviesCount: watchedMovies.length,
@@ -351,6 +357,8 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
                         onMediaPlay={onMediaPlay}
                         onMediaEdit={handleEditMedia}
                         onMediaDelete={handleDeleteMedia}
+                        onMediaToggleHidden={handleToggleHidden}
+                        onMediaWatchedChange={refreshMedia}
                         selectedMediaIds={selectedMediaIds}
                         onToggleMediaSelection={toggleMediaSelection}
                         viewMode={viewMode}

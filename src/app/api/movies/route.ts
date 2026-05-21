@@ -88,6 +88,8 @@ export async function GET(request: NextRequest) {
       videos: parseJsonSafe<unknown[]>(movie.videos, [], { movieId: movie.id, field: "videos" }),
       cast: parseJsonSafe<unknown[]>(movie.cast, [], { movieId: movie.id, field: "cast" }),
       crew: parseJsonSafe<unknown[]>(movie.crew, [], { movieId: movie.id, field: "crew" }),
+      isHidden: Boolean(movie.isHidden),
+      hiddenAt: movie.hiddenAt ? movie.hiddenAt.toISOString() : undefined,
       createdAt: movie.createdAt.toISOString(),
       updatedAt: movie.updatedAt.toISOString(),
     }));

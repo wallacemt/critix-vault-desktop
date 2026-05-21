@@ -9,6 +9,8 @@ import {
   ArrowUpDown,
   BookmarkPlus,
   CheckCircleIcon,
+  Eye,
+  EyeOff,
   Film,
   FolderOpen,
   Grid3x3,
@@ -23,7 +25,7 @@ import {
 import { Dispatch, SetStateAction, useState } from "react";
 import { userActionService } from "@/services/userActionService";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
-import { MonthFilter } from "./MonthFilter";
+import { MonthFilter } from "./month-filter";
 
 interface FolderMediaHeaderProps {
   selectedFolder: Folder;
@@ -58,6 +60,8 @@ interface FolderMediaHeaderProps {
   setDurationRange: Dispatch<SetStateAction<"all" | "short" | "medium" | "long">>;
   setWatchedMonthFilter: Dispatch<SetStateAction<string>>;
   setLocalOnly: Dispatch<SetStateAction<boolean>>;
+  showHidden?: boolean;
+  setShowHidden?: Dispatch<SetStateAction<boolean>>;
   scanFolder: (folderPath: string) => Promise<void>;
   onManualEntry?: () => void;
   onOpenFolder?: () => void;
@@ -95,6 +99,8 @@ export function FolderMediaHeader({
   setRatingRange,
   setDurationRange,
   setLocalOnly,
+  showHidden = false,
+  setShowHidden,
   totalCount,
   unwatchedMoviesCount,
   watchedMoviesCount,
@@ -246,6 +252,29 @@ export function FolderMediaHeader({
                 </TooltipTrigger>
                 <TooltipContent>Adicionar Mídia</TooltipContent>
               </Tooltip>
+              {setShowHidden && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={showHidden ? "default" : "outline"}
+                      size="sm"
+                      aria-label={showHidden ? "Ocultar midias ocultas" : "Mostrar midias ocultas"}
+                      className={cn(
+                        "h-9 border-[var(--border-color)] rounded-md px-3",
+                        showHidden
+                          ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)]"
+                          : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--color-primary)]",
+                      )}
+                      onClick={() => setShowHidden((current) => !current)}
+                    >
+                      {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {showHidden ? "Ocultando ocultas" : "Mostrar midias ocultas"}
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

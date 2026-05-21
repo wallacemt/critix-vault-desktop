@@ -367,6 +367,17 @@ export function LandingPage({
                               },
                             ]
                           : []),
+                        ...(onViewDemo
+                          ? [
+                              {
+                                id: "view-demo",
+                                label: "Ver Demo",
+                                icon: Play,
+                                onClick: onViewDemo,
+                                tone: "neutral" as const,
+                              },
+                            ]
+                          : []),
                         ...(onOpenHelp
                           ? [
                               {

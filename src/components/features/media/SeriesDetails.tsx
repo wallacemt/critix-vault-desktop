@@ -28,6 +28,7 @@ import {
   Trash2,
   CheckCircle2,
   Eye,
+  EyeOff,
   AlertTriangle,
   RefreshCw,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
   toggleEpisodeWatchStatus,
   toggleSeasonWatchStatus,
   setSeriesEpisodesWatchStatus,
+  setMediaHidden,
 } from "@/services/databaseService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useActions, type SeriesPlayResult } from "@/hooks/useActions";
@@ -1016,6 +1018,30 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
                     <Edit className="w-5 h-5 mr-2" />
                     Edição Avançada
                   </Button>
+                  {series && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={async () => {
+                        const next = !series.isHidden;
+                        await setMediaHidden(series.id, "SERIES", next);
+                        onSeriesUpdate({ ...series, isHidden: next });
+                      }}
+                      className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl text-amber-300 hover:text-amber-200"
+                    >
+                      {series.isHidden ? (
+                        <>
+                          <Eye className="w-5 h-5 mr-2" />
+                          Mostrar
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-5 h-5 mr-2" />
+                          Ocultar
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     size="lg"
                     variant="outline"

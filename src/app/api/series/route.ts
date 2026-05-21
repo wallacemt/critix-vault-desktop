@@ -131,6 +131,8 @@ export async function GET(request: NextRequest) {
         seriesId: series.id,
         field: "productionCompanies",
       }),
+      isHidden: Boolean((series as unknown as { isHidden?: boolean }).isHidden),
+      hiddenAt: (series as unknown as { hiddenAt?: Date | null }).hiddenAt?.toISOString(),
       createdAt: series.createdAt.toISOString(),
       updatedAt: series.updatedAt.toISOString(),
       seasons: series.seasons.map((season) => ({

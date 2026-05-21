@@ -406,6 +406,47 @@ async function fixTurbopackHashedModules(serverDir) {
   }
 }
 
+/**
+ * Remove variantes nativas de `@img/sharp-*` e `@img/sharp-libvips-*`
+ * que não correspondem à plataforma atual.
+ *
+ * O Next.js standalone copia todas as variantes opcionais do `sharp`
+ * (linux, linuxmusl, darwin, win32 × x64/arm64). No bundling do AppImage,
+ * o `linuxdeploy` tenta recursivamente resolver dependências de cada `.node`
+ * encontrado e falha ao não achar `libc.musl-x86_64.so.1` para a variante
+ * `linuxmusl-*` em runners glibc. Mantemos apenas a variante da plataforma
+ * de build para evitar esse problema (e reduzir tamanho do bundle).
+ */
+async function pruneSharpVariants(serverDir) {
+  const imgDir = path.join(serverDir, "node_modules", "@img");
+  if (!existsSync(imgDir)) return;
+
+  const platform = process.platform; // 'linux' | 'darwin' | 'win32'
+  const arch = process.arch; // 'x64' | 'arm64'
+
+  // Assume glibc em Linux (runners Ubuntu/Debian). Builds em Alpine usariam linuxmusl.
+  const platformTag =
+    platform === "linux" ? "linux" : platform === "darwin" ? "darwin" : platform === "win32" ? "win32" : platform;
+  const keepSuffix = `${platformTag}-${arch}`;
+
+  let entries;
+  try {
+    entries = await readdir(imgDir);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    // sharp-<platform>-<arch>  OR  sharp-libvips-<platform>-<arch>
+    const m = entry.match(/^sharp(?:-libvips(?:-dev)?)?-(.+)$/);
+    if (!m) continue;
+    const suffix = m[1];
+    if (suffix === keepSuffix) continue;
+    await rm(path.join(imgDir, entry), { recursive: true, force: true });
+    console.log(`  🗑️  Variante sharp removida (incompatível com ${keepSuffix}): @img/${entry}`);
+  }
+}
+
 async function ensurePrismaRuntimeEntries(serverDir) {
   const runtimePackages = [
     "@prisma/adapter-better-sqlite3",
@@ -523,6 +564,9 @@ async function main() {
 
   console.log("🧩 Ajustando runtime Prisma no bundle...");
   await ensurePrismaRuntimeEntries(SERVER_DEST);
+
+  console.log("🧹 Removendo variantes nativas de sharp incompatíveis com a plataforma...");
+  await pruneSharpVariants(SERVER_DEST);
 
   // -------------------------------------------------------
   // 2d. Valida o bundle final do servidor para falhar cedo

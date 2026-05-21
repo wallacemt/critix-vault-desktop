@@ -215,7 +215,18 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
         .map(|dirs| dirs.data_dir().to_path_buf())
         .unwrap_or_else(|| server_dir.join("data"));
 
-    std::fs::create_dir_all(&data_dir).ok();
+    if let Err(err) = std::fs::create_dir_all(&data_dir) {
+        eprintln!(
+            "[critix] Falha critica ao criar data_dir {}: {}",
+            data_dir.display(),
+            err
+        );
+        return Err(format!(
+            "Nao foi possivel criar diretorio de dados em {}: {}",
+            data_dir.display(),
+            err
+        ));
+    }
 
     // Sync prisma schema & migrations to data dir on every startup.
     // This keeps older AppData installs up to date with new bundled migrations.
@@ -251,6 +262,9 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
 
     let node_exe = find_node_executable();
     let mut cmd = Command::new(&node_exe);
+    // Use the writable AppData dir as cwd. The install dir is read-only under MSIX,
+    // and Prisma/Node may try to write relative to cwd (e.g. engine cache, temp files).
+    // server_js is absolute, so Node resolves it correctly regardless of cwd.
     cmd.arg(&server_js)
         .env("PORT", SERVER_PORT.to_string())
         .env("NODE_ENV", "production")
@@ -258,7 +272,8 @@ pub fn start_nextjs_server_internal() -> Result<(), String> {
         .env("CRITIX_EXTERNAL_API_URL", external_api_url)
         .env("DATABASE_URL", format!("file:{}", db_path.display()))
         .env("CRITIX_DATA_DIR", data_dir.to_string_lossy().to_string())
-        .current_dir(&server_dir)
+        .env("CRITIX_SERVER_DIR", server_dir.to_string_lossy().to_string())
+        .current_dir(&data_dir)
         .stdin(Stdio::null())
         .stdout(stdout_cfg)
         .stderr(stderr_cfg);

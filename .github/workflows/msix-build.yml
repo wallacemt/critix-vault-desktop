@@ -95,7 +95,7 @@ jobs:
       - name: Download portable Node.js LTS (x64)
         shell: pwsh
         run: |
-          $nodeVersion = "20.19.2"
+          $nodeVersion = "24.4.0"
           $url = "https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-win-x64.zip"
           $zip  = "$env:TEMP\node-portable.zip"
           $dest = "$env:TEMP\node-portable"
@@ -124,6 +124,21 @@ jobs:
       # ──────────────────────────────────────────────
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
+
+      # bun install resolves prebuilds against its own ABI (Node 22 / 137),
+      # but the node.exe bundled in src-tauri/resources/server is Node 20 (ABI 115).
+      # Without this step the app crashes at runtime with ERR_DLOPEN_FAILED
+      # / NODE_MODULE_VERSION 137 vs 115 on every Prisma query.
+      - name: Rebuild better-sqlite3 against bundled Node 20 ABI
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force node_modules\better-sqlite3\build -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force node_modules\better-sqlite3\prebuilds -ErrorAction SilentlyContinue
+          npm rebuild better-sqlite3 --build-from-source=false
+          if ($LASTEXITCODE -ne 0) { Write-Error "npm rebuild better-sqlite3 failed"; exit 1 }
+          $bin = Get-ChildItem -Recurse -Filter "better_sqlite3.node" node_modules\better-sqlite3 | Select-Object -First 1
+          if (-not $bin) { Write-Error "better_sqlite3.node not found after rebuild"; exit 1 }
+          Write-Host "better-sqlite3 binary: $($bin.FullName)"
 
       - name: Generate Prisma client
         run: bunx prisma generate
@@ -254,9 +269,9 @@ jobs:
           New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 
           $outFile = "$outDir\CritixVault_${version}_x64.msix"
-          & $makeappx.FullName pack /d $pkgDir /p $outFile /o /nv
+          & $makeappx.FullName pack /d $pkgDir /p $outFile /o
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "makeappx failed with exit code $LASTEXITCODE"
+            Write-Error "makeappx failed with exit code $LASTEXITCODE. Manifest validation enabled - check errors above."
             exit 1
           }
           Write-Host "MSIX created: $outFile ($([math]::Round((Get-Item $outFile).Length / 1MB, 1)) MB)"

@@ -468,10 +468,22 @@ async function main() {
   // -------------------------------------------------------
   console.log("📦 Copiando servidor Next.js standalone...");
 
+  // Preserve files pre-placed by external tooling (e.g. node.exe bundled by
+  // scripts/build-msix.ps1 for MSIX builds — without it the MSIX package fails
+  // manifest validation, since the firewall rule references resources/server/node.exe).
+  const PRESERVE_ENTRIES = new Set(["node.exe"]);
   if (existsSync(SERVER_DEST)) {
-    await rm(SERVER_DEST, { recursive: true });
+    const existingEntries = await readdir(SERVER_DEST);
+    for (const entry of existingEntries) {
+      if (PRESERVE_ENTRIES.has(entry)) {
+        console.log(`  ↻ Preservando arquivo pré-existente: ${entry}`);
+        continue;
+      }
+      await rm(path.join(SERVER_DEST, entry), { recursive: true, force: true });
+    }
+  } else {
+    await mkdir(SERVER_DEST, { recursive: true });
   }
-  await mkdir(SERVER_DEST, { recursive: true });
 
   // Servidor standalone (dereferences symlinks, skips junctions and blocked native files)
   // Skip 'src-tauri' to guard against Windows NTFS junction loops via node_modules

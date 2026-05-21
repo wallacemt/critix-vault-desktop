@@ -54,6 +54,9 @@ model Movie {
     folderId String
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
+    isHidden Boolean   @default(false)
+    hiddenAt DateTime?
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
@@ -100,6 +103,9 @@ model Series {
     folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
     seasons Season[]
+
+    isHidden Boolean   @default(false)
+    hiddenAt DateTime?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

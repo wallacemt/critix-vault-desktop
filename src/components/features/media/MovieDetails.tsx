@@ -28,9 +28,8 @@ import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
 import { fetchMediaImages } from "@/services/mediaService";
-import { watchHistoryService } from "@/services/watchHistoryService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
-import { removeMovie, saveMovies, setMediaHidden } from "@/services/databaseService";
+import { markAsWatched, clearWatchHistory, removeMovie, saveMovies, setMediaHidden } from "@/services/databaseService";
 import { MovieEditDialog } from "./_components/movie-edit-dialog";
 import { CastSection } from "./_components/cast-section";
 import { TrailerModal } from "./_components/trailer-modal";
@@ -139,14 +138,9 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
 
   const handleMarkAsWatched = async () => {
     if (currentMovie.isWatched) {
-      await watchHistoryService.unmarkMovieWatched(currentMovie.id);
+      await clearWatchHistory(currentMovie.id);
     } else {
-      await watchHistoryService.markMovieWatched(
-        currentMovie.id,
-        currentMovie.title,
-        currentMovie.poster || "",
-        currentMovie.duration,
-      );
+      await markAsWatched(currentMovie.id, "MOVIE");
     }
     await refreshMedia(currentMovie.id, currentMovie.type);
   };

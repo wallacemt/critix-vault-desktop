@@ -34,7 +34,9 @@ import {
   Info,
   Clock,
   FileJson,
+  Library,
 } from "lucide-react";
+import { AppSettings } from "@/services/tauri";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -119,6 +121,7 @@ export default function SettingsPage() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMsg({ type, text });
@@ -143,6 +146,28 @@ export default function SettingsPage() {
   useEffect(() => {
     loadInfo();
   }, [loadInfo]);
+
+  useEffect(() => {
+    tauriService
+      .getSettings()
+      .then(setAppSettings)
+      .catch((err) => console.error("Failed to load app settings:", err));
+  }, []);
+
+  const handleAutoscanToggle = async () => {
+    if (!appSettings) return;
+    const updated: AppSettings = {
+      ...appSettings,
+      auto_scan_on_startup: !appSettings.auto_scan_on_startup,
+    };
+    try {
+      await tauriService.saveSettings(updated);
+      setAppSettings(updated);
+    } catch (err) {
+      console.error("Failed to save app settings:", err);
+      showStatus("error", "Erro ao salvar configuração.");
+    }
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -702,6 +727,48 @@ export default function SettingsPage() {
               )}
 
               {updateError && <p className="text-sm text-red-300">{updateError}</p>}
+            </div>
+          </motion.section>
+
+          {/* Biblioteca */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.14 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-600/30 flex items-center justify-center">
+                <Library className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Biblioteca</h2>
+                <p className="text-xs text-slate-500">Comportamento de escaneamento de mídia</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+              <div className="flex-1 pr-4">
+                <h4 className="font-medium text-white text-sm mb-1">Verificar novas mídias ao iniciar</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Ao abrir o app, procura por mídias novas nas pastas monitoradas e pergunta se deseja adicioná-las.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={appSettings?.auto_scan_on_startup ?? false}
+                onClick={handleAutoscanToggle}
+                disabled={appSettings === null}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
+                  appSettings?.auto_scan_on_startup ? "bg-indigo-600" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                    appSettings?.auto_scan_on_startup ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
             </div>
           </motion.section>
 

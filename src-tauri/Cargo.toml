@@ -1,6 +1,6 @@
 [package]
 name = "critix-vault"
-version = "1.1.9"
+version = "2.0.0"
 description = "Seu gerenciador de pastas com medias favorito"
 authors = ["Wallace"]
 edition = "2021"
@@ -32,4 +32,11 @@ hex = "0.4"
 directories = "5.0"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
 

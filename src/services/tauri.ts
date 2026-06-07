@@ -122,11 +122,17 @@ interface RustFolder {
   last_scanned?: string;
 }
 
+export type PreferredPlayer = "ASK" | "INTERNAL" | "EXTERNAL";
+
 interface AppSettings {
   default_player: string;
   enable_image_cache: boolean;
   auto_scan_on_startup: boolean;
   theme: string;
+  /** Controls which player the UI uses when the user opens media. */
+  preferred_player: PreferredPlayer;
+  /** Port the BitTorrent client listens on. Reserved for Phase 5. */
+  torrent_client_port: number;
 }
 
 interface CacheInfo {

@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
       watchedAt: h.watchedAt,
       progress: h.progress,
       completed: h.completed,
+      positionSeconds: h.positionSeconds,
+      durationSeconds: h.durationSeconds,
     }));
 
     return NextResponse.json(transformed, { status: 200 });
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { mediaId, mediaType, episodeId, seasonNumber, episodeNumber, progress, completed } = await request.json();
+    const { mediaId, mediaType, episodeId, seasonNumber, episodeNumber, progress, completed, positionSeconds, durationSeconds } = await request.json();
 
     const normalizedEpisodeId =
       episodeId === undefined || episodeId === null || episodeId === "" ? null : String(episodeId);
@@ -116,6 +118,8 @@ export async function POST(request: NextRequest) {
         data: {
           progress: progress ?? existing.progress,
           completed: completed ?? (progress && progress >= 100) ?? existing.completed,
+          positionSeconds: positionSeconds ?? existing.positionSeconds,
+          durationSeconds: durationSeconds ?? existing.durationSeconds,
           watchedAt: new Date(),
         },
       });
@@ -130,6 +134,8 @@ export async function POST(request: NextRequest) {
           episodeNumber: normalizedEpisodeId ? normalizedEpisodeNumber : null,
           progress: progress || null,
           completed: completed || false,
+          positionSeconds: positionSeconds ?? null,
+          durationSeconds: durationSeconds ?? null,
           watchedAt: new Date(),
         },
       });

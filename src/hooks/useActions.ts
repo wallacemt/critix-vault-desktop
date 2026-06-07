@@ -2,6 +2,7 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
+import type { AppSettings } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
 import { useMediaContext } from "@/context/mediaContext";
 import { useFoldersContext } from "@/context/foldersContext";
@@ -18,6 +19,7 @@ import { Movie } from "@/types/movie";
 import { Episode, Series } from "@/types/serie";
 import { registerEasterEggClue } from "@/lib/easter-egg";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
+import { usePlayerStore, type PlayableItem } from "@/stores/playerStore";
 
 type LastWatchedReference = {
   seasonNumber: number;
@@ -96,29 +98,124 @@ export function useActions() {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [playError, setPlayError] = useState<string | null>(null);
+  // pendingPlay lives in the shared Zustand store so PlayerChoiceGate
+  // (mounted in the layout) sees state set by any media page instance.
+  const pendingPlay = usePlayerStore((s) => s.pendingPlay);
+  const setPendingPlay = usePlayerStore((s) => s.setPendingPlay);
+
+  // Dispatches playback according to the user's saved preference.
+  // "ASK" sets pendingPlay → PlayerChoiceGate picks it up and shows the modal.
+  const dispatchPlay = async (
+    item: PlayableItem,
+    queue: PlayableItem[],
+    pref: string,
+  ): Promise<void> => {
+    if (pref === "INTERNAL") {
+      usePlayerStore.getState().openMedia(item, queue);
+      return;
+    }
+    if (pref === "EXTERNAL") {
+      await tauriService.openMedia(item.filePath);
+      return;
+    }
+    // Default: "ASK" — surface the choice modal.
+    setPendingPlay({ item, queue });
+  };
+
+  const handlePlayerChoice = async (
+    choice: "INTERNAL" | "EXTERNAL",
+    remember: boolean,
+  ): Promise<void> => {
+    if (!pendingPlay) return;
+
+    if (remember) {
+      try {
+        const current = await tauriService.getSettings();
+        await tauriService.saveSettings({ ...current, preferred_player: choice });
+      } catch (err) {
+        console.error("Failed to persist player preference:", err);
+      }
+    }
+
+    if (choice === "INTERNAL") {
+      usePlayerStore.getState().openMedia(pendingPlay.item, pendingPlay.queue);
+    } else {
+      // Mirror the saved-EXTERNAL path: set watch session before opening externally
+      const { item } = pendingPlay;
+      flushSync(() => {
+        if (item.mediaType === "MOVIE") {
+          setWatchSession({ type: "movie", mediaId: item.mediaId, title: item.title, returnPath: pathname });
+        } else {
+          setWatchSession({ type: "episode", mediaId: item.mediaId, title: item.title, returnPath: pathname, episodeId: item.episodeId, seasonNumber: item.seasonNumber });
+        }
+      });
+      await tauriService.openMedia(item.filePath);
+      router.push("/watching");
+    }
+    setPendingPlay(null);
+  };
 
   const playEpisodeForSeries = async (seriesToPlay: Series, episode: Episode) => {
     if (!episode.filePath) {
       throw new Error("Episode file path not available");
     }
 
-    await tauriService.openMedia(episode.filePath);
-    flushSync(() => {
-      setSerie(seriesToPlay);
-      setWatchSession({
-        type: "episode",
-        mediaId: seriesToPlay.id,
-        title: seriesToPlay.title,
-        returnPath: pathname,
-        episodeId: episode.id,
-        episodeTitle: episode.title,
-        seasonNumber: episode.season_number,
-        episodeNumber: episode.episode_number,
-        backdrop: episode.still_path ? `https://image.tmdb.org/t/p/original${episode.still_path}` : seriesToPlay.backdrop,
-      });
-    });
+    // Build the queue from the remaining episodes in the same season (those
+    // that come at or after the selected episode and have a file available).
+    const seasonEpisodes = seriesToPlay.seasons
+      .find((s) => s.seasonNumber === episode.season_number)
+      ?.episodes ?? [];
 
-    router.push("/watching");
+    const queue: PlayableItem[] = seasonEpisodes
+      .filter((ep) => ep.available && ep.filePath)
+      .sort((a, b) => a.episode_number - b.episode_number)
+      .map((ep) => ({
+        mediaId: seriesToPlay.id,
+        episodeId: ep.id,
+        title: `${seriesToPlay.title} S${ep.season_number}E${ep.episode_number} — ${ep.title}`,
+        filePath: ep.filePath!,
+        mediaType: "SERIES" as const,
+        seasonNumber: ep.season_number,
+        episodeNumber: ep.episode_number,
+      }));
+
+    const item: PlayableItem = {
+      mediaId: seriesToPlay.id,
+      episodeId: episode.id,
+      title: `${seriesToPlay.title} S${episode.season_number}E${episode.episode_number} — ${episode.title}`,
+      filePath: episode.filePath,
+      mediaType: "SERIES",
+      seasonNumber: episode.season_number,
+      episodeNumber: episode.episode_number,
+    };
+
+    const settings = await tauriService.getSettings().catch(() => null);
+    const pref = settings?.preferred_player ?? "ASK";
+
+    if (pref === "EXTERNAL") {
+      // External path: keep the legacy watch-session + route redirect flow.
+      await tauriService.openMedia(episode.filePath);
+      flushSync(() => {
+        setSerie(seriesToPlay);
+        setWatchSession({
+          type: "episode",
+          mediaId: seriesToPlay.id,
+          title: seriesToPlay.title,
+          returnPath: pathname,
+          episodeId: episode.id,
+          episodeTitle: episode.title,
+          seasonNumber: episode.season_number,
+          episodeNumber: episode.episode_number,
+          backdrop: episode.still_path
+            ? `https://image.tmdb.org/t/p/original${episode.still_path}`
+            : seriesToPlay.backdrop,
+        });
+      });
+      router.push("/watching");
+      return;
+    }
+
+    await dispatchPlay(item, queue, pref);
   };
 
   const handleSplashReady = () => {
@@ -230,17 +327,33 @@ export function useActions() {
   const handlePlayMovie = async (movie: Movie) => {
     setPlayError(null);
     try {
-      await tauriService.openMedia(movie.filePath);
-      flushSync(() => {
-        setWatchSession({
-          type: "movie",
-          mediaId: movie.id,
-          title: movie.title,
-          returnPath: pathname,
-          backdrop: movie.backdrop || movie.poster,
+      const settings = await tauriService.getSettings().catch(() => null);
+      const pref = settings?.preferred_player ?? "ASK";
+
+      if (pref === "EXTERNAL") {
+        // External path: keep the legacy watch-session + route redirect flow.
+        await tauriService.openMedia(movie.filePath);
+        flushSync(() => {
+          setWatchSession({
+            type: "movie",
+            mediaId: movie.id,
+            title: movie.title,
+            returnPath: pathname,
+            backdrop: movie.backdrop || movie.poster,
+          });
         });
-      });
-      router.push("/watching");
+        router.push("/watching");
+        return;
+      }
+
+      const item: PlayableItem = {
+        mediaId: movie.id,
+        title: movie.title,
+        filePath: movie.filePath,
+        mediaType: "MOVIE",
+      };
+
+      await dispatchPlay(item, [item], pref);
     } catch (error) {
       console.error("Failed to play movie:", error);
       const message =
@@ -356,5 +469,8 @@ export function useActions() {
     scanProgress,
     playError,
     clearPlayError: () => setPlayError(null),
+    pendingPlay,
+    setPendingPlay,
+    handlePlayerChoice,
   };
 }

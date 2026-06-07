@@ -35,8 +35,10 @@ import {
   Clock,
   FileJson,
   Library,
+  Play,
 } from "lucide-react";
 import { AppSettings } from "@/services/tauri";
+import type { PreferredPlayer } from "@/services/tauri";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -772,11 +774,80 @@ export default function SettingsPage() {
             </div>
           </motion.section>
 
-          {/* Danger Zone */}
+          {/* Player preference */}
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-600/30 flex items-center justify-center">
+                <Play className="w-5 h-5 text-violet-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Player de Vídeo</h2>
+                <p className="text-xs text-slate-500">Escolha como as mídias serão reproduzidas</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {(["ASK", "INTERNAL", "EXTERNAL"] as const).map((opt) => {
+                const labels: Record<PreferredPlayer, string> = {
+                  ASK: "Perguntar sempre",
+                  INTERNAL: "Sempre player interno",
+                  EXTERNAL: "Sempre app externo",
+                };
+                const descriptions: Record<PreferredPlayer, string> = {
+                  ASK: "Pergunta qual player usar cada vez que você abre uma mídia.",
+                  INTERNAL: "Usa o player embutido do Critix Vault (Vidstack).",
+                  EXTERNAL: "Abre sempre no player de vídeo padrão do sistema.",
+                };
+                const isSelected = (appSettings?.preferred_player ?? "ASK") === opt;
+
+                return (
+                  <label
+                    key={opt}
+                    className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-indigo-600/60 bg-indigo-600/10"
+                        : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="preferred_player"
+                      value={opt}
+                      checked={isSelected}
+                      disabled={appSettings === null}
+                      onChange={async () => {
+                        if (!appSettings) return;
+                        const updated: AppSettings = { ...appSettings, preferred_player: opt };
+                        try {
+                          await tauriService.saveSettings(updated);
+                          setAppSettings(updated);
+                        } catch (err) {
+                          console.error("Failed to save player preference:", err);
+                          showStatus("error", "Erro ao salvar preferência de player.");
+                        }
+                      }}
+                      className="mt-0.5 w-4 h-4 accent-indigo-500 cursor-pointer shrink-0"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-white">{labels[opt]}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{descriptions[opt]}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </motion.section>
+
+          {/* Danger Zone */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.17 }}
             className="bg-red-950/20 border border-red-900/40 rounded-2xl p-6"
           >
             <div className="flex items-center gap-3 mb-6">

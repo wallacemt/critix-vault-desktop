@@ -8,10 +8,15 @@
  * navigated away from "/", so mounting the autoscan here guarantees it runs
  * exactly once per session — after folders are loaded and the user is in the
  * app — without polluting the root layout or the Splash page.
+ *
+ * PlayerModal and PlayerChoiceGate are also mounted here so they are available
+ * on every route without duplicating them in individual pages.
  */
 
 import { useStartupAutoscan } from "@/hooks/useStartupAutoscan";
 import { AutoscanNotification } from "@/components/features/autoscan/AutoscanNotification";
+import { PlayerModal } from "@/components/features/player/PlayerModal";
+import { PlayerChoiceGate } from "@/components/features/player/PlayerChoiceGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const autoscan = useStartupAutoscan();
@@ -26,6 +31,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         onConfirm={autoscan.confirm}
         onDismiss={autoscan.dismiss}
       />
+      <PlayerModal />
+      <PlayerChoiceGate />
     </>
   );
 }

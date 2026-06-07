@@ -11,15 +11,32 @@
  *
  * PlayerModal and PlayerChoiceGate are also mounted here so they are available
  * on every route without duplicating them in individual pages.
+ *
+ * TorrentStatusStrip is also mounted here so it is available on every route.
+ * Its `enabled` prop is driven by the `torrent_proxy_enabled` setting so
+ * polling only starts when the user has explicitly opted in (CA-17).
  */
 
+import { useEffect, useState } from "react";
 import { useStartupAutoscan } from "@/hooks/useStartupAutoscan";
 import { AutoscanNotification } from "@/components/features/autoscan/AutoscanNotification";
 import { PlayerModal } from "@/components/features/player/PlayerModal";
 import { PlayerChoiceGate } from "@/components/features/player/PlayerChoiceGate";
+import { TorrentStatusStrip } from "@/components/features/torrent/TorrentStatusStrip";
+import { tauriService } from "@/services/tauri";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const autoscan = useStartupAutoscan();
+  const [torrentProxyEnabled, setTorrentProxyEnabled] = useState(false);
+
+  useEffect(() => {
+    tauriService
+      .getSettings()
+      .then((s) => setTorrentProxyEnabled(s.torrent_proxy_enabled ?? false))
+      .catch(() => {
+        // Non-fatal: strip stays disabled on error.
+      });
+  }, []);
 
   return (
     <>
@@ -33,6 +50,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <PlayerModal />
       <PlayerChoiceGate />
+      <TorrentStatusStrip enabled={torrentProxyEnabled} />
     </>
   );
 }

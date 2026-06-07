@@ -36,6 +36,7 @@ import {
   FileJson,
   Library,
   Play,
+  Magnet,
 } from "lucide-react";
 import { AppSettings } from "@/services/tauri";
 import type { PreferredPlayer } from "@/services/tauri";
@@ -124,6 +125,12 @@ export default function SettingsPage() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  // Credential inputs are write-only: the password is never returned from
+  // getSettings (Rust redacts it). We keep ephemeral local state for the
+  // current editing session and call setTorrentCredentials on commit.
+  const [torrentUser, setTorrentUser] = useState("");
+  const [torrentPass, setTorrentPass] = useState("");
+  const [savingCredentials, setSavingCredentials] = useState(false);
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMsg({ type, text });
@@ -152,7 +159,11 @@ export default function SettingsPage() {
   useEffect(() => {
     tauriService
       .getSettings()
-      .then(setAppSettings)
+      .then((settings) => {
+        setAppSettings(settings);
+        // Pre-populate the username field (password is always redacted server-side).
+        setTorrentUser(settings.torrent_client_user ?? "");
+      })
       .catch((err) => console.error("Failed to load app settings:", err));
   }, []);
 
@@ -840,6 +851,179 @@ export default function SettingsPage() {
                   </label>
                 );
               })}
+            </div>
+          </motion.section>
+
+          {/* Torrent Client */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.16 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-600/30 flex items-center justify-center">
+                <Magnet className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Cliente Torrent</h2>
+                <p className="text-xs text-slate-500">
+                  Integração com o cliente BitTorrent local (uTorrent / qBittorrent)
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Enable/disable toggle — must be on before other fields matter */}
+              <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                <div className="flex-1 pr-4">
+                  <h4 className="font-medium text-white text-sm mb-1">Ativar monitoramento de torrents</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Habilita o proxy de status do cliente BitTorrent local. Quando desativado, nenhuma
+                    conexão de rede é iniciada para o cliente torrent.
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={appSettings?.torrent_proxy_enabled ?? false}
+                  onClick={async () => {
+                    if (!appSettings) return;
+                    const updated: AppSettings = {
+                      ...appSettings,
+                      torrent_proxy_enabled: !appSettings.torrent_proxy_enabled,
+                    };
+                    try {
+                      await tauriService.saveSettings(updated);
+                      setAppSettings(updated);
+                    } catch (err) {
+                      console.error("Failed to save torrent proxy toggle:", err);
+                      showStatus("error", "Erro ao salvar configuração de torrent.");
+                    }
+                  }}
+                  disabled={appSettings === null}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
+                    appSettings?.torrent_proxy_enabled ? "bg-emerald-600" : "bg-slate-600"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                      appSettings?.torrent_proxy_enabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Port */}
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="torrent-port" className="text-sm font-medium text-slate-200">
+                  Porta da interface web
+                </label>
+                <p className="text-xs text-slate-500">
+                  Porta em que o cliente torrent escuta. O padrão é{" "}
+                  <code className="text-slate-400">10800</code> para evitar conflito com a porta interna{" "}
+                  <code className="text-slate-400">8080</code> do app.
+                </p>
+                <input
+                  id="torrent-port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={appSettings?.torrent_client_port ?? 10800}
+                  disabled={appSettings === null}
+                  onChange={async (e) => {
+                    if (!appSettings) return;
+                    const port = Math.max(1, Math.min(65535, parseInt(e.target.value, 10) || 10800));
+                    const updated: AppSettings = { ...appSettings, torrent_client_port: port };
+                    try {
+                      await tauriService.saveSettings(updated);
+                      setAppSettings(updated);
+                    } catch (err) {
+                      console.error("Failed to save torrent port:", err);
+                      showStatus("error", "Erro ao salvar porta do torrent.");
+                    }
+                  }}
+                  className="w-40 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-white focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                />
+              </div>
+
+              {/* Credentials — write-only section */}
+              <div className="space-y-3 rounded-xl border border-slate-700/60 bg-slate-800/30 p-4">
+                <p className="text-xs font-medium text-slate-300">Credenciais de autenticação (opcional)</p>
+
+                {/* Username */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="torrent-user" className="text-sm font-medium text-slate-200">
+                    Usuário
+                  </label>
+                  <input
+                    id="torrent-user"
+                    type="text"
+                    autoComplete="off"
+                    value={torrentUser}
+                    disabled={appSettings === null}
+                    placeholder="Deixe em branco se não usar autenticação"
+                    onChange={(e) => setTorrentUser(e.target.value)}
+                    className="w-64 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  />
+                </div>
+
+                {/* Password — write-only: never populated from getSettings */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="torrent-pass" className="text-sm font-medium text-slate-200">
+                    Senha
+                  </label>
+                  <input
+                    id="torrent-pass"
+                    type="password"
+                    autoComplete="new-password"
+                    value={torrentPass}
+                    disabled={appSettings === null}
+                    placeholder="••••••••"
+                    onChange={(e) => setTorrentPass(e.target.value)}
+                    className="w-64 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  />
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={appSettings === null || savingCredentials}
+                  onClick={async () => {
+                    setSavingCredentials(true);
+                    try {
+                      await tauriService.setTorrentCredentials(
+                        torrentUser || null,
+                        torrentPass || null,
+                      );
+                      // Clear the password field after a successful save — the
+                      // value now lives only on the Rust side.
+                      setTorrentPass("");
+                      showStatus("success", "Credenciais salvas.");
+                    } catch (err) {
+                      console.error("Failed to save torrent credentials:", err);
+                      showStatus("error", "Erro ao salvar credenciais.");
+                    } finally {
+                      setSavingCredentials(false);
+                    }
+                  }}
+                  className="border-emerald-700/50 text-emerald-400 hover:bg-emerald-600/10 hover:border-emerald-600"
+                >
+                  {savingCredentials ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Shield className="w-4 h-4 mr-2" />
+                  )}
+                  Salvar credenciais
+                </Button>
+              </div>
+
+              <div className="flex items-start gap-2 p-3 bg-slate-800/30 rounded-lg border border-slate-700/50">
+                <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  As credenciais são armazenadas localmente no arquivo de configuração do app.
+                  A senha nunca é retornada ao renderer após ser salva.
+                </p>
+              </div>
             </div>
           </motion.section>
 

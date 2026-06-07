@@ -10,6 +10,8 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "process:allow-restart",
-    "updater:default"
+    "updater:default",
+    "core:webview:allow-create-webview-window",
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "magnet:*" }] }
   ]
 }

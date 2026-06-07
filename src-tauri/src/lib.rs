@@ -131,6 +131,7 @@ pub fn run() {
             commands::settings::get_last_selected_folder,
             commands::settings::save_settings,
             commands::settings::get_settings,
+            commands::settings::set_torrent_credentials,
             // Image cache (offline functionality)
             commands::cache::cache_image,
             commands::cache::get_cached_image_path,
@@ -152,7 +153,11 @@ pub fn run() {
             commands::files::open_external_url,
             // Player path resolution & subtitle discovery
             commands::player::resolve_media_path,
-            commands::player::list_sidecar_subtitles
+            commands::player::list_sidecar_subtitles,
+            // Torrent integration (Phase 5)
+            commands::torrent::open_torrent_pane,
+            commands::torrent::intercept_torrent_link,
+            commands::torrent::proxy_torrent_api,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

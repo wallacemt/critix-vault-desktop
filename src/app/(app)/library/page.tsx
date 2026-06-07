@@ -8,6 +8,7 @@ import { Series } from "@/types/serie";
 import { LoaderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { TorrentLauncherButton } from "@/components/features/torrent/TorrentLauncherButton";
 
 export default function LibraryPage() {
   const { folders, isLoading } = useFoldersContext();
@@ -34,6 +35,13 @@ export default function LibraryPage() {
 
   return (
     <>
+      {/* Torrent launcher — fixed to top-right so it is always reachable */}
+      {!isLoading && (
+        <div className="fixed top-4 right-4 z-30">
+          <TorrentLauncherButton />
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center flex-col justify-center flex-1 h-screen w-full">
           <LoaderIcon className="animate-spin size-6" />

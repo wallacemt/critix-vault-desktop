@@ -131,8 +131,14 @@ interface AppSettings {
   theme: string;
   /** Controls which player the UI uses when the user opens media. */
   preferred_player: PreferredPlayer;
-  /** Port the BitTorrent client listens on. Reserved for Phase 5. */
+  /** Port the local BitTorrent client's web UI listens on (default 10800). */
   torrent_client_port: number;
+  /** Optional username for the local BitTorrent client's web UI. */
+  torrent_client_user?: string;
+  /** Optional password for the local BitTorrent client's web UI. */
+  torrent_client_pass?: string;
+  /** Master switch for the torrent API proxy. Defaults to false (opt-in). */
+  torrent_proxy_enabled: boolean;
 }
 
 interface CacheInfo {
@@ -564,6 +570,48 @@ class TauriService {
    */
   async openFileLocation(filePath: string): Promise<void> {
     return invoke("open_file_location", { filePath });
+  }
+
+  // ============================================================================
+  // Torrent Integration (Phase 5)
+  // ============================================================================
+
+  /**
+   * Open the sandboxed torrent browser pane. If it is already open, focuses it.
+   */
+  async openTorrentPane(): Promise<void> {
+    return invoke("open_torrent_pane");
+  }
+
+  /**
+   * Validate and hand a magnet link to the OS torrent client.
+   * The Rust side rejects anything that is not a well-formed magnet URI.
+   */
+  async interceptTorrentLink(link: string): Promise<void> {
+    return invoke("intercept_torrent_link", { link });
+  }
+
+  /**
+   * Proxy a torrent list request to the local BitTorrent client.
+   * Port and credentials are read from Rust-side settings — the renderer
+   * passes no arguments.
+   */
+  async proxyTorrentApi(): Promise<unknown> {
+    return invoke("proxy_torrent_api");
+  }
+
+  /**
+   * Write-only command for torrent credentials (LSF-PHASE5-006).
+   *
+   * Credentials are sent to Rust in isolation via this dedicated command.
+   * `getSettings` never returns the password back to the renderer, so this
+   * is the only path credentials travel over IPC — and only inbound.
+   */
+  async setTorrentCredentials(
+    user: string | null,
+    pass: string | null,
+  ): Promise<void> {
+    return invoke("set_torrent_credentials", { user, pass });
   }
 }
 

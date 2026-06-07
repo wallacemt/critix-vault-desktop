@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "torrent-pane",
+  "description": "Capability for the sandboxed torrent browser pane. No Tauri plugin permissions. IPC is blocked via on_ipc_request filter in the window builder — do NOT add invoke_handler commands without updating the IPC filter.",
+  "windows": ["torrent-pane"],
+  "permissions": []
+}

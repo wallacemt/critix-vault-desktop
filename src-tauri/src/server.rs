@@ -330,7 +330,10 @@ pub fn wait_for_server() -> ServerWaitResult {
         .timeout(Duration::from_secs(12))
         .connect_timeout(Duration::from_secs(2))
         .build()
-        .unwrap_or_default();
+        .unwrap_or_else(|e| {
+            eprintln!("[critix] Failed to build HTTP client (timeouts may not apply): {e}");
+            reqwest::blocking::Client::new()
+        });
 
     // Até ~3 minutos: 240 iterações × (até 12 s timeout + 0,5 s sleep).
     // Na prática a maioria das iterações é "connection refused" (retorna em <1 ms),

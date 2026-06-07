@@ -87,7 +87,7 @@ pub fn list_sidecar_subtitles(video_path: String) -> Result<Vec<SubtitleEntry>, 
         // Require an exact stem match OR a '.'-separated suffix (DEF-031).
         // "movie" matches "movie" and "movie.en" but NOT "movie 2" or "movies".
         let suffix = file_stem.strip_prefix(stem.as_str()).unwrap_or("NOMATCH");
-        if suffix != "" && !suffix.starts_with('.') {
+        if !suffix.is_empty() && !suffix.starts_with('.') {
             continue;
         }
 

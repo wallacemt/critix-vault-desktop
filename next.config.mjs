@@ -15,6 +15,13 @@ const nextConfig = {
   // instead, which eliminates the three "overly broad file pattern" Turbopack
   // warnings and the ReferenceError: location is not defined crash.
   serverExternalPackages: ["better-sqlite3", "@prisma/client", "@prisma/adapter-better-sqlite3", "@tauri-apps/api"],
+
+  experimental: {
+    // Only load the icons/components actually used from these barrel-file-heavy
+    // packages, instead of pulling in the entire library on every import.
+    // Confirmed valid for Next.js 16.x via Context7 docs (v16.1.5).
+    optimizePackageImports: ["lucide-react", "framer-motion", "swiper", "@vidstack/react"],
+  },
 };
 
 export default nextConfig;

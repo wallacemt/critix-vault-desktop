@@ -62,7 +62,7 @@ pub fn open_torrent_pane(app: tauri::AppHandle) -> Result<(), String> {
     .title("Torrent Browser")
     .inner_size(1200.0, 800.0)
     // LSF-PHASE5-002: only allowlisted https hosts may be navigated to.
-    .on_navigation(|url| is_navigation_allowed(url))
+    .on_navigation(is_navigation_allowed)
     // LSF-PHASE5-001: deny every IPC invoke from this webview.
     .on_ipc_request(|_window, _request| false)
     // LSF-PHASE5-001, -009: freeze Tauri internals + CSP violation observer.

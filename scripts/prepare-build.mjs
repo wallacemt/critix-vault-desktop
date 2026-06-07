@@ -492,6 +492,37 @@ async function validateServerBundle(serverDir) {
   console.log(`  ✅ Bundle validado: ${chunkFiles.length} chunk(s) em _next_build/server/chunks`);
 }
 
+/**
+ * Post-copy cleanup: removes dev-only artifacts that must not ship in production.
+ *
+ * - *.map files expose original source code to end users and are unnecessary at runtime.
+ * - node_modules/.cache directories are Turbopack/webpack build caches, not runtime deps.
+ */
+async function removeDevArtifacts(serverDir) {
+  const removeMapFiles = async (dir) => {
+    if (!existsSync(dir)) return;
+    let entries;
+    try { entries = await readdir(dir); } catch { return; }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      let s;
+      try { s = await lstat(fullPath); } catch { continue; }
+      if (s.isDirectory()) {
+        // node_modules/.cache is a build cache — remove the whole directory at once.
+        if (entry === ".cache") {
+          await rm(fullPath, { recursive: true, force: true });
+          continue;
+        }
+        await removeMapFiles(fullPath);
+      } else if (entry.endsWith(".map")) {
+        await rm(fullPath, { force: true });
+      }
+    }
+  };
+  await removeMapFiles(serverDir);
+  console.log("  ✅ Source maps e caches de dev removidos do bundle");
+}
+
 async function main() {
   await syncTauriCspFromEnv();
 
@@ -527,8 +558,9 @@ async function main() {
   }
 
   // Servidor standalone (dereferences symlinks, skips junctions and blocked native files)
-  // Skip 'src-tauri' to guard against Windows NTFS junction loops via node_modules
-  await cpSafe(STANDALONE, SERVER_DEST, { skipDirs: ["src-tauri"] });
+  // Skip 'src-tauri' to guard against Windows NTFS junction loops via node_modules.
+  // Skip '.map' files — source maps expose original source code and are not needed in production.
+  await cpSafe(STANDALONE, SERVER_DEST, { skipDirs: ["src-tauri"], skipFiles: [".map"] });
 
   // Assets estáticos (JS/CSS bundles)
   const staticDest = path.join(SERVER_DEST, ".next", "static");
@@ -543,7 +575,7 @@ async function main() {
 
   // Schema Prisma e banco SQLite (se existir)
   if (existsSync(PRISMA_SRC)) {
-    await cpSafe(PRISMA_SRC, path.join(SERVER_DEST, "prisma"), { skipFiles: [".db", ".db-journal", ".db-wal"] });
+    await cpSafe(PRISMA_SRC, path.join(SERVER_DEST, "prisma"), { skipFiles: [".db", ".db-journal", ".db-wal", ".map"] });
     console.log("  ✅ Pasta prisma copiada (sem arquivo .db)");
   }
 
@@ -573,6 +605,12 @@ async function main() {
   // -------------------------------------------------------
   console.log("🧪 Validando bundle do servidor...");
   await validateServerBundle(SERVER_DEST);
+
+  // -------------------------------------------------------
+  // 2e. Remove artefatos de desenvolvimento do bundle final
+  // -------------------------------------------------------
+  console.log("🗑️  Removendo artefatos de dev (source maps, caches)...");
+  await removeDevArtifacts(SERVER_DEST);
 
   // -------------------------------------------------------
   // 3. Cria o out/ com a tela de loading/redirect para o Tauri

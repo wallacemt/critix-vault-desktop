@@ -155,7 +155,7 @@ pub fn open_file_location(file_path: String) -> Result<(), String> {
                 let mut opened = false;
 
                 for manager in &managers {
-                    if let Ok(_) = Command::new(manager).arg(&parent_str).spawn() {
+                    if Command::new(manager).arg(&parent_str).spawn().is_ok() {
                         opened = true;
                         break;
                     }

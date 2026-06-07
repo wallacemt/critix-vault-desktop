@@ -308,7 +308,54 @@ export type WatchHistory = {
   episodeNumber?: number | null;
 };
 
-let _shadowRestoreChecked = false;
+// Checks the DB identity token against the locally stored one. When they
+// differ (MSIX wipe or first run), and the DB has no watch entries, it
+// restores from the localStorage shadow cache. Fires at most once per
+// app session — subsequent calls skip the network round-trip.
+async function maybeRestoreFromShadow(): Promise<boolean> {
+  try {
+    // Fetch DB identity and row count — cheap, no full list
+    const resp = await fetch("/api/db-meta/", { method: "GET", cache: "no-store" });
+    if (!resp.ok) return false; // API not ready — skip silently, try next session
+
+    const { generation, watchCount } = (await resp.json()) as {
+      generation: string;
+      watchCount: number;
+    };
+
+    const localGen =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("critix_db_generation")
+        : null;
+
+    if (generation === localGen) return false; // same DB — never restore
+
+    // DB identity changed (MSIX wipe or first run)
+    let didRestore = false;
+    if (watchCount === 0) {
+      const shadow = loadWatchShadow();
+      if (shadow.length > 0) {
+        console.warn("[watch] DB generation changed and watchCount=0 — restoring from shadow...");
+        await restoreWatchHistoryFromShadow(shadow);
+        didRestore = true;
+      }
+    }
+
+    // Adopt new generation regardless of whether we restored
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("critix_db_generation", generation);
+    }
+
+    return didRestore;
+  } catch (err) {
+    // Network or parse error — skip silently
+    console.warn("[watch] maybeRestoreFromShadow failed:", err);
+    return false;
+  }
+}
+
+// module-scoped guard — restore fires at most once per app session
+let _dbGenRestoreChecked = false;
 
 export async function getWatchHistory(mediaId?: string, limit?: number): Promise<WatchHistory[]> {
   const params = new URLSearchParams();
@@ -317,10 +364,7 @@ export async function getWatchHistory(mediaId?: string, limit?: number): Promise
 
   const url = `${apiPath("watch-history")}${params.toString() ? "?" + params.toString() : ""}`;
 
-  const response = await fetch(url, {
-    method: "GET",
-    cache: "no-store",
-  });
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
 
   if (!response.ok) {
     throw await parseApiError(response, "Nao foi possivel carregar o historico de assistidos.");
@@ -328,14 +372,13 @@ export async function getWatchHistory(mediaId?: string, limit?: number): Promise
 
   const history = (await response.json()) as WatchHistory[];
 
-  // On the first full fetch (no filter), if the DB is empty but local backup
-  // has entries, restore silently so watched state survives a DB reset.
-  if (!mediaId && !_shadowRestoreChecked) {
-    _shadowRestoreChecked = true;
-    const shadow = loadWatchShadow();
-    if (history.length === 0 && shadow.length > 0) {
-      await restoreWatchHistoryFromShadow(shadow);
-      // Re-fetch after restore
+  // On the first full fetch (no filter), check db_generation to decide
+  // whether to restore from shadow. Only restores when DB identity changed
+  // (MSIX wipe), never on a slow-boot empty response.
+  if (!mediaId && !_dbGenRestoreChecked) {
+    _dbGenRestoreChecked = true;
+    const didRestore = await maybeRestoreFromShadow();
+    if (didRestore) {
       const retryResponse = await fetch(url, { method: "GET", cache: "no-store" });
       if (retryResponse.ok) return (await retryResponse.json()) as WatchHistory[];
     }

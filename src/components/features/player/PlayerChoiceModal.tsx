@@ -11,16 +11,8 @@ interface PlayerChoiceModalProps {
   onCancel: () => void;
 }
 
-export function PlayerChoiceModal({
-  open,
-  filePath,
-  onChoose,
-  onCancel,
-}: PlayerChoiceModalProps) {
+export function PlayerChoiceModal({ open, filePath, onChoose, onCancel }: PlayerChoiceModalProps) {
   const [remember, setRemember] = useState(false);
-
-  const isMkv = filePath.toLowerCase().endsWith(".mkv");
-
   return (
     <AnimatePresence>
       {open && (
@@ -52,12 +44,12 @@ export function PlayerChoiceModal({
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
-                <h2
-                  id="player-choice-title"
-                  className="text-lg font-semibold text-white"
-                >
-                  Como deseja assistir?
-                </h2>
+                <div className="flex  flex-col gap-2 max-w-3xs">
+                  <h2 id="player-choice-title" className="text-lg font-semibold text-white">
+                    Como deseja assistir?
+                  </h2>
+                  <p className="text-gray-400 truncate font-sans text-sm">{filePath}</p>
+                </div>
                 <button
                   onClick={onCancel}
                   className="rounded-lg p-1 text-zinc-500 hover:text-zinc-200 transition-colors"
@@ -78,12 +70,6 @@ export function PlayerChoiceModal({
                     <Monitor className="w-5 h-5 shrink-0" />
                     Player interno
                   </button>
-                  {isMkv && (
-                    <p className="flex items-center gap-1.5 text-xs text-amber-400 pl-1">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      MKV pode não funcionar no player interno
-                    </p>
-                  )}
                 </div>
 
                 {/* External player */}

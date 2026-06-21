@@ -1,93 +1,105 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { MediaPlayer, MediaOutlet } from "@vidstack/react";
-import "vidstack/styles/defaults.css";
-import "vidstack/styles/community-skin/video.css";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import {
+  MediaPlayer,
+  MediaProvider,
+  Track,
+  useMediaState,
+  useMediaRemote,
+} from "@vidstack/react";
+import { DefaultVideoLayout, defaultLayoutIcons } from "@vidstack/react/player/layouts/default";
+import "@vidstack/react/player/styles/base.css";
+import "@vidstack/react/player/styles/default/theme.css";
+import "@vidstack/react/player/styles/default/layouts/video.css";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
+import { FfmpegInstallModal } from "./FfmpegInstallModal";
+import { PlayerContextMenu } from "./PlayerContextMenu";
+
 import type { PlayableItem } from "@/stores/playerStore";
 import { usePlayerStore } from "@/stores/playerStore";
 import {
   buildStreamUrl,
   buildSubtitleUrl,
+  buildEmbeddedSubtitleUrl,
+  getMimeType,
   getResume,
   listSidecarSubtitles,
   saveProgress,
+  probeAudio,
+  startHlsSession,
+  stopHlsSession,
 } from "@/services/playerService";
-import type { SubtitleEntry } from "@/types/player";
-import { SpeedMenu } from "./SpeedMenu";
-import { AudioTrackMenu } from "./AudioTrackMenu";
-import { SubtitleMenu } from "./SubtitleMenu";
+import type { SubtitleEntry, SubtitleStreamInfo } from "@/types/player";
 
 const AUTOSAVE_INTERVAL_MS = 10_000;
-// Mark as completed when 90% of duration has been watched.
 const COMPLETION_THRESHOLD = 0.9;
 
-// Minimal shape of the properties we access on the player element at runtime.
-// Vidstack v0.6.x exposes these through InferComponentMembers on the custom
-// element but the TypeScript types are not reliably picked up in all tsconfig
-// setups, so we narrow them explicitly here.
-interface VidstackPlayerEl extends EventTarget {
-  currentTime: number;
-  audioTracks: Iterable<{ id: string; label: string; language: string; selected: boolean }>;
-  textTracks: {
-    add(init: { src: string; kind: string; label: string; language: string }): void;
-    [Symbol.iterator](): Iterator<{
-      kind: string;
-      label: string;
-      language: string;
-      src?: string;
-      mode: string;
-    }>;
-  };
-}
+// ── Inner headless logic component (needs MediaPlayer context for hooks) ──────
 
-interface VideoSurfaceProps {
+interface PlayerLogicProps {
   item: PlayableItem;
   onEnded: () => void;
-  onClose: () => void;
   onUnsupported: () => void;
+  resumeTime: number;
+  /** One-shot seek override applied after a source switch (transcode ready). */
+  seekOnReadyRef: React.MutableRefObject<number | null>;
 }
 
-export function VideoSurface({ item, onEnded, onClose, onUnsupported }: VideoSurfaceProps) {
-  // The ref type is `object` on the React level; we cast to our narrow interface
-  // when we need to access player members at runtime.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const playerRef = useRef<any>(null);
-  const autosaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef }: PlayerLogicProps) {
+  const currentTime = useMediaState("currentTime");
+  const duration = useMediaState("duration");
+  const paused = useMediaState("paused");
+  const canPlay = useMediaState("canPlay");
+  const ended = useMediaState("ended");
+  const error = useMediaState("error");
+  const mediaPlaybackRate = useMediaState("playbackRate");
+  const remote = useMediaRemote();
 
-  const [sidecars, setSidecars] = useState<SubtitleEntry[]>([]);
-  const [audioTracks, setAudioTracks] = useState<
-    Array<{ id: string; label: string; language?: string }>
-  >([]);
-  const [embeddedTextTracks, setEmbeddedTextTracks] = useState<
-    Array<{ id: string; label: string; language?: string }>
-  >([]);
+  const { setPosition, setDuration, setPlaybackRate } = usePlayerStore();
 
-  const {
-    positionSeconds,
-    durationSeconds,
-    playbackRate,
-    activeAudioTrackId,
-    activeTextTrackId,
-    setPosition,
-    setDuration,
-    setPlaybackRate,
-    setAudioTrack,
-    setTextTrack,
-  } = usePlayerStore();
-
-  // Keep stable refs for position/duration so the autosave closure
-  // always sees current values without needing re-subscription.
-  const positionRef = useRef(positionSeconds);
-  const durationRef = useRef(durationSeconds);
-  positionRef.current = positionSeconds;
-  durationRef.current = durationSeconds;
-
-  // Keep stable refs for the callbacks that change each render.
+  const positionRef = useRef(0);
+  const durationRef = useRef(0);
+  const resumeAppliedRef = useRef(false);
+  const prevPausedRef = useRef(true);
   const onEndedRef = useRef(onEnded);
   const onUnsupportedRef = useRef(onUnsupported);
+
   onEndedRef.current = onEnded;
   onUnsupportedRef.current = onUnsupported;
+  positionRef.current = currentTime;
+  durationRef.current = duration;
+
+  useEffect(() => { setPosition(currentTime); }, [currentTime, setPosition]);
+  useEffect(() => { setDuration(duration); }, [duration, setDuration]);
+  useEffect(() => { setPlaybackRate(mediaPlaybackRate); }, [mediaPlaybackRate, setPlaybackRate]);
+
+  // Hard decode error → fall back to external player
+  useEffect(() => {
+    if (error) onUnsupportedRef.current();
+  }, [error]);
+
+  // Apply resume offset (or source-switch seek) the first time the player is ready.
+  useEffect(() => {
+    if (!canPlay) return;
+
+    // One-shot: seek to the saved position after the transcoded source is loaded.
+    if (seekOnReadyRef.current !== null) {
+      remote.seek(seekOnReadyRef.current);
+      seekOnReadyRef.current = null;
+      resumeAppliedRef.current = true;
+      return;
+    }
+
+    if (resumeAppliedRef.current) return;
+    resumeAppliedRef.current = true;
+    if (resumeTime > 5) remote.seek(resumeTime);
+  }, [canPlay, resumeTime, remote, seekOnReadyRef]);
+
+  useEffect(() => {
+    resumeAppliedRef.current = false;
+  }, [item.mediaId, item.episodeId]);
 
   const buildSaveOpts = useCallback(
     () => ({
@@ -103,177 +115,294 @@ export function VideoSurface({ item, onEnded, onClose, onUnsupported }: VideoSur
     [item.mediaId, item.episodeId, item.mediaType],
   );
 
-  const getPlayer = (): VidstackPlayerEl | null =>
-    playerRef.current as VidstackPlayerEl | null;
-
-  // Load sidecar subtitles on mount and register them with the player.
   useEffect(() => {
-    let cancelled = false;
-    listSidecarSubtitles(item.filePath)
-      .then((subs) => {
-        if (cancelled) return;
-        setSidecars(subs);
-        const player = getPlayer();
-        if (!player) return;
-        for (const sub of subs) {
-          player.textTracks.add({
-            src: buildSubtitleUrl(sub.path),
-            kind: "subtitles",
-            label: sub.label,
-            language: sub.lang,
-          });
-        }
-      })
-      .catch(() => setSidecars([]));
-    return () => { cancelled = true; };
-  }, [item.filePath]);
+    if (!ended) return;
+    saveProgress({ ...buildSaveOpts(), completed: true }).catch(console.error);
+    onEndedRef.current();
+  }, [ended, buildSaveOpts]);
 
-  // Autosave interval — set up once per item, tear down on unmount.
   useEffect(() => {
-    autosaveTimerRef.current = setInterval(() => {
-      saveProgress(buildSaveOpts()).catch(console.error);
-    }, AUTOSAVE_INTERVAL_MS);
-
+    const timer = setInterval(
+      () => saveProgress(buildSaveOpts()).catch(console.error),
+      AUTOSAVE_INTERVAL_MS,
+    );
     return () => {
-      if (autosaveTimerRef.current !== null) clearInterval(autosaveTimerRef.current);
-      // Final save on unmount (e.g. when the modal is closed).
+      clearInterval(timer);
       saveProgress(buildSaveOpts()).catch(console.error);
     };
   }, [buildSaveOpts]);
 
-  // Attach DOM event listeners once the player element is in the DOM.
   useEffect(() => {
-    const player = getPlayer();
-    if (!player) return;
-
-    const onCanPlay = async () => {
-      const resume = await getResume(item.mediaId, item.episodeId).catch(() => null);
-      if (resume && resume.positionSeconds > 5) {
-        player.currentTime = resume.positionSeconds;
-      }
-
-      setAudioTracks(
-        Array.from(player.audioTracks).map((t, i) => ({
-          id: String(i),
-          label: (t as { label: string }).label || `Audio ${i + 1}`,
-          language: (t as { language?: string }).language || undefined,
-        })),
-      );
-
-      setEmbeddedTextTracks(
-        Array.from(player.textTracks)
-          .filter((t) => t.kind === "subtitles" || t.kind === "captions")
-          .map((t, i) => ({
-            id: String(i),
-            label: t.label || `Sub ${i + 1}`,
-            language: t.language || undefined,
-          })),
-      );
-    };
-
-    const onTimeUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ currentTime: number }>).detail;
-      if (detail) setPosition(detail.currentTime);
-    };
-
-    const onDurationChange = (event: Event) => {
-      const detail = (event as CustomEvent<number>).detail;
-      if (typeof detail === "number") setDuration(detail);
-    };
-
-    const onPause = () => {
+    if (paused && !prevPausedRef.current) {
       saveProgress(buildSaveOpts()).catch(console.error);
+    }
+    prevPausedRef.current = paused;
+  }, [paused, buildSaveOpts]);
+
+  return null;
+}
+
+// ── Main VideoSurface component ───────────────────────────────────────────────
+
+type TranscodeState =
+  | { status: "idle" }
+  | { status: "probing" }
+  // FFmpeg running in background; player shows raw stream so the user sees video immediately.
+  | { status: "transcoding"; codec: string }
+  | { status: "ready"; videoUrl: string; sessionId: string; codec: string }
+  | { status: "error"; audioCodec: string };
+
+interface VideoSurfaceProps {
+  item: PlayableItem;
+  onEnded: () => void;
+  onClose: () => void;
+  onUnsupported: () => void;
+}
+
+export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }: VideoSurfaceProps) {
+  const [sidecars, setSidecars] = useState<SubtitleEntry[]>([]);
+  const [embeddedSubs, setEmbeddedSubs] = useState<SubtitleStreamInfo[]>([]);
+  const [resumeTime, setResumeTime] = useState(0);
+  // Start in "probing" so the player never mounts before we know the source.
+  // Starting in "idle" would cause MediaPlayer to render with the direct stream
+  // before the probe runs (useEffect fires after the render), producing silent
+  // playback on files with unsupported audio codecs.
+  const [transcode, setTranscode] = useState<TranscodeState>({ status: "probing" });
+  const { playbackRate, positionSeconds } = usePlayerStore();
+
+  // One-shot seek after a transcoded source is loaded mid-playback.
+  const seekOnReadyRef = useRef<number | null>(null);
+
+  // Track the active HLS session so we can stop it on unmount / item change.
+  const activeSessionRef = useRef<string | null>(null);
+
+  // Context-menu state: cursor position or null when hidden.
+  const [ctxMenuPos, setCtxMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  const stopActiveSession = useCallback(async () => {
+    if (activeSessionRef.current) {
+      await stopHlsSession(activeSessionRef.current);
+      activeSessionRef.current = null;
+    }
+  }, []);
+
+  // When item changes: stop previous HLS session, reset state, re-probe.
+  useEffect(() => {
+    let cancelled = false;
+
+    // Containers that can embed unsupported codecs (AC3/DTS/EAC3).
+    // Everything else (MP4, WebM) is safe and skips the probe.
+    const AT_RISK = new Set([".mkv", ".avi", ".mov", ".ts", ".m2ts"]);
+
+    const init = async () => {
+      await stopActiveSession();
+      if (cancelled) return;
+
+      const ext = item.filePath.slice(item.filePath.lastIndexOf(".")).toLowerCase();
+
+      // Fast-path: safe containers never need transcoding.
+      if (!AT_RISK.has(ext)) {
+        setEmbeddedSubs([]);
+        setTranscode({ status: "idle" });
+        return;
+      }
+
+      setTranscode({ status: "probing" });
+
+      const probe = await probeAudio(item.filePath);
+      if (cancelled) return;
+
+      // Expose embedded subtitle streams as Vidstack Track elements.
+      setEmbeddedSubs(probe.subtitleStreams ?? []);
+
+      if (!probe.needsTranscode) {
+        setTranscode({ status: "idle" });
+        return;
+      }
+
+      // Codec is unsupported — mount the player immediately with the raw stream so
+      // the user sees video while FFmpeg transcodes audio in the background.
+      setTranscode({ status: "transcoding", codec: probe.audioCodec ?? "unknown" });
+
+      const session = await startHlsSession(item.filePath);
+      if (cancelled) return;
+
+      if (!session) {
+        setTranscode({ status: "error", audioCodec: probe.audioCodec ?? "desconhecido" });
+        return;
+      }
+
+      // Save current playback position so we can resume after the source switch.
+      seekOnReadyRef.current = positionSeconds > 1 ? positionSeconds : 0;
+
+      activeSessionRef.current = session.sessionId;
+      setTranscode({
+        status: "ready",
+        videoUrl: session.hlsUrl,
+        sessionId: session.sessionId,
+        codec: probe.audioCodec ?? "unknown",
+      });
     };
 
-    const onEndedHandler = () => {
-      saveProgress({ ...buildSaveOpts(), completed: true }).catch(console.error);
-      onEndedRef.current();
-    };
-
-    const onErrorHandler = () => {
-      onUnsupportedRef.current();
-    };
-
-    player.addEventListener("can-play", onCanPlay);
-    player.addEventListener("time-update", onTimeUpdate);
-    player.addEventListener("duration-change", onDurationChange);
-    player.addEventListener("pause", onPause);
-    player.addEventListener("ended", onEndedHandler);
-    player.addEventListener("error", onErrorHandler);
-
-    return () => {
-      player.removeEventListener("can-play", onCanPlay);
-      player.removeEventListener("time-update", onTimeUpdate);
-      player.removeEventListener("duration-change", onDurationChange);
-      player.removeEventListener("pause", onPause);
-      player.removeEventListener("ended", onEndedHandler);
-      player.removeEventListener("error", onErrorHandler);
-    };
+    init().catch(console.error);
+    return () => { cancelled = true; };
+    // positionSeconds intentionally excluded: we only want to snapshot it at
+    // the moment of calling startHlsSession, not reactively.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.mediaId, item.episodeId, buildSaveOpts, setPosition, setDuration]);
+  }, [item.filePath, item.mediaId, item.episodeId, stopActiveSession]);
 
-  const handleSelectAudioTrack = (id: string) => {
-    setAudioTrack(id);
-    const player = getPlayer();
-    if (!player) return;
-    const tracks = Array.from(player.audioTracks) as Array<{
-      selected: boolean;
-    }>;
-    const idx = Number(id);
-    if (tracks[idx]) tracks[idx].selected = true;
-  };
+  // Stop the HLS session when the component unmounts.
+  useEffect(() => () => { stopActiveSession(); }, [stopActiveSession]);
 
-  const handleSelectEmbeddedSubtitle = (trackId: string | undefined) => {
-    setTextTrack(trackId);
-    const player = getPlayer();
-    if (!player) return;
-    Array.from(player.textTracks).forEach((t, i) => {
-      if (t.kind === "subtitles" || t.kind === "captions") {
-        t.mode = trackId !== undefined && String(i) === trackId ? "showing" : "disabled";
-      }
-    });
-  };
+  // Load sidecar subtitle files alongside the video.
+  useEffect(() => {
+    listSidecarSubtitles(item.filePath)
+      .then(setSidecars)
+      .catch(() => setSidecars([]));
+  }, [item.filePath]);
 
-  const handleSelectSidecarSubtitle = (path: string) => {
-    setTextTrack(`sidecar:${path}`);
-    const player = getPlayer();
-    if (!player) return;
-    const targetSrc = buildSubtitleUrl(path);
-    Array.from(player.textTracks).forEach((t) => {
-      if (t.kind === "subtitles" || t.kind === "captions") {
-        t.mode = t.src === targetSrc ? "showing" : "disabled";
-      }
-    });
-  };
+  // Fetch last saved position for resume logic.
+  useEffect(() => {
+    getResume(item.mediaId, item.episodeId)
+      .then((r) => setResumeTime(r?.positionSeconds ?? 0))
+      .catch(() => setResumeTime(0));
+  }, [item.mediaId, item.episodeId]);
+
+  // Stable source object — new reference on every render causes Vidstack to
+  // tear down and remount the <video> element (black screen).
+  const playerSrc = useMemo(() => {
+    if (transcode.status === "ready") {
+      // Transcoded MP4 served with Accept-Ranges — full seeking support.
+      return { src: transcode.videoUrl, type: "video/mp4" };
+    }
+    return { src: buildStreamUrl(item.filePath), type: getMimeType(item.filePath) };
+  }, [item.filePath, transcode]);
+
+  const isProbing = transcode.status === "probing";
+  const isTranscoding = transcode.status === "transcoding";
+
+  // Player is mounted as soon as the probe finishes, even if FFmpeg is still running.
+  const playerReady = !isProbing;
+
+  function handleContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    setCtxMenuPos({ x: e.clientX, y: e.clientY });
+  }
 
   return (
-    <div className="relative flex flex-col flex-1 bg-black">
-      <MediaPlayer
-        ref={playerRef}
-        src={buildStreamUrl(item.filePath)}
-        title={item.title}
-        playbackRate={playbackRate}
-        className="w-full h-full"
-      >
-        <MediaOutlet />
-      </MediaPlayer>
+    <div
+      className="relative flex-1 min-h-0"
+      onContextMenu={handleContextMenu}
+    >
+      {/* Loading overlay — shown only during the fast probe (1-3 s), not during transcoding */}
+      <AnimatePresence>
+        {isProbing && (
+          <motion.div
+            key="probe-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black"
+          >
+            <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+            <p className="text-sm text-white/70">Verificando codec de áudio...</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Custom controls overlay — speed / audio / subtitle menus */}
-      <div className="absolute bottom-14 right-4 z-10 flex items-center gap-1">
-        <SpeedMenu currentRate={playbackRate} onSelect={setPlaybackRate} />
-        <AudioTrackMenu
-          tracks={audioTracks}
-          activeId={activeAudioTrackId}
-          onSelect={handleSelectAudioTrack}
-        />
-        <SubtitleMenu
-          embedded={embeddedTextTracks}
-          sidecars={sidecars}
-          activeId={activeTextTrackId}
-          onSelectEmbedded={handleSelectEmbeddedSubtitle}
-          onSelectSidecar={handleSelectSidecarSubtitle}
-        />
-      </div>
+      {/* FFmpeg not found — show installation guide modal */}
+      <AnimatePresence>
+        {transcode.status === "error" && (
+          <FfmpegInstallModal
+            audioCodec={transcode.audioCodec}
+            onOpenExternal={onUnsupported}
+            onDismiss={() => setTranscode({ status: "idle" })}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Non-blocking transcoding badge — video is already visible while this runs */}
+      <AnimatePresence>
+        {isTranscoding && (
+          <motion.div
+            key="transcoding-badge"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2
+                       rounded-full px-3 py-1.5 text-xs font-medium
+                       bg-black/70 border border-amber-500/30 text-amber-300 backdrop-blur-sm"
+          >
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+            Otimizando áudio ({(transcode as { codec: string }).codec.toUpperCase()} → AAC)...
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Active transcode badge — shown once FFmpeg is done */}
+      {transcode.status === "ready" && (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-md
+                        px-2 py-1 text-xs font-medium bg-amber-500/15 border border-amber-500/30
+                        text-amber-300 pointer-events-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          Áudio recodificado ({transcode.codec.toUpperCase()} → AAC)
+        </div>
+      )}
+
+      {playerReady && (
+        <MediaPlayer
+          src={playerSrc.src}
+          title={item.title}
+          playbackRate={playbackRate}
+          className="h-full w-full"
+        >
+          <MediaProvider>
+            {/* Sidecar subtitle files (.srt / .vtt) */}
+            {sidecars.map((sub) => (
+              <Track
+                key={`sidecar:${sub.path}`}
+                src={buildSubtitleUrl(sub.path)}
+                kind="subtitles"
+                label={sub.label}
+                language={sub.lang}
+              />
+            ))}
+
+            {/* Embedded subtitle streams extracted on-demand via ffmpeg */}
+            {embeddedSubs.map((sub) => (
+              <Track
+                key={`embedded:${sub.relativeIndex}`}
+                src={buildEmbeddedSubtitleUrl(item.filePath, sub.relativeIndex)}
+                kind="subtitles"
+                label={sub.title ?? sub.language ?? `Legenda ${sub.relativeIndex + 1}`}
+                language={sub.language ?? "und"}
+              />
+            ))}
+          </MediaProvider>
+
+          {/* Full controls: timeline, seek, time display, speed, CC, audio tracks */}
+          <DefaultVideoLayout icons={defaultLayoutIcons} />
+
+          {/* Headless logic — inside MediaPlayer for hook access */}
+          <PlayerLogic
+            item={item}
+            onEnded={onEnded}
+            onUnsupported={onUnsupported}
+            resumeTime={resumeTime}
+            seekOnReadyRef={seekOnReadyRef}
+          />
+
+          {/* Custom right-click context menu */}
+          {ctxMenuPos && playerReady && (
+            <PlayerContextMenu
+              x={ctxMenuPos.x}
+              y={ctxMenuPos.y}
+              onClose={() => setCtxMenuPos(null)}
+              onOpenExternal={onUnsupported}
+            />
+          )}
+        </MediaPlayer>
+      )}
     </div>
   );
 }

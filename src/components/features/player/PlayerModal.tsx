@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { usePlayerStore } from "@/stores/playerStore";
+import { useMediaContext } from "@/context/mediaContext";
 import { tauriService } from "@/services/tauri";
 import { VideoSurface } from "./VideoSurface";
 import { NextEpisodeOverlay } from "./NextEpisodeOverlay";
 
 export function PlayerModal() {
   const { open, queue, index, closePlayer, advance } = usePlayerStore();
+  const { setWatchSession } = useMediaContext();
+  const router = useRouter();
   const [showNextOverlay, setShowNextOverlay] = useState(false);
 
   if (!open || queue.length === 0) return null;
@@ -21,6 +25,20 @@ export function PlayerModal() {
     closePlayer();
     try {
       await tauriService.openMedia(current.filePath);
+      const session =
+        current.mediaType === "MOVIE"
+          ? { type: "movie" as const, mediaId: current.mediaId, title: current.title, returnPath: "/movie-details" }
+          : {
+              type: "episode" as const,
+              mediaId: current.mediaId,
+              title: current.title,
+              episodeId: current.episodeId,
+              seasonNumber: current.seasonNumber,
+              episodeNumber: current.episodeNumber,
+              returnPath: "/series-details",
+            };
+      setWatchSession(session);
+      router.push("/watching");
     } catch (err) {
       console.error("Fallback to external player failed:", err);
     }
@@ -43,7 +61,7 @@ export function PlayerModal() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] bg-black flex flex-col"
+          className="fixed inset-0 z-50 bg-black flex flex-col"
         >
           {/* Close button */}
           <button

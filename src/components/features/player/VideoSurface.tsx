@@ -168,7 +168,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // before the probe runs (useEffect fires after the render), producing silent
   // playback on files with unsupported audio codecs.
   const [transcode, setTranscode] = useState<TranscodeState>({ status: "probing" });
-  const { playbackRate, positionSeconds } = usePlayerStore();
+  const { playbackRate } = usePlayerStore();
 
   // One-shot seek after a transcoded source is loaded mid-playback.
   const seekOnReadyRef = useRef<number | null>(null);
@@ -232,8 +232,10 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         return;
       }
 
-      // Save current playback position so we can resume after the source switch.
-      seekOnReadyRef.current = positionSeconds > 1 ? positionSeconds : 0;
+      // Read the current position imperatively so we capture the position
+      // at the moment FFmpeg finishes (30-60 s after the effect fired), not at mount time.
+      const pos = usePlayerStore.getState().positionSeconds;
+      seekOnReadyRef.current = pos > 1 ? pos : 0;
 
       activeSessionRef.current = session.sessionId;
       setTranscode({
@@ -246,9 +248,6 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
 
     init().catch(console.error);
     return () => { cancelled = true; };
-    // positionSeconds intentionally excluded: we only want to snapshot it at
-    // the moment of calling startHlsSession, not reactively.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.filePath, item.mediaId, item.episodeId, stopActiveSession]);
 
   // Stop the HLS session when the component unmounts.

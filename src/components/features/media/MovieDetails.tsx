@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  Download,
 } from "lucide-react";
 import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
@@ -43,9 +44,13 @@ import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface MovieDetailsProps {
   demoMode?: boolean;
+  /** When true the movie was opened from the Torrent Browser. Only shows
+   * the Download torrent and Watch Trailer actions — library-specific
+   * controls (play, mark watched, edit, delete) are hidden. */
+  torrentMode?: boolean;
 }
 
-export function MovieDetails({ demoMode }: MovieDetailsProps) {
+export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProps) {
   const [backdropError, setBackdropError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -328,7 +333,22 @@ export function MovieDetails({ demoMode }: MovieDetailsProps) {
               </div>
 
               {/* Actions */}
-              {!demoMode && (
+              {torrentMode ? (
+                /* Torrent context: only show Download torrent (go back to picker) and Watch Trailer */
+                <div className="flex gap-3 flex-wrap">
+                  <Button
+                    size="lg"
+                    onClick={() => router.push("/torrent-search")}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl"
+                  >
+                    <Download className="w-5 h-5 mr-2" />
+                    Baixar Torrent
+                  </Button>
+                  {currentMovie.videos && currentMovie.videos.length > 0 && (
+                    <TrailerModal videos={currentMovie.videos} title={currentMovie.title} />
+                  )}
+                </div>
+              ) : !demoMode && (
                 <div className="flex flex-col gap-3">
                   {playError && (
                     <div className="flex items-start gap-3 rounded-xl bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-200">

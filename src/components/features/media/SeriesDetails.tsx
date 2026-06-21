@@ -31,6 +31,7 @@ import {
   EyeOff,
   AlertTriangle,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
@@ -62,9 +63,13 @@ import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface SeriesDetailsProps {
   demoMode?: boolean;
+  /** When true the series was opened from the Torrent Browser. Only shows
+   * the Download torrent and Watch Trailer actions — library-specific
+   * controls (play, mark watched, edit, delete, seasons) are hidden. */
+  torrentMode?: boolean;
 }
 
-export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
+export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesDetailsProps) {
   const [backdropError, setBackdropError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
@@ -949,7 +954,22 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
               </div>
 
               {/* Actions */}
-              {!demoMode && (
+              {torrentMode ? (
+                /* Torrent context: only show Download torrent (back to picker) and Watch Trailer */
+                <div className="flex gap-3 flex-wrap">
+                  <Button
+                    size="lg"
+                    onClick={() => router.push("/torrent-search")}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl"
+                  >
+                    <Download className="w-5 h-5 mr-2" />
+                    Baixar Torrent
+                  </Button>
+                  {series.videos && series.videos.length > 0 && (
+                    <TrailerModal videos={series.videos} title={series.title} />
+                  )}
+                </div>
+              ) : !demoMode && (
                 <div className="flex flex-col gap-3">
                   {playError && (
                     <div className="flex items-start gap-3 rounded-xl bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-200">

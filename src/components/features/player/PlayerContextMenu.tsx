@@ -131,18 +131,32 @@ export function PlayerContextMenu({ x, y, onClose, onOpenExternal }: PlayerConte
       </div>
 
       {/* Picture-in-Picture */}
-      <MenuItem
-        icon={<PictureInPicture className="w-3.5 h-3.5" />}
-        label="Picture in Picture"
-        onClick={action(() => remote.requestPictureInPicture())}
-      />
+      {document.pictureInPictureEnabled && (
+        <MenuItem
+          icon={<PictureInPicture className="w-3.5 h-3.5" />}
+          label="Picture in Picture"
+          onClick={action(() => {
+            const video = document.querySelector("video");
+            if (video) {
+              if (document.pictureInPictureElement) {
+                document.exitPictureInPicture().catch(console.error);
+              } else {
+                video.requestPictureInPicture().catch(console.error);
+              }
+            }
+          })}
+        />
+      )}
 
       {/* Fullscreen */}
       <MenuItem
         icon={<Maximize className="w-3.5 h-3.5" />}
         label="Tela cheia"
         shortcut="F"
-        onClick={action(() => remote.requestFullscreen())}
+        onClick={action(() => {
+          const el = document.querySelector(".vds-player") ?? document.documentElement;
+          el.requestFullscreen?.().catch(console.error);
+        })}
       />
 
       <Divider />

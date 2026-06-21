@@ -1,76 +1,64 @@
-use tauri::WebviewWindowBuilder;
+use tauri::{Manager, WebviewWindowBuilder};
 
-/// Hosts the torrent pane is allowed to navigate to.
-/// Only exact host matches are permitted; no subdomain wildcards.
-const ALLOWED_TORRENT_HOSTS: &[&str] = &["apachetorrent.com"];
-
-/// Initialization script injected into the torrent pane webview.
-/// Blocks `window.open`, clears `opener`, freezes Tauri internals so the
-/// sandboxed page cannot reach any app IPC, and wires a CSP-violation listener
-/// as a defense-in-depth observer.
-const TORRENT_INIT_SCRIPT: &str = r#"
-    window.open = () => null;
-    window.opener = null;
-    try { Object.freeze(window.__TAURI_INTERNALS__); } catch(_) {}
-    document.addEventListener('securitypolicyviolation', function(e) {
-        console.warn('[torrent-pane CSP violation]', e.violatedDirective, e.blockedURI);
-    });
-"#;
-
-/// Returns true only when the URL is an https:// URL whose host is in the
-/// allowlist. Blocks data:, blob:, javascript: and any non-https scheme.
-fn is_navigation_allowed(url: &tauri::Url) -> bool {
-    let scheme = url.scheme();
-    if matches!(scheme, "data" | "blob" | "javascript") {
-        return false;
-    }
-    if scheme != "https" {
-        return false;
-    }
-    ALLOWED_TORRENT_HOSTS
-        .iter()
-        .any(|&h| url.host_str() == Some(h))
-}
-
-/// Opens the sandboxed torrent browser pane. If the window is already open,
-/// focuses it instead of creating a second one.
-///
-/// Security properties (LSF-PHASE5-001, -002, -008, -009):
-/// - `on_ipc_request` returns `false` for every call → no app IPC reachable
-/// - `on_navigation` blocks anything that is not an allowlisted https host
-/// - initialization script freezes `__TAURI_INTERNALS__` and overrides `window.open`
+/// Opens the in-app torrent search pane. The pane is a regular Tauri window
+/// that loads the internal `/torrent-search` Next.js route using WebviewUrl::App,
+/// which resolves correctly in both dev (devUrl) and production (frontendDist) modes.
 #[tauri::command]
 pub fn open_torrent_pane(app: tauri::AppHandle) -> Result<(), String> {
-    // Reuse the existing window rather than spawning duplicates.
-    if app.webview_windows().contains_key("torrent-pane") {
-        if let Some(w) = app.get_webview_window("torrent-pane") {
-            let _ = w.set_focus();
-            return Ok(());
-        }
+    if let Some(w) = app.get_webview_window("torrent-pane") {
+        let _ = w.set_focus();
+        return Ok(());
     }
-
-    let initial_url = format!("https://{}", ALLOWED_TORRENT_HOSTS[0]);
-    let parsed_url: tauri::Url = initial_url
-        .parse()
-        .map_err(|e: url::ParseError| e.to_string())?;
 
     WebviewWindowBuilder::new(
         &app,
         "torrent-pane",
-        tauri::WebviewUrl::External(parsed_url),
+        tauri::WebviewUrl::App("torrent-search".into()),
     )
-    .title("Torrent Browser")
-    .inner_size(1200.0, 800.0)
-    // LSF-PHASE5-002: only allowlisted https hosts may be navigated to.
-    .on_navigation(is_navigation_allowed)
-    // LSF-PHASE5-001: deny every IPC invoke from this webview.
-    .on_ipc_request(|_window, _request| false)
-    // LSF-PHASE5-001, -009: freeze Tauri internals + CSP violation observer.
-    .initialization_script(TORRENT_INIT_SCRIPT)
+    .title("Buscar Torrent")
+    .inner_size(1000.0, 700.0)
+    .resizable(false)
+    .closable(true)
     .build()
     .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+/// Search torrents via The Pirate Bay's public JSON API (apibay.org).
+/// All network I/O happens on the Rust side to avoid CORS restrictions in the
+/// renderer. Returns the raw JSON array from the API.
+#[tauri::command]
+pub async fn search_torrents(query: String) -> Result<serde_json::Value, String> {
+    use reqwest::Client;
+
+    if query.trim().is_empty() {
+        return Ok(serde_json::Value::Array(vec![]));
+    }
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("https://apibay.org/q.php")
+        .query(&[("q", query.trim()), ("cat", "0")])
+        .send()
+        .await
+        .map_err(|e| format!("Falha ao conectar com apibay.org: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("API retornou status {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Resposta inválida da API: {e}"))?;
+
+    Ok(json)
 }
 
 /// Validates and hands a magnet link off to the OS torrent client via the

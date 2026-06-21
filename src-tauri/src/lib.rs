@@ -118,9 +118,11 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                server::stop_server();
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::Destroyed = event {
+                    server::stop_server();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -158,6 +160,7 @@ pub fn run() {
             commands::torrent::open_torrent_pane,
             commands::torrent::intercept_torrent_link,
             commands::torrent::proxy_torrent_api,
+            commands::torrent::search_torrents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

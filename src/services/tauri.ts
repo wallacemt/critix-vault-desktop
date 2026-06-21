@@ -139,12 +139,30 @@ interface AppSettings {
   torrent_client_pass?: string;
   /** Master switch for the torrent API proxy. Defaults to false (opt-in). */
   torrent_proxy_enabled: boolean;
+  /** Last app version for which the user dismissed the "What's New" prompt.
+   *  Empty string on first run — treated as "already seen" (OQ-1). */
+  last_seen_version: string;
 }
 
 interface CacheInfo {
   total_size_bytes: number;
   image_count: number;
   data_file_size: number;
+}
+
+interface TorrentResult {
+  id: string;
+  name: string;
+  info_hash: string;
+  leechers: string;
+  seeders: string;
+  num_files: string;
+  size: string;
+  username: string;
+  added: string;
+  status: string;
+  category: string;
+  imdb: string;
 }
 
 // Conversion utilities
@@ -583,6 +601,15 @@ class TauriService {
     return invoke("open_torrent_pane");
   }
 
+  async searchTorrents(query: string): Promise<TorrentResult[]> {
+    const raw = await invoke<unknown[]>("search_torrents", { query });
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((r) => {
+      const item = r as Record<string, unknown>;
+      return item.info_hash && String(item.info_hash) !== "0000000000000000000000000000000000000000";
+    }) as TorrentResult[];
+  }
+
   /**
    * Validate and hand a magnet link to the OS torrent client.
    * The Rust side rejects anything that is not a well-formed magnet URI.
@@ -616,4 +643,4 @@ class TauriService {
 }
 
 export const tauriService = new TauriService();
-export type { AppSettings, CacheInfo };
+export type { AppSettings, CacheInfo, TorrentResult };

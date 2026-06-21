@@ -4,6 +4,7 @@
  */
 
 import { ApiStatus } from "@/types/api";
+import { DiscoveryCategory, DiscoveryFeed, TorrentMatch } from "@/types/discovery";
 import { logger } from "@/lib/logger";
 
 const API_BASE_URL = "/api/external";
@@ -105,6 +106,42 @@ class ApiService {
    */
   async getMediaDetailsById(mediaId: string, mediaType: "movie" | "tv") {
     return this.request(`/media/v1/${mediaType}/${mediaId}/details`);
+  }
+
+  /**
+   * Fetch the enriched discovery feed (TMDB trending + Apache highlights + PirateBay torrents).
+   * Served from the backend Redis cache — typically responds in < 1s when warm.
+   */
+  async getDiscoveryFeed(page = 1, category: DiscoveryCategory = "all"): Promise<DiscoveryFeed> {
+    const p = new URLSearchParams({ page: String(page), category });
+    return this.request<DiscoveryFeed>(`/media/v1/discovery/feed?${p.toString()}`);
+  }
+
+  /**
+   * Fetch the best-matching torrents for a specific media title + year from the backend.
+   * Returns { torrents: [] } — never an error — when nothing is found.
+   */
+  async getTorrentsForMedia(
+    title: string,
+    year?: number,
+    mediaType?: "movie" | "tv",
+  ): Promise<{ torrents: TorrentMatch[] }> {
+    const p = new URLSearchParams({ title });
+    if (year) p.append("year", String(year));
+    if (mediaType) p.append("mediaType", mediaType);
+    return this.request<{ torrents: TorrentMatch[] }>(
+      `/media/v1/discovery/torrents?${p.toString()}`,
+    );
+  }
+
+  /**
+   * Proxy a raw torrent search query through the backend to apibay.org.
+   * Used as the primary search path when the backend is online (RF-09).
+   */
+  async searchTorrentsViaBackend(query: string): Promise<{ torrents: TorrentMatch[] }> {
+    return this.request<{ torrents: TorrentMatch[] }>(
+      `/media/v1/discovery/search?query=${encodeURIComponent(query)}`,
+    );
   }
 }
 

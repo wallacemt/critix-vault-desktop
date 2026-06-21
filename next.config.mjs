@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  // Strict Mode must be OFF: Vidstack/Maverick inserts <video> into <shadow-root>
+  // elements imperatively. With reactStrictMode:true, React's double-render pass
+  // reconciles <shadow-root> back to its empty virtual-DOM state and removes the
+  // Maverick-inserted <video>, causing the permanent black screen.
+  reactStrictMode: false,
   output: "standalone",
 
   images: {
@@ -20,7 +24,7 @@ const nextConfig = {
     // Only load the icons/components actually used from these barrel-file-heavy
     // packages, instead of pulling in the entire library on every import.
     // Confirmed valid for Next.js 16.x via Context7 docs (v16.1.5).
-    optimizePackageImports: ["lucide-react", "framer-motion", "swiper", "@vidstack/react"],
+    optimizePackageImports: ["lucide-react", "framer-motion", "swiper"],
   },
 };
 

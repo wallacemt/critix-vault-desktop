@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { flushSync } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
 import type { AppSettings } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
-import { useMediaContext } from "@/context/mediaContext";
+import { useMediaContext, type WatchSession } from "@/context/mediaContext";
 import { useFoldersContext } from "@/context/foldersContext";
 import {
   getMovies,
@@ -20,6 +19,21 @@ import { Episode, Series } from "@/types/serie";
 import { registerEasterEggClue } from "@/lib/easter-egg";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
 import { usePlayerStore, type PlayableItem } from "@/stores/playerStore";
+
+function playableItemToWatchSession(item: PlayableItem): WatchSession {
+  if (item.mediaType === "MOVIE") {
+    return { type: "movie", mediaId: item.mediaId, title: item.title, returnPath: "/movie-details" };
+  }
+  return {
+    type: "episode",
+    mediaId: item.mediaId,
+    title: item.title,
+    episodeId: item.episodeId,
+    seasonNumber: item.seasonNumber,
+    episodeNumber: item.episodeNumber,
+    returnPath: "/series-details",
+  };
+}
 
 type LastWatchedReference = {
   seasonNumber: number;
@@ -82,7 +96,7 @@ const getLastWatchedReference = (history: WatchHistory[]): LastWatchedReference 
 };
 
 export function useActions() {
-  const { folders, addFolder, selectedFolder } = useFoldersContext();
+  const { folders, addFolder } = useFoldersContext();
   const {
     setCurrentMovie: setMovie,
     setCurrentSerie: setSerie,
@@ -94,7 +108,6 @@ export function useActions() {
   } = useMediaContext();
   const { isOnline } = useApiConnectivity();
   const router = useRouter();
-  const pathname = usePathname();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [playError, setPlayError] = useState<string | null>(null);
@@ -112,10 +125,13 @@ export function useActions() {
   ): Promise<void> => {
     if (pref === "INTERNAL") {
       usePlayerStore.getState().openMedia(item, queue);
+      router.push("/player");
       return;
     }
     if (pref === "EXTERNAL") {
       await tauriService.openMedia(item.filePath);
+      setWatchSession(playableItemToWatchSession(item));
+      router.push("/watching");
       return;
     }
     // Default: "ASK" — surface the choice modal.
@@ -139,20 +155,15 @@ export function useActions() {
 
     if (choice === "INTERNAL") {
       usePlayerStore.getState().openMedia(pendingPlay.item, pendingPlay.queue);
+      setPendingPlay(null);
+      router.push("/player");
     } else {
-      // Mirror the saved-EXTERNAL path: set watch session before opening externally
       const { item } = pendingPlay;
-      flushSync(() => {
-        if (item.mediaType === "MOVIE") {
-          setWatchSession({ type: "movie", mediaId: item.mediaId, title: item.title, returnPath: pathname });
-        } else {
-          setWatchSession({ type: "episode", mediaId: item.mediaId, title: item.title, returnPath: pathname, episodeId: item.episodeId, seasonNumber: item.seasonNumber });
-        }
-      });
+      setPendingPlay(null);
       await tauriService.openMedia(item.filePath);
+      setWatchSession(playableItemToWatchSession(item));
       router.push("/watching");
     }
-    setPendingPlay(null);
   };
 
   const playEpisodeForSeries = async (seriesToPlay: Series, episode: Episode) => {
@@ -166,6 +177,10 @@ export function useActions() {
       .find((s) => s.seasonNumber === episode.season_number)
       ?.episodes ?? [];
 
+    const seriesBackdropUrl = seriesToPlay.backdrop
+      ? `https://image.tmdb.org/t/p/w1280${seriesToPlay.backdrop}`
+      : undefined;
+
     const queue: PlayableItem[] = seasonEpisodes
       .filter((ep) => ep.available && ep.filePath)
       .sort((a, b) => a.episode_number - b.episode_number)
@@ -177,6 +192,7 @@ export function useActions() {
         mediaType: "SERIES" as const,
         seasonNumber: ep.season_number,
         episodeNumber: ep.episode_number,
+        backdropUrl: seriesBackdropUrl,
       }));
 
     const item: PlayableItem = {
@@ -187,29 +203,24 @@ export function useActions() {
       mediaType: "SERIES",
       seasonNumber: episode.season_number,
       episodeNumber: episode.episode_number,
+      backdropUrl: seriesBackdropUrl,
     };
 
     const settings = await tauriService.getSettings().catch(() => null);
     const pref = settings?.preferred_player ?? "ASK";
 
     if (pref === "EXTERNAL") {
-      // External path: keep the legacy watch-session + route redirect flow.
       await tauriService.openMedia(episode.filePath);
-      flushSync(() => {
-        setSerie(seriesToPlay);
-        setWatchSession({
-          type: "episode",
-          mediaId: seriesToPlay.id,
-          title: seriesToPlay.title,
-          returnPath: pathname,
-          episodeId: episode.id,
-          episodeTitle: episode.title,
-          seasonNumber: episode.season_number,
-          episodeNumber: episode.episode_number,
-          backdrop: episode.still_path
-            ? `https://image.tmdb.org/t/p/original${episode.still_path}`
-            : seriesToPlay.backdrop,
-        });
+      setSerie(seriesToPlay);
+      setWatchSession({
+        type: "episode",
+        mediaId: seriesToPlay.id,
+        title: seriesToPlay.title,
+        episodeId: episode.id,
+        episodeTitle: episode.title,
+        seasonNumber: episode.season_number,
+        episodeNumber: episode.episode_number,
+        returnPath: "/series-details",
       });
       router.push("/watching");
       return;
@@ -331,16 +342,12 @@ export function useActions() {
       const pref = settings?.preferred_player ?? "ASK";
 
       if (pref === "EXTERNAL") {
-        // External path: keep the legacy watch-session + route redirect flow.
         await tauriService.openMedia(movie.filePath);
-        flushSync(() => {
-          setWatchSession({
-            type: "movie",
-            mediaId: movie.id,
-            title: movie.title,
-            returnPath: pathname,
-            backdrop: movie.backdrop || movie.poster,
-          });
+        setWatchSession({
+          type: "movie",
+          mediaId: movie.id,
+          title: movie.title,
+          returnPath: "/movie-details",
         });
         router.push("/watching");
         return;
@@ -351,6 +358,9 @@ export function useActions() {
         title: movie.title,
         filePath: movie.filePath,
         mediaType: "MOVIE",
+        backdropUrl: movie.backdrop
+          ? `https://image.tmdb.org/t/p/w1280${movie.backdrop}`
+          : undefined,
       };
 
       await dispatchPlay(item, [item], pref);

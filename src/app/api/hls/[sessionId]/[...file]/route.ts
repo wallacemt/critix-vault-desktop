@@ -46,6 +46,10 @@ export async function GET(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
+  if (!session.dir) {
+    return NextResponse.json({ error: "Session has no segment directory" }, { status: 404 });
+  }
+
   const filePath = join(session.dir, filename);
   const isPlaylist = filename.endsWith(".m3u8");
   const isSegment = filename.endsWith(".ts");

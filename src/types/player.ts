@@ -9,3 +9,10 @@ export interface PlaybackTrack {
   label: string;
   language?: string;
 }
+
+export interface SubtitleStreamInfo {
+  relativeIndex: number;
+  codec: string;
+  language: string | null;
+  title: string | null;
+}

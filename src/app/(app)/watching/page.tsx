@@ -6,7 +6,7 @@ import { apiService } from "@/services/api";
 import { markAsWatched, markEpisodeAsWatched } from "@/services/databaseService";
 import { fetchMediaImages, fetchSeasonDetails } from "@/services/mediaService";
 import { tauriService } from "@/services/tauri";
-import { CheckCircle2, Loader2, MonitorPlay, SkipForward, Tv2 } from "lucide-react";
+import { CheckCircle2, Loader2, MonitorPlay, RefreshCw, SkipForward, Tv2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -49,6 +49,22 @@ export default function WatchingPage() {
     return watchSession.type === "movie" ? "/movie-details" : "/series-details";
   }, [watchSession]);
 
+  const currentFilePath = useMemo(() => {
+    if (!watchSession) return null;
+    if (watchSession.type === "movie") return movie?.filePath ?? null;
+    const allEpisodes = serie?.seasons.flatMap((s) => s.episodes) ?? [];
+    return allEpisodes.find((ep) => ep.id === watchSession.episodeId)?.filePath ?? null;
+  }, [watchSession, movie, serie]);
+
+  const handleReopenMedia = async () => {
+    if (!currentFilePath) return;
+    try {
+      await tauriService.openMedia(currentFilePath);
+    } catch {
+      alert("Não foi possível reabrir o arquivo. Verifique se ele ainda existe.");
+    }
+  };
+
   useEffect(() => {
     if (!watchSession) {
       if (skipEmptySessionRedirectRef.current) return;
@@ -65,10 +81,7 @@ export default function WatchingPage() {
           setBackgroundImage(movie.backdrop);
           return;
         }
-
-        if (serie?.backdrop) {
-          setBackgroundImage(serie.backdrop);
-        }
+        if (serie?.backdrop) setBackgroundImage(serie.backdrop);
         return;
       }
 
@@ -85,12 +98,9 @@ export default function WatchingPage() {
             setBackgroundImage(`https://image.tmdb.org/t/p/original${details.backdrop_path}`);
             return;
           }
-
           const images = await fetchMediaImages(watchSession.mediaId, "movie");
-          const firstBackdrop = images.backdrop?.[0]?.file_path;
-          if (firstBackdrop) {
-            setBackgroundImage(`https://image.tmdb.org/t/p/original${firstBackdrop}`);
-          }
+          const first = images.backdrop?.[0]?.file_path;
+          if (first) setBackgroundImage(`https://image.tmdb.org/t/p/original${first}`);
           return;
         }
 
@@ -107,19 +117,12 @@ export default function WatchingPage() {
         }
 
         const images = await fetchMediaImages(seriesId, "tv");
-        const firstBackdrop = images.backdrop?.[0]?.file_path;
-        if (firstBackdrop) {
-          setBackgroundImage(`https://image.tmdb.org/t/p/original${firstBackdrop}`);
-        } else if (serie?.backdrop) {
-          setBackgroundImage(serie.backdrop);
-        }
-      } catch (error) {
-        console.error("Failed to resolve watching lock-screen image:", error);
-        if (watchSession.type === "movie" && movie?.backdrop) {
-          setBackgroundImage(movie.backdrop);
-        } else if (serie?.backdrop) {
-          setBackgroundImage(serie.backdrop);
-        }
+        const first = images.backdrop?.[0]?.file_path;
+        if (first) setBackgroundImage(`https://image.tmdb.org/t/p/original${first}`);
+        else if (serie?.backdrop) setBackgroundImage(serie.backdrop);
+      } catch {
+        if (watchSession.type === "movie" && movie?.backdrop) setBackgroundImage(movie.backdrop);
+        else if (serie?.backdrop) setBackgroundImage(serie.backdrop);
       } finally {
         setIsResolvingImage(false);
       }
@@ -142,57 +145,27 @@ export default function WatchingPage() {
       if (watchSession.type === "movie") {
         const movieId = watchSession.mediaId || movie?.id;
         if (!movieId) throw new Error("Filme não encontrado para marcar como assistido.");
-
         await markAsWatched(movieId, "MOVIE");
-
-        if (movie && movie.id === movieId) {
-          setCurrentMovie({
-            ...movie,
-            isWatched: true,
-          });
-        }
+        if (movie && movie.id === movieId) setCurrentMovie({ ...movie, isWatched: true });
       } else {
         const seriesId = watchSession.mediaId || serie?.id;
-        if (
-          !seriesId ||
-          !watchSession.episodeId ||
-          watchSession.seasonNumber == null ||
-          watchSession.episodeNumber == null
-        ) {
+        if (!seriesId || !watchSession.episodeId || watchSession.seasonNumber == null || watchSession.episodeNumber == null) {
           throw new Error("Episódio não encontrado para marcar como assistido.");
         }
-
-        await markEpisodeAsWatched(
-          seriesId,
-          watchSession.episodeId,
-          watchSession.seasonNumber,
-          watchSession.episodeNumber,
-        );
-
+        await markEpisodeAsWatched(seriesId, watchSession.episodeId, watchSession.seasonNumber, watchSession.episodeNumber);
         if (serie && serie.id === seriesId) {
           const updatedSeasons = serie.seasons.map((season) => ({
             ...season,
-            episodes: season.episodes.map((episode) => {
-              if (episode.id !== watchSession.episodeId) return episode;
-              return {
-                ...episode,
-                isWatched: true,
-              };
-            }),
+            episodes: season.episodes.map((ep) =>
+              ep.id === watchSession.episodeId ? { ...ep, isWatched: true } : ep,
+            ),
           }));
-
           const isSeriesWatched =
-            updatedSeasons.flatMap((season) => season.episodes).length > 0 &&
-            updatedSeasons.flatMap((season) => season.episodes).every((episode) => episode.isWatched === true);
-
-          setCurrentSerie({
-            ...serie,
-            seasons: updatedSeasons,
-            isWatched: isSeriesWatched,
-          });
+            updatedSeasons.flatMap((s) => s.episodes).length > 0 &&
+            updatedSeasons.flatMap((s) => s.episodes).every((ep) => ep.isWatched === true);
+          setCurrentSerie({ ...serie, seasons: updatedSeasons, isWatched: isSeriesWatched });
         }
       }
-
       skipEmptySessionRedirectRef.current = true;
       clearWatchSession();
       router.replace(destinationPath);
@@ -299,18 +272,18 @@ export default function WatchingPage() {
             <p className="text-slate-300 text-sm mb-4">
               S{String(watchSession.seasonNumber).padStart(2, "0")}E
               {String(watchSession.episodeNumber).padStart(2, "0")}
-              {watchSession.episodeTitle ? ` - ${watchSession.episodeTitle}` : ""}
+              {watchSession.episodeTitle ? ` — ${watchSession.episodeTitle}` : ""}
             </p>
           )}
 
           <p className="text-slate-300/90 mb-7">
-            A mídia foi aberta em outro aplicativo. Quando terminar, confirme aqui para marcar como assistido.
+            A mídia foi aberta no seu player de vídeo. Quando terminar, use os botões abaixo para registrar.
           </p>
 
           {isResolvingImage && (
-            <p className="text-xs text-slate-300 mb-4 inline-flex items-center gap-2">
+            <p className="text-xs text-slate-400 mb-4 inline-flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Buscando melhor imagem para esta mídia...
+              Carregando imagem...
             </p>
           )}
 
@@ -350,6 +323,17 @@ export default function WatchingPage() {
               </Button>
             )}
           </div>
+
+          {currentFilePath && (
+            <Button
+              variant="ghost"
+              onClick={handleReopenMedia}
+              className="mt-3 w-full text-slate-400 hover:text-white hover:bg-white/5 text-sm"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Reabrir no player
+            </Button>
+          )}
         </motion.div>
       </div>
     </div>

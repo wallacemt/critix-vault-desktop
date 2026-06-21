@@ -8,7 +8,6 @@ const ALLOWED_PREFIXES = ["/status", "/media/"];
 
 const getExternalApiBase = (): string => {
   const raw = process.env.CRITIX_EXTERNAL_API_URL?.trim() || process.env.NEXT_PUBLIC_CRITIX_API_URL?.trim();
-
   if (!raw) {
     logger.error("External API URL not configured. Set CRITIX_EXTERNAL_API_URL in your .env file.", null, {
       CRITIX_EXTERNAL_API_URL: process.env.CRITIX_EXTERNAL_API_URL ?? "(not set)",

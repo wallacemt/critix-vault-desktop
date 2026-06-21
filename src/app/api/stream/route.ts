@@ -3,11 +3,16 @@ import { extname } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAndGuardPath } from "@/lib/streaming";
 
+// Browser-compatible MIME types for the <video> element.
+// Non-web-native containers (.mkv, .avi, .mov) are mapped to "video/mp4" so
+// that Chromium/WebView2 accepts the stream via canPlayType. The actual bytes
+// are still the original container; Chromium byte-sniffs the EBML/AVI header
+// and selects the correct demuxer regardless of the declared type.
 const MIME_TYPES: Record<string, string> = {
-  ".mkv": "video/x-matroska",
+  ".mkv": "video/mp4",
   ".mp4": "video/mp4",
-  ".avi": "video/x-msvideo",
-  ".mov": "video/quicktime",
+  ".avi": "video/mp4",
+  ".mov": "video/mp4",
   ".webm": "video/webm",
   ".m4v": "video/mp4",
 };

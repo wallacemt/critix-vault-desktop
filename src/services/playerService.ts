@@ -85,11 +85,20 @@ export interface SubtitleStreamInfo {
   title: string | null;
 }
 
+export interface AudioStreamInfo {
+  relativeIndex: number;
+  codec: string;
+  language: string | null;
+  title: string | null;
+  channels: number;
+}
+
 export interface AudioProbeResult {
   audioCodec: string | null;
   needsTranscode: boolean;
   ffprobeAvailable: boolean;
   subtitleStreams: SubtitleStreamInfo[];
+  audioStreams: AudioStreamInfo[];
 }
 
 export async function probeAudio(filePath: string): Promise<AudioProbeResult> {
@@ -100,12 +109,12 @@ export async function probeAudio(filePath: string): Promise<AudioProbeResult> {
     );
     if (!resp.ok) {
       console.error(`[probeAudio] HTTP ${resp.status} for ${filePath}`);
-      return { audioCodec: null, needsTranscode: false, ffprobeAvailable: false, subtitleStreams: [] };
+      return { audioCodec: null, needsTranscode: false, ffprobeAvailable: false, subtitleStreams: [], audioStreams: [] };
     }
     return resp.json() as Promise<AudioProbeResult>;
   } catch (err) {
     console.error("[probeAudio] Request failed:", err);
-    return { audioCodec: null, needsTranscode: false, ffprobeAvailable: false, subtitleStreams: [] };
+    return { audioCodec: null, needsTranscode: false, ffprobeAvailable: false, subtitleStreams: [], audioStreams: [] };
   }
 }
 
@@ -114,18 +123,25 @@ export interface HlsSession {
   hlsUrl: string;
 }
 
-export async function startHlsSession(filePath: string): Promise<HlsSession | null> {
+export async function startHlsSession(
+  filePath: string,
+  /** Relative index of the audio stream to transcode (from probe's audioStreams[]). */
+  audioStream: number = 0,
+  signal?: AbortSignal,
+): Promise<HlsSession | null> {
   try {
-    const resp = await fetch(
-      `${BASE}/api/hls/start?path=${encodeURIComponent(filePath)}`,
-      { method: "POST" },
-    );
+    const url = new URL(`${BASE}/api/hls/start`);
+    url.searchParams.set("path", filePath);
+    url.searchParams.set("audioStream", String(audioStream));
+    const resp = await fetch(url.toString(), { method: "POST", signal });
     if (!resp.ok) {
       console.error(`[startHlsSession] HTTP ${resp.status}:`, await resp.text().catch(() => ""));
       return null;
     }
     return resp.json() as Promise<HlsSession>;
   } catch (err) {
+    // AbortError is expected when the player unmounts mid-transcode — not a real error.
+    if (err instanceof DOMException && err.name === "AbortError") return null;
     console.error("[startHlsSession] Request failed:", err);
     return null;
   }

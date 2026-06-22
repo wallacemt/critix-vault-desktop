@@ -16,3 +16,11 @@ export interface SubtitleStreamInfo {
   language: string | null;
   title: string | null;
 }
+
+export interface AudioStreamInfo {
+  relativeIndex: number;
+  codec: string;
+  language: string | null;
+  title: string | null;
+  channels: number;
+}

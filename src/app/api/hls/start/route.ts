@@ -6,7 +6,7 @@ import { tmpdir } from "os";
 import { randomUUID, createHash } from "crypto";
 import { resolveAndGuardPath } from "@/lib/streaming";
 import { findBinary } from "@/lib/find-binary";
-import { setSession, pruneOldSessions } from "../sessions";
+import { setSession, getSession, pruneOldSessions } from "../sessions";
 
 // Allow up to 10 minutes for transcoding large files.
 // (Only relevant in serverless deploys; local Tauri server has no hard limit.)
@@ -17,8 +17,12 @@ function getTranscodeCacheDir(): string {
   return dataDir ? join(dataDir, "transcodes") : join(tmpdir(), "critix_tc_cache");
 }
 
-async function findCachedTranscode(resolved: string): Promise<string | null> {
-  const hash = createHash("sha1").update(resolved).digest("hex");
+function transcodeHash(resolved: string, audioStream: number): string {
+  return createHash("sha1").update(`${resolved}:a${audioStream}`).digest("hex");
+}
+
+async function findCachedTranscode(resolved: string, audioStream: number): Promise<string | null> {
+  const hash = transcodeHash(resolved, audioStream);
   const cacheFile = join(getTranscodeCacheDir(), `${hash}.mp4`);
   try {
     const [srcStat, cacheStat] = await Promise.all([
@@ -43,13 +47,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { resolved } = guardResult;
 
+  const audioStreamParam = request.nextUrl.searchParams.get("audioStream");
+  const audioStream = audioStreamParam !== null && !isNaN(parseInt(audioStreamParam, 10))
+    ? parseInt(audioStreamParam, 10)
+    : 0;
+
   pruneOldSessions();
 
   // ── Check persistent cache ────────────────────────────────────────────────
-  const cachedPath = await findCachedTranscode(resolved);
+  // Cache key includes the audio stream index so different language selections
+  // get separate transcoded files.
+  const cachedPath = await findCachedTranscode(resolved, audioStream);
   if (cachedPath) {
-    // Use a stable session ID derived from the hash so repeated requests hit the same entry.
-    const hash = createHash("sha1").update(resolved).digest("hex");
+    const hash = transcodeHash(resolved, audioStream);
     const sessionId = `cached${hash}`;
     setSession(sessionId, {
       process: null,
@@ -75,22 +85,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const cacheDir = getTranscodeCacheDir();
   await mkdir(cacheDir, { recursive: true });
 
-  const hash = createHash("sha1").update(resolved).digest("hex");
+  const hash = transcodeHash(resolved, audioStream);
   const sessionId = randomUUID();
 
   // Write to a temp file first; rename to cache on success (avoids partial cache files).
   const tempPath = join(cacheDir, `${hash}.tmp.mp4`);
   const outputPath = join(cacheDir, `${hash}.mp4`);
 
-  // -map 0:v:0  → first video stream (copy, no re-encode)
-  // -map 0:a    → ALL audio streams (transcoded to AAC so every language track survives)
+  // -map 0:v:0          → first video stream (copy, no re-encode)
+  // -map 0:a:<stream>   → the user-selected audio stream only
   // -movflags +faststart → moov atom at front for immediate seeking on full-file serve
   const args = [
     "-hide_banner",
     "-loglevel", "error",
     "-i", resolved,
     "-map", "0:v:0",
-    "-map", "0:a",
+    "-map", `0:a:${audioStream}`,
     "-c:v", "copy",
     "-c:a", "aac",
     "-b:a", "192k",
@@ -105,22 +115,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     process.stderr.write(chunk);
   });
 
-  // Register session immediately so cleanup works even if the client navigates away.
+  // Register session with dir=null so stopSession never deletes the shared cache directory.
+  // The tempPath file is harmless if incomplete: it's overwritten on the next attempt via -y.
   setSession(sessionId, {
     process: ffmpeg,
-    dir: cacheDir,    // used for cleanup only if !cached
+    dir: null,
     filePath: resolved,
     outputPath: tempPath,
     startedAt: Date.now(),
   });
 
-  await new Promise<void>((resolve, reject) => {
-    ffmpeg.on("close", (code) => {
-      if (code === 0 || code === null) resolve();
-      else reject(new Error(`FFmpeg exited with code ${code}`));
-    });
-    ffmpeg.on("error", reject);
+  // Kill FFmpeg immediately if the client disconnects (user closes the player page).
+  request.signal.addEventListener("abort", () => {
+    const s = getSession(sessionId);
+    if (s?.process) {
+      try { s.process.kill("SIGTERM"); } catch {}
+    }
   });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg.on("close", (code) => {
+        if (code === 0 || code === null) resolve();
+        else reject(new Error(`FFmpeg exited with code ${code}`));
+      });
+      ffmpeg.on("error", reject);
+    });
+  } catch {
+    // FFmpeg was killed (client disconnected) or failed — don't write the cache file.
+    return NextResponse.json({ error: "Transcoding interrupted or failed" }, { status: 500 });
+  }
+
+  // Check if client already disconnected before even finishing.
+  if (request.signal.aborted) {
+    return NextResponse.json({ error: "Client disconnected" }, { status: 499 });
+  }
 
   // Rename temp → final cache file; update session to point at the stable path.
   await rename(tempPath, outputPath);
@@ -136,6 +165,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const origin = new URL(request.url).origin;
   return NextResponse.json({
     sessionId,
-    hlsUrl: `${origin}/api/hls/${encodeURIComponent(sessionId)}/video`,
+    hlsUrl: `${origin}/api/hls/${sessionId}/video`,
   });
 }

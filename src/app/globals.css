@@ -192,6 +192,55 @@ html {
   }
 }
 
+/* ── Vidstack subtitle/caption styling ─────────────────────────────────────────
+   Vidstack v1.x renders captions in light DOM via React using .vds-captions
+   container and [data-part='cue'] / [data-part='cue-display'] elements.
+   The default cue background is rgba(0,0,0,0.7) — override it via the CSS
+   custom properties that Vidstack reads internally.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Override Vidstack CSS custom properties to remove the black cue background */
+.vds-captions {
+  --media-cue-bg: transparent;
+  --media-cue-display-bg: transparent;
+}
+
+/* Remove background on the outer cue-display block */
+.vds-captions [data-part='cue-display'] {
+  background-color: transparent !important;
+}
+
+/* Style the actual cue text: no background, white text with stroke-style shadow */
+.vds-captions [data-part='cue'] {
+  background-color: transparent !important;
+  color: #ffffff !important;
+  font-size: 1.05rem !important;
+  line-height: 1.5 !important;
+  font-family: var(--font-sans-base) !important;
+  font-weight: 500 !important;
+  padding: 0 0.3em !important;
+  border-radius: 0 !important;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.95),
+    0 0 6px rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.9),
+    -1px -1px 0 rgba(0, 0, 0, 0.9),
+    1px -1px 0 rgba(0, 0, 0, 0.9),
+    -1px 1px 0 rgba(0, 0, 0, 0.9) !important;
+}
+
+/* Fallback: native browser ::cue for any <track> element rendered directly */
+::cue {
+  background-color: transparent;
+  color: #ffffff;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.95),
+    0 0 6px rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.9),
+    -1px -1px 0 rgba(0, 0, 0, 0.9);
+  font-weight: 500;
+}
+
 /* Tailwind custom utilities */
 @layer utilities {
   .bg-linear-to-b {

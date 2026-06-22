@@ -25,11 +25,18 @@ const UNSUPPORTED_CODECS = new Set([
 const AT_RISK_EXTS = new Set([".mkv", ".avi", ".mov", ".ts", ".m2ts"]);
 
 export interface SubtitleStreamInfo {
-  /** Stream index within the file (used with -map 0:s:<relativeIndex> in ffmpeg). */
   relativeIndex: number;
   codec: string;
   language: string | null;
   title: string | null;
+}
+
+export interface AudioStreamInfo {
+  relativeIndex: number;
+  codec: string;
+  language: string | null;
+  title: string | null;
+  channels: number;
 }
 
 export interface AudioProbeResult {
@@ -37,6 +44,7 @@ export interface AudioProbeResult {
   needsTranscode: boolean;
   ffprobeAvailable: boolean;
   subtitleStreams: SubtitleStreamInfo[];
+  audioStreams: AudioStreamInfo[];
 }
 
 // In-memory probe cache — codecs don't change while the app is running.
@@ -49,6 +57,7 @@ const SAFE_RESULT = (available: boolean): AudioProbeResult => ({
   needsTranscode: false,
   ffprobeAvailable: available,
   subtitleStreams: [],
+  audioStreams: [],
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -91,25 +100,37 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       streams?: Array<{
         codec_type?: string;
         codec_name?: string;
+        channels?: number;
         tags?: { language?: string; title?: string };
       }>;
     };
 
     const allStreams = info.streams ?? [];
 
-    // Audio: first audio stream determines whether transcoding is needed.
-    const audioStreams = allStreams.filter((s) => s.codec_type === "audio");
-    const firstAudioCodec = audioStreams[0]?.codec_name ?? null;
+    // Audio streams: first audio determines needsTranscode; all are returned for UI.
+    let audioRelIndex = 0;
+    const audioStreams: AudioStreamInfo[] = [];
+    for (const s of allStreams) {
+      if (s.codec_type !== "audio") continue;
+      audioStreams.push({
+        relativeIndex: audioRelIndex++,
+        codec: s.codec_name ?? "unknown",
+        language: s.tags?.language ?? null,
+        title: s.tags?.title ?? null,
+        channels: s.channels ?? 2,
+      });
+    }
+
+    const firstAudioCodec = audioStreams[0]?.codec ?? null;
     const needsTranscode = firstAudioCodec
       ? UNSUPPORTED_CODECS.has(firstAudioCodec.toLowerCase())
       : false;
 
-    // Subtitles: collect subtitle streams with relative index within subtitle streams.
+    // Subtitle streams: skip image-based formats that can't be converted to VTT.
     let subtitleRelIndex = 0;
     const subtitleStreams: SubtitleStreamInfo[] = [];
     for (const s of allStreams) {
       if (s.codec_type !== "subtitle") continue;
-      // Skip binary/image-based subtitle formats that can't be extracted as VTT.
       const codec = s.codec_name?.toLowerCase() ?? "";
       if (codec === "hdmv_pgs_subtitle" || codec === "dvd_subtitle" || codec === "dvbsub") {
         subtitleRelIndex++;
@@ -124,7 +145,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     console.log(
-      `[probe] ${resolved} → codec=${firstAudioCodec} needsTranscode=${needsTranscode} subs=${subtitleStreams.length}`,
+      `[probe] ${resolved} → codec=${firstAudioCodec} needsTranscode=${needsTranscode} ` +
+      `audio=${audioStreams.length} subs=${subtitleStreams.length}`,
     );
 
     const result: AudioProbeResult = {
@@ -132,6 +154,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       needsTranscode,
       ffprobeAvailable: true,
       subtitleStreams,
+      audioStreams,
     };
 
     probeCache.set(resolved, result);

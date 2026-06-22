@@ -50,9 +50,12 @@ export default function PlayerPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showEpisodePicker, setShowEpisodePicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // Prevents the auto-redirect to /library when we're handling our own navigation
+  // (e.g. opening an external player and redirecting to /watching instead).
+  const suppressAutoRedirectRef = useRef(false);
 
   if (!open || queue.length === 0) {
-    router.replace("/library");
+    if (!suppressAutoRedirectRef.current) router.replace("/library");
     return null;
   }
 
@@ -70,25 +73,29 @@ export default function PlayerPage() {
   };
 
   const handleOpenExternal = async () => {
+    // Snapshot current item before closePlayer() clears the queue.
+    const item = current;
+    suppressAutoRedirectRef.current = true;
     closePlayer();
     try {
-      await tauriService.openMedia(current.filePath);
+      await tauriService.openMedia(item.filePath);
       const session =
-        current.mediaType === "MOVIE"
-          ? { type: "movie" as const, mediaId: current.mediaId, title: current.title, returnPath: "/movie-details" }
+        item.mediaType === "MOVIE"
+          ? { type: "movie" as const, mediaId: item.mediaId, title: item.title, returnPath: "/movie-details" }
           : {
               type: "episode" as const,
-              mediaId: current.mediaId,
-              title: current.title,
-              episodeId: current.episodeId,
-              seasonNumber: current.seasonNumber,
-              episodeNumber: current.episodeNumber,
+              mediaId: item.mediaId,
+              title: item.title,
+              episodeId: item.episodeId,
+              seasonNumber: item.seasonNumber,
+              episodeNumber: item.episodeNumber,
               returnPath: "/series-details",
             };
       setWatchSession(session);
       router.replace("/watching");
     } catch (err) {
       console.error("Fallback to external player failed:", err);
+      suppressAutoRedirectRef.current = false;
       router.back();
     }
   };

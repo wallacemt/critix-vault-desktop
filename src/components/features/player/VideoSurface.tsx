@@ -13,7 +13,7 @@ import "@vidstack/react/player/styles/base.css";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, Volume2, Languages } from "lucide-react";
 import { FfmpegInstallModal } from "./FfmpegInstallModal";
 import { PlayerContextMenu } from "./PlayerContextMenu";
 
@@ -31,7 +31,7 @@ import {
   startHlsSession,
   stopHlsSession,
 } from "@/services/playerService";
-import type { SubtitleEntry, SubtitleStreamInfo } from "@/types/player";
+import type { SubtitleEntry, SubtitleStreamInfo, AudioStreamInfo } from "@/types/player";
 
 const AUTOSAVE_INTERVAL_MS = 10_000;
 const COMPLETION_THRESHOLD = 0.9;
@@ -147,6 +147,8 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef 
 type TranscodeState =
   | { status: "idle" }
   | { status: "probing" }
+  // User must pick which audio track to transcode (shown before FFmpeg starts).
+  | { status: "selecting-audio"; streams: AudioStreamInfo[]; codec: string }
   // FFmpeg running in background; player shows raw stream so the user sees video immediately.
   | { status: "transcoding"; codec: string }
   | { status: "ready"; videoUrl: string; sessionId: string; codec: string }
@@ -179,6 +181,16 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // Context-menu state: cursor position or null when hidden.
   const [ctxMenuPos, setCtxMenuPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Resolver for the audio-selection promise; called when the user picks a track.
+  const audioSelectCallbackRef = useRef<((index: number | null) => void) | null>(null);
+
+  // Counter that re-triggers the probe+audio-select+transcode flow when incremented.
+  // Used by the "Trocar Idioma" button so the user can change audio mid-playback.
+  const [rePickCounter, setRePickCounter] = useState(0);
+
+  // Whether the last probe found multiple audio streams (decides if button is shown).
+  const hasMultipleAudioRef = useRef(false);
+
   const stopActiveSession = useCallback(async () => {
     if (activeSessionRef.current) {
       await stopHlsSession(activeSessionRef.current);
@@ -189,6 +201,9 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // When item changes: stop previous HLS session, reset state, re-probe.
   useEffect(() => {
     let cancelled = false;
+    // Aborting this controller kills the in-flight startHlsSession fetch, which triggers
+    // the server-side request.signal listener to SIGTERM FFmpeg immediately.
+    const abortCtrl = new AbortController();
 
     // Containers that can embed unsupported codecs (AC3/DTS/EAC3).
     // Everything else (MP4, WebM) is safe and skips the probe.
@@ -212,19 +227,38 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       const probe = await probeAudio(item.filePath);
       if (cancelled) return;
 
-      // Expose embedded subtitle streams as Vidstack Track elements.
       setEmbeddedSubs(probe.subtitleStreams ?? []);
+      hasMultipleAudioRef.current = (probe.audioStreams ?? []).length > 1;
 
       if (!probe.needsTranscode) {
         setTranscode({ status: "idle" });
         return;
       }
 
-      // Codec is unsupported — mount the player immediately with the raw stream so
-      // the user sees video while FFmpeg transcodes audio in the background.
+      // ── Determine which audio stream to transcode ─────────────────────────
+      let selectedAudioIndex = 0;
+
+      if ((probe.audioStreams ?? []).length > 1) {
+        // Multiple audio tracks: ask the user which language they want.
+        const selected = await new Promise<number | null>((resolve) => {
+          audioSelectCallbackRef.current = resolve;
+          setTranscode({
+            status: "selecting-audio",
+            streams: probe.audioStreams!,
+            codec: probe.audioCodec ?? "unknown",
+          });
+          // Resolve with null if the page unmounts while the modal is open.
+          abortCtrl.signal.addEventListener("abort", () => resolve(null), { once: true });
+        });
+        audioSelectCallbackRef.current = null;
+        if (selected === null || cancelled) return;
+        selectedAudioIndex = selected;
+      }
+
+      // ── Start FFmpeg in background, player shows raw stream immediately ───
       setTranscode({ status: "transcoding", codec: probe.audioCodec ?? "unknown" });
 
-      const session = await startHlsSession(item.filePath);
+      const session = await startHlsSession(item.filePath, selectedAudioIndex, abortCtrl.signal);
       if (cancelled) return;
 
       if (!session) {
@@ -232,8 +266,8 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         return;
       }
 
-      // Read the current position imperatively so we capture the position
-      // at the moment FFmpeg finishes (30-60 s after the effect fired), not at mount time.
+      // Read the current position imperatively so we capture the position at the
+      // moment FFmpeg finishes (30-60 s after the effect fired), not at mount time.
       const pos = usePlayerStore.getState().positionSeconds;
       seekOnReadyRef.current = pos > 1 ? pos : 0;
 
@@ -247,8 +281,15 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
     };
 
     init().catch(console.error);
-    return () => { cancelled = true; };
-  }, [item.filePath, item.mediaId, item.episodeId, stopActiveSession]);
+    return () => {
+      cancelled = true;
+      audioSelectCallbackRef.current?.(null); // dismiss audio picker if open
+      abortCtrl.abort();                       // kills in-flight startHlsSession → server kills FFmpeg
+    };
+  // rePickCounter is intentionally included: incrementing it re-runs the full
+  // probe → audio selection → transcode flow so the user can change audio language.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.filePath, item.mediaId, item.episodeId, stopActiveSession, rePickCounter]);
 
   // Stop the HLS session when the component unmounts.
   useEffect(() => () => { stopActiveSession(); }, [stopActiveSession]);
@@ -271,17 +312,23 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // tear down and remount the <video> element (black screen).
   const playerSrc = useMemo(() => {
     if (transcode.status === "ready") {
-      // Transcoded MP4 served with Accept-Ranges — full seeking support.
       return { src: transcode.videoUrl, type: "video/mp4" };
     }
     return { src: buildStreamUrl(item.filePath), type: getMimeType(item.filePath) };
   }, [item.filePath, transcode]);
 
   const isProbing = transcode.status === "probing";
+  const isSelectingAudio = transcode.status === "selecting-audio";
   const isTranscoding = transcode.status === "transcoding";
 
-  // Player is mounted as soon as the probe finishes, even if FFmpeg is still running.
-  const playerReady = !isProbing;
+  // Player mounts as soon as probe+selection are done (even while FFmpeg is still running).
+  const playerReady = !isProbing && !isSelectingAudio;
+
+  // Re-run audio selection and re-transcode with the new chosen track.
+  function handleRePick() {
+    seekOnReadyRef.current = usePlayerStore.getState().positionSeconds;
+    setRePickCounter((c) => c + 1);
+  }
 
   function handleContextMenu(e: React.MouseEvent) {
     e.preventDefault();
@@ -293,7 +340,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       className="relative flex-1 min-h-0"
       onContextMenu={handleContextMenu}
     >
-      {/* Loading overlay — shown only during the fast probe (1-3 s), not during transcoding */}
+      {/* Probe loading overlay — only shown during the fast ffprobe step (1-3 s) */}
       <AnimatePresence>
         {isProbing && (
           <motion.div
@@ -309,6 +356,62 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         )}
       </AnimatePresence>
 
+      {/* Audio track selection modal — shown when the file has multiple audio languages */}
+      <AnimatePresence>
+        {isSelectingAudio && transcode.status === "selecting-audio" && (
+          <motion.div
+            key="audio-select"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center bg-black"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 26 }}
+              className="w-80 rounded-2xl border border-white/10 bg-zinc-900/95 backdrop-blur-xl
+                         shadow-2xl p-5"
+            >
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="w-7 h-7 rounded-full bg-amber-500/15 flex items-center justify-center">
+                  <Volume2 className="w-4 h-4 text-amber-400" />
+                </div>
+                <h2 className="text-sm font-semibold text-white">Idioma de Áudio</h2>
+              </div>
+              <p className="text-xs text-zinc-500 mb-4 ml-9">
+                Codec {transcode.codec.toUpperCase()} — escolha a faixa antes de iniciar.
+              </p>
+
+              <div className="flex flex-col gap-1.5">
+                {transcode.streams.map((stream, i) => {
+                  const label =
+                    stream.title ||
+                    (stream.language ? stream.language.toUpperCase() : null) ||
+                    `Faixa ${i + 1}`;
+                  const detail = `${stream.codec.toUpperCase()} · ${stream.channels}ch`;
+                  return (
+                    <button
+                      key={stream.relativeIndex}
+                      onClick={() => audioSelectCallbackRef.current?.(stream.relativeIndex)}
+                      className="flex items-center justify-between w-full rounded-xl px-3 py-2.5
+                                 border border-white/8 bg-white/4 hover:bg-amber-500/10
+                                 hover:border-amber-500/30 transition-all text-left group"
+                    >
+                      <span className="text-sm font-medium text-white/80 group-hover:text-amber-300 transition-colors">
+                        {label}
+                      </span>
+                      <span className="text-xs text-zinc-500 font-mono">{detail}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* FFmpeg not found — show installation guide modal */}
       <AnimatePresence>
         {transcode.status === "error" && (
@@ -320,7 +423,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         )}
       </AnimatePresence>
 
-      {/* Non-blocking transcoding badge — video is already visible while this runs */}
+      {/* Non-blocking transcoding badge — video is already visible while FFmpeg runs */}
       <AnimatePresence>
         {isTranscoding && (
           <motion.div
@@ -338,13 +441,27 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         )}
       </AnimatePresence>
 
-      {/* Active transcode badge — shown once FFmpeg is done */}
+      {/* Active transcode badge + optional "Trocar idioma" button */}
       {transcode.status === "ready" && (
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-md
-                        px-2 py-1 text-xs font-medium bg-amber-500/15 border border-amber-500/30
-                        text-amber-300 pointer-events-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          Áudio recodificado ({transcode.codec.toUpperCase()} → AAC)
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium
+                          bg-amber-500/15 border border-amber-500/30 text-amber-300 pointer-events-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Áudio recodificado ({transcode.codec.toUpperCase()} → AAC)
+          </div>
+          {hasMultipleAudioRef.current && (
+            <button
+              onClick={handleRePick}
+              title="Trocar idioma de áudio"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium
+                         bg-zinc-800/80 border border-white/15 text-white/70
+                         hover:text-white hover:bg-zinc-700/80 hover:border-white/30
+                         backdrop-blur-sm transition-all"
+            >
+              <Languages className="w-3.5 h-3.5" />
+              Trocar idioma
+            </button>
+          )}
         </div>
       )}
 
@@ -362,6 +479,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
                 key={`sidecar:${sub.path}`}
                 src={buildSubtitleUrl(sub.path)}
                 kind="subtitles"
+                type="vtt"
                 label={sub.label}
                 language={sub.lang}
               />
@@ -373,6 +491,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
                 key={`embedded:${sub.relativeIndex}`}
                 src={buildEmbeddedSubtitleUrl(item.filePath, sub.relativeIndex)}
                 kind="subtitles"
+                type="vtt"
                 label={sub.title ?? sub.language ?? `Legenda ${sub.relativeIndex + 1}`}
                 language={sub.language ?? "und"}
               />
@@ -392,7 +511,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
           />
 
           {/* Custom right-click context menu */}
-          {ctxMenuPos && playerReady && (
+          {ctxMenuPos && (
             <PlayerContextMenu
               x={ctxMenuPos.x}
               y={ctxMenuPos.y}

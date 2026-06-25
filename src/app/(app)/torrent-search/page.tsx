@@ -181,9 +181,13 @@ export default function TorrentBrowserPage() {
     }
   };
 
-  const handleDiscoveryDownload = (item: DiscoveryItem) => {
+  const handleDiscoveryDownload = async (item: DiscoveryItem) => {
     if (item.torrents.length === 1) {
-      handleDownload(item.torrents[0]);
+      try {
+        await handleDownload(item.torrents[0]);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Não foi possível abrir o link magnet.");
+      }
       return;
     }
     // Multiple torrents (or zero): open picker
@@ -191,8 +195,8 @@ export default function TorrentBrowserPage() {
     setPickerOpen(true);
   };
 
-  const handlePickerSelect = (torrent: TorrentMatch) => {
-    handleDownload(torrent);
+  const handlePickerSelect = async (torrent: TorrentMatch) => {
+    await handleDownload(torrent);
   };
 
   const handleManualSearch = async (e?: React.FormEvent) => {

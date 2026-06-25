@@ -121,6 +121,8 @@ export default function PlayerPage() {
         positionSeconds,
         durationSeconds,
         completed: true,
+        seasonNumber: current.seasonNumber,
+        episodeNumber: current.episodeNumber,
       });
 
       if (isSeries) {

@@ -37,6 +37,7 @@ export interface AudioStreamInfo {
   language: string | null;
   title: string | null;
   channels: number;
+  needsTranscode: boolean;
 }
 
 export interface AudioProbeResult {
@@ -107,24 +108,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const allStreams = info.streams ?? [];
 
-    // Audio streams: first audio determines needsTranscode; all are returned for UI.
+    // Audio streams: all are returned for UI; per-stream needsTranscode flag drives selection.
     let audioRelIndex = 0;
     const audioStreams: AudioStreamInfo[] = [];
     for (const s of allStreams) {
       if (s.codec_type !== "audio") continue;
+      const codec = s.codec_name ?? "unknown";
       audioStreams.push({
         relativeIndex: audioRelIndex++,
-        codec: s.codec_name ?? "unknown",
+        codec,
         language: s.tags?.language ?? null,
         title: s.tags?.title ?? null,
         channels: s.channels ?? 2,
+        needsTranscode: UNSUPPORTED_CODECS.has(codec.toLowerCase()),
       });
     }
 
     const firstAudioCodec = audioStreams[0]?.codec ?? null;
-    const needsTranscode = firstAudioCodec
-      ? UNSUPPORTED_CODECS.has(firstAudioCodec.toLowerCase())
-      : false;
+    // True if ANY audio stream uses an unsupported codec — not just stream 0.
+    // This ensures multi-track files with mixed codecs (e.g. eng-aac + por-ac3) still
+    // show the audio-selection modal and transcode the user's chosen track.
+    const needsTranscode = audioStreams.some((s) => UNSUPPORTED_CODECS.has(s.codec.toLowerCase()));
 
     // Subtitle streams: skip image-based formats that can't be converted to VTT.
     let subtitleRelIndex = 0;

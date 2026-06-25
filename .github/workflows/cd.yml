@@ -99,7 +99,7 @@ jobs:
             BACKEND_URL: ${{ secrets['BACKEND_URL'] }}
             NEXT_PUBLIC_CRITIX_API_URL: ${{ secrets['BACKEND_URL'] }}
             CRITIX_EXTERNAL_API_URL: ${{ secrets['BACKEND_URL'] }}
-
+            TAURI_SIGNING_PRIVATE_KEY: ${{ secrets['TAURI_SIGNING_PRIVATE_KEY'] }}
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
@@ -109,6 +109,11 @@ jobs:
               run: |
                   if [ -z "$BACKEND_URL" ]; then
                     echo "::error::BACKEND_URL secret is required for release pipeline."
+                    exit 1
+                  fi
+
+                  if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+                    echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is required for release pipeline."
                     exit 1
                   fi
 

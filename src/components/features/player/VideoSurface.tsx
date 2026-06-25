@@ -36,6 +36,12 @@ import type { SubtitleEntry, SubtitleStreamInfo, AudioStreamInfo } from "@/types
 const AUTOSAVE_INTERVAL_MS = 10_000;
 const COMPLETION_THRESHOLD = 0.9;
 
+function audioLabel(stream: AudioStreamInfo): string {
+  if (stream.title) return stream.title;
+  if (stream.language) return stream.language.toUpperCase();
+  return `Faixa ${stream.relativeIndex + 1}`;
+}
+
 // ── Inner headless logic component (needs MediaPlayer context for hooks) ──────
 
 interface PlayerLogicProps {
@@ -106,13 +112,15 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef 
       mediaId: item.mediaId,
       episodeId: item.episodeId,
       mediaType: item.mediaType,
+      seasonNumber: item.seasonNumber,
+      episodeNumber: item.episodeNumber,
       positionSeconds: positionRef.current,
       durationSeconds: durationRef.current,
       completed:
         durationRef.current > 0 &&
         positionRef.current / durationRef.current >= COMPLETION_THRESHOLD,
     }),
-    [item.mediaId, item.episodeId, item.mediaType],
+    [item.mediaId, item.episodeId, item.mediaType, item.seasonNumber, item.episodeNumber],
   );
 
   useEffect(() => {
@@ -191,6 +199,9 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // Whether the last probe found multiple audio streams (decides if button is shown).
   const hasMultipleAudioRef = useRef(false);
 
+  // The audio stream that is currently loaded (shown as a badge on "Trocar idioma").
+  const [activeAudioStream, setActiveAudioStream] = useState<AudioStreamInfo | null>(null);
+
   const stopActiveSession = useCallback(async () => {
     if (activeSessionRef.current) {
       await stopHlsSession(activeSessionRef.current);
@@ -228,9 +239,12 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       if (cancelled) return;
 
       setEmbeddedSubs(probe.subtitleStreams ?? []);
-      hasMultipleAudioRef.current = (probe.audioStreams ?? []).length > 1;
+      const audioStreams = probe.audioStreams ?? [];
+      hasMultipleAudioRef.current = audioStreams.length > 1;
 
-      if (!probe.needsTranscode) {
+      // No unsupported codecs and only one track → play raw stream directly.
+      if (!probe.needsTranscode && audioStreams.length <= 1) {
+        setActiveAudioStream(audioStreams[0] ?? null);
         setTranscode({ status: "idle" });
         return;
       }
@@ -238,13 +252,14 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       // ── Determine which audio stream to transcode ─────────────────────────
       let selectedAudioIndex = 0;
 
-      if ((probe.audioStreams ?? []).length > 1) {
-        // Multiple audio tracks: ask the user which language they want.
+      if (audioStreams.length > 1) {
+        // Multiple audio tracks: always ask which language the user wants,
+        // even when the first stream's codec is supported — another stream may not be.
         const selected = await new Promise<number | null>((resolve) => {
           audioSelectCallbackRef.current = resolve;
           setTranscode({
             status: "selecting-audio",
-            streams: probe.audioStreams!,
+            streams: audioStreams,
             codec: probe.audioCodec ?? "unknown",
           });
           // Resolve with null if the page unmounts while the modal is open.
@@ -253,10 +268,24 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         audioSelectCallbackRef.current = null;
         if (selected === null || cancelled) return;
         selectedAudioIndex = selected;
+
+        // Only skip transcode when the user chose the default track (index 0) and
+        // no stream needs re-encoding. Choosing any non-default track requires
+        // a transcode so FFmpeg outputs only that audio track — Vidstack/WebView2
+        // cannot reliably switch audio tracks in raw MKV containers.
+        const selectedStream = audioStreams.find((s) => s.relativeIndex === selectedAudioIndex);
+        if (selectedStream && !selectedStream.needsTranscode && !probe.needsTranscode && selectedAudioIndex === 0) {
+          setActiveAudioStream(selectedStream);
+          setTranscode({ status: "idle" });
+          return;
+        }
       }
 
-      // ── Start FFmpeg in background, player shows raw stream immediately ───
-      setTranscode({ status: "transcoding", codec: probe.audioCodec ?? "unknown" });
+      // ── Start FFmpeg; player shows raw stream (muted) while FFmpeg runs ───
+      const selectedStream = audioStreams.find((s) => s.relativeIndex === selectedAudioIndex) ?? null;
+      const selectedCodec = selectedStream?.codec ?? probe.audioCodec ?? "unknown";
+      setActiveAudioStream(selectedStream);
+      setTranscode({ status: "transcoding", codec: selectedCodec });
 
       const session = await startHlsSession(item.filePath, selectedAudioIndex, abortCtrl.signal);
       if (cancelled) return;
@@ -276,7 +305,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         status: "ready",
         videoUrl: session.hlsUrl,
         sessionId: session.sessionId,
-        codec: probe.audioCodec ?? "unknown",
+        codec: selectedCodec,
       });
     };
 
@@ -323,6 +352,13 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
 
   // Player mounts as soon as probe+selection are done (even while FFmpeg is still running).
   const playerReady = !isProbing && !isSelectingAudio;
+
+  // While FFmpeg is running, the raw stream (with unsupported audio codec) is expected to
+  // fail in WebView2. Suppress the external-player fallback so the transcode can finish.
+  const handleUnsupported = useCallback(() => {
+    if (isTranscoding) return;
+    onUnsupported();
+  }, [isTranscoding, onUnsupported]);
 
   // Re-run audio selection and re-transcode with the new chosen track.
   function handleRePick() {
@@ -436,19 +472,24 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
                        bg-black/70 border border-amber-500/30 text-amber-300 backdrop-blur-sm"
           >
             <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-            Otimizando áudio ({(transcode as { codec: string }).codec.toUpperCase()} → AAC)...
+            Preparando áudio ({(transcode as { codec: string }).codec.toUpperCase()} → AAC) — sem som até finalizar...
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Active transcode badge + optional "Trocar idioma" button */}
-      {transcode.status === "ready" && (
+      {/* Top-left info bar: transcode badge + "Trocar idioma" button.
+          The button is always visible while the player is ready and the file has
+          multiple audio tracks (idle, transcoding, or ready state), so the user
+          can re-open the language picker at any time. */}
+      {playerReady && (transcode.status === "ready" || hasMultipleAudioRef.current) && (
         <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium
-                          bg-amber-500/15 border border-amber-500/30 text-amber-300 pointer-events-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            Áudio recodificado ({transcode.codec.toUpperCase()} → AAC)
-          </div>
+          {transcode.status === "ready" && (
+            <div className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium
+                            bg-amber-500/15 border border-amber-500/30 text-amber-300 pointer-events-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              Áudio recodificado ({transcode.codec.toUpperCase()} → AAC)
+            </div>
+          )}
           {hasMultipleAudioRef.current && (
             <button
               onClick={handleRePick}
@@ -460,6 +501,12 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
             >
               <Languages className="w-3.5 h-3.5" />
               Trocar idioma
+              {activeAudioStream && (
+                <span className="px-1.5 py-0.5 rounded bg-white/10 text-white/50
+                                 text-[10px] font-mono leading-none tracking-wide">
+                  {audioLabel(activeAudioStream)}
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -470,6 +517,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
           src={playerSrc.src}
           title={item.title}
           playbackRate={playbackRate}
+          muted={isTranscoding}
           className="h-full w-full"
         >
           <MediaProvider>
@@ -505,7 +553,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
           <PlayerLogic
             item={item}
             onEnded={onEnded}
-            onUnsupported={onUnsupported}
+            onUnsupported={handleUnsupported}
             resumeTime={resumeTime}
             seekOnReadyRef={seekOnReadyRef}
           />

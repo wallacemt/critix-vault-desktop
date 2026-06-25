@@ -41,6 +41,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { userActionService } from "@/services/userActionService";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
+import { apiService } from "@/services/api";
 
 interface MovieDetailsProps {
   demoMode?: boolean;
@@ -73,6 +74,57 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
     ] as string[];
   };
 
+  // When opened from the Torrent Browser, the movie object only has minimal data
+  // (title, poster, overview). Fetch full details so cast, runtime, videos, etc. are shown.
+  useEffect(() => {
+    if (!torrentMode || !currentMovie || !isOnline) return;
+    // Skip if we already have rich data (cast populated means a prior fetch succeeded).
+    if (currentMovie.cast && currentMovie.cast.length > 0) return;
+
+    const enrichFromApi = async () => {
+      try {
+        const apiData = await apiService.getMediaDetailsById(currentMovie.id, "movie") as any;
+        if (!apiData) return;
+
+        const videos = apiData.videos?.results?.map((v: any) => ({
+          id: v.id, key: v.key, name: v.name, type: v.type, site: v.site, official: v.official,
+        })) ?? [];
+
+        const cast = apiData.credits?.cast?.slice(0, 20).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : undefined,
+          order: c.order,
+        })) ?? [];
+
+        const genres = apiData.genres?.map((g: any) => ({ id: g.id, name: g.name })) ?? currentMovie.genres ?? [];
+
+        setCurrentMovie({
+          ...currentMovie,
+          title: apiData.title ?? currentMovie.title,
+          originalTitle: apiData.original_title ?? currentMovie.originalTitle,
+          overview: apiData.overview ?? currentMovie.overview,
+          poster: apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : currentMovie.poster,
+          backdrop: apiData.backdrop_path ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}` : currentMovie.backdrop,
+          rating: apiData.vote_average ?? currentMovie.rating,
+          releaseDate: apiData.release_date ?? currentMovie.releaseDate,
+          duration: apiData.runtime ?? currentMovie.duration,
+          tagline: apiData.tagline ?? currentMovie.tagline,
+          genres,
+          videos,
+          cast,
+        });
+      } catch (err) {
+        console.error("[MovieDetails] Failed to enrich torrent-mode movie data:", err);
+      }
+    };
+
+    enrichFromApi();
+  // currentMovie is intentionally excluded: the cast-length guard prevents re-runs after enrichment.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [torrentMode, currentMovie?.id, isOnline]);
+
   // Save movie view action - must be before early return
   useEffect(() => {
     if (!currentMovie) return;
@@ -97,7 +149,7 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
   }, [currentMovie?.id, currentMovie?.images, isOnline]);
 
   useEffect(() => {
-    if (!currentMovie) return;
+    if (!currentMovie || torrentMode) return;
 
     const saveView = async () => {
       try {
@@ -108,7 +160,7 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
     };
 
     saveView();
-  }, [currentMovie?.id]);
+  }, [currentMovie?.id, torrentMode]);
 
   function onDelete() {
     router.push("/library");
@@ -513,20 +565,24 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
               </p>
             </div>
 
-            <div>
-              <h3 className="text-sm font-semibold text-slate-400 mb-2">Status</h3>
-              <Badge
-                variant={currentMovie.status === "MATCHED" ? "default" : "destructive"}
-                className={currentMovie.status === "MATCHED" ? "bg-green-600 text-white" : ""}
-              >
-                {currentMovie.status}
-              </Badge>
-            </div>
+            {!torrentMode && (
+              <div>
+                <h3 className="text-sm font-semibold text-slate-400 mb-2">Status</h3>
+                <Badge
+                  variant={currentMovie.status === "MATCHED" ? "default" : "destructive"}
+                  className={currentMovie.status === "MATCHED" ? "bg-green-600 text-white" : ""}
+                >
+                  {currentMovie.status}
+                </Badge>
+              </div>
+            )}
 
-            <div>
-              <h3 className="text-sm font-semibold text-slate-400 mb-2">File Location</h3>
-              <p className="text-sm text-slate-500 break-all">{currentMovie.filePath}</p>
-            </div>
+            {!torrentMode && (
+              <div>
+                <h3 className="text-sm font-semibold text-slate-400 mb-2">File Location</h3>
+                <p className="text-sm text-slate-500 break-all">{currentMovie.filePath}</p>
+              </div>
+            )}
           </motion.div>
         </div>
 

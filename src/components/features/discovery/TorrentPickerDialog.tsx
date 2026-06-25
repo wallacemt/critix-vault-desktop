@@ -12,7 +12,7 @@ interface TorrentPickerDialogProps {
   onClose: () => void;
   item: DiscoveryItem | null;
   /** Called when the user picks a torrent to download. */
-  onSelect: (torrent: TorrentMatch) => void;
+  onSelect: (torrent: TorrentMatch) => Promise<void>;
   /** Called when the item has no torrents and the user wants to fetch them. */
   onFetchTorrents: (item: DiscoveryItem) => Promise<TorrentMatch[]>;
 }
@@ -59,8 +59,10 @@ export function TorrentPickerDialog({
   const handleSelect = async (torrent: TorrentMatch) => {
     setDownloadingId(torrent.id);
     try {
-      onSelect(torrent);
+      await onSelect(torrent);
       onClose();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Não foi possível abrir o link magnet.");
     } finally {
       setDownloadingId(null);
     }

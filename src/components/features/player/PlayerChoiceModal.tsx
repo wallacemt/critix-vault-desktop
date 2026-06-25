@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Monitor, Tv2, X, AlertTriangle } from "lucide-react";
 
@@ -13,6 +13,13 @@ interface PlayerChoiceModalProps {
 
 export function PlayerChoiceModal({ open, filePath, onChoose, onCancel }: PlayerChoiceModalProps) {
   const [remember, setRemember] = useState(false);
+
+  // Reset the checkbox every time the modal opens so a stale "true" from a
+  // previous session cannot accidentally save an unintended preference.
+  useEffect(() => {
+    if (open) setRemember(false);
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (

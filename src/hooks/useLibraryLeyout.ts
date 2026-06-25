@@ -232,11 +232,12 @@ export const useLibraryLeyout = () => {
       return;
     }
 
-    // Scan only selected folders
+    // Pass each folder's own ID so media is saved under the correct folderId,
+    // not under the currently selected folder's ID.
     for (const path of selectedPaths) {
       const folder = folders.find((f) => f.path === path);
       if (folder) {
-        await scanFolder(folder.path);
+        await scanFolder(folder.path, folder.id);
       }
     }
     refreshMedia();

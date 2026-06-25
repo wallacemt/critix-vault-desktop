@@ -239,21 +239,17 @@ export function useActions() {
 
   const handleAddFolder = async () => {
     try {
-      if (!isOnline) {
-        alert("Modo offline ativo. Reconecte para escanear e associar mídias automaticamente.");
-        return;
-      }
-
       setScanning(true);
       setScanProgress(0);
 
-      // Open folder dialog
+      // Folder selection is a local OS dialog — it must not depend on connectivity.
       const selectedPath = await tauriService.selectFolder();
       if (!selectedPath) {
         setScanning(false);
         return;
       }
 
+      // Verify the path is readable before proceeding.
       let preScanFiles: string[] = [];
       try {
         preScanFiles = await tauriService.scanFolder(selectedPath);
@@ -271,6 +267,18 @@ export function useActions() {
 
       // Add folder to context (will persist automatically via database)
       const folder = await addFolder(selectedPath);
+
+      // Metadata scan requires connectivity. If offline, persist the folder and
+      // notify the user — they can rescan later when back online.
+      if (!isOnline) {
+        setScanning(false);
+        router.push("/library");
+        alert(
+          "Pasta adicionada, mas o scan de metadados está pendente: o app está offline. " +
+          "Reabra o app com conexão ativa para escanear automaticamente.",
+        );
+        return;
+      }
 
       // Get existing media from database before scanning
       const existingMovies = await getMovies();

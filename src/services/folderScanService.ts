@@ -123,8 +123,12 @@ class FolderScanService {
       try {
         files = await this.scanFolderRecursive(folderPath);
       } catch (scanError) {
-        const errorMessage =
-          scanError instanceof Error ? scanError.message : "Erro ao acessar a pasta. Verifique as permissões.";
+        const rawMessage = scanError instanceof Error ? scanError.message : String(scanError);
+        // Distinguish "path not found" (common after restore from backup) from real permission errors.
+        const isNotFound = /not found|no such file|os error 2|cannot find/i.test(rawMessage);
+        const errorMessage = isNotFound
+          ? `A pasta "${folderPath}" não foi encontrada. Se os dados foram restaurados de outro computador, remova e adicione a pasta novamente apontando para o caminho correto.`
+          : `Erro ao acessar a pasta. Verifique as permissões. (${rawMessage})`;
         onProgress?.({
           status: "error",
           totalFiles: 0,

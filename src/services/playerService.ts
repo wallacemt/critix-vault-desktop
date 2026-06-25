@@ -91,6 +91,7 @@ export interface AudioStreamInfo {
   language: string | null;
   title: string | null;
   channels: number;
+  needsTranscode: boolean;
 }
 
 export interface AudioProbeResult {
@@ -168,6 +169,8 @@ export async function saveProgress(opts: {
   positionSeconds: number;
   durationSeconds: number;
   completed: boolean;
+  seasonNumber?: number;
+  episodeNumber?: number;
 }): Promise<void> {
   const progress =
     opts.durationSeconds > 0
@@ -185,6 +188,8 @@ export async function saveProgress(opts: {
       durationSeconds: opts.durationSeconds,
       progress,
       completed: opts.completed,
+      seasonNumber: opts.seasonNumber,
+      episodeNumber: opts.episodeNumber,
     }),
   });
 }

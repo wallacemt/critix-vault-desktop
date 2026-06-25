@@ -23,4 +23,5 @@ export interface AudioStreamInfo {
   language: string | null;
   title: string | null;
   channels: number;
+  needsTranscode: boolean;
 }

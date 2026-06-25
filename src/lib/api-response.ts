@@ -5,6 +5,7 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "CONFLICT"
   | "EXTERNAL_API_ERROR"
+  | "GATEWAY_TIMEOUT"
   | "DATABASE_ERROR"
   | "INTERNAL_ERROR";
 

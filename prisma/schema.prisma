@@ -160,19 +160,29 @@ model Episode {
 
 // Watch History Model
 model WatchHistory {
-    id            String   @id @default(uuid())
-    mediaId       String?
-    mediaType     String // MOVIE, SERIES
-    episodeId     String?
-    seasonNumber  Int?
-    episodeNumber Int?
-    watchedAt     DateTime @default(now())
-    progress      Float? // 0-100
-    completed     Boolean  @default(false)
+    id              String   @id @default(uuid())
+    mediaId         String?
+    mediaType       String // MOVIE, SERIES
+    episodeId       String?
+    seasonNumber    Int?
+    episodeNumber   Int?
+    watchedAt       DateTime @default(now())
+    progress        Float? // 0-100
+    completed       Boolean  @default(false)
+    positionSeconds Int? // absolute resume point in seconds (for player Phase 4)
+    durationSeconds Int? // total duration in seconds (for % reconciliation)
 
     @@index([mediaId])
     @@index([watchedAt])
     @@map("watch_history")
+}
+
+// App metadata for DB generation tracking (BUG-1 fix — Phase 2)
+model Meta {
+    key   String @id
+    value String
+
+    @@map("meta")
 }
 
 // User Action History Model

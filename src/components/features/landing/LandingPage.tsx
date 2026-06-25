@@ -19,6 +19,7 @@ import {
   CircleHelp,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import Image from "next/image";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
@@ -34,6 +35,7 @@ interface LandingPageProps {
   folders?: FolderType[];
   onGoToLibrary?: () => void;
   onOpenHelp?: () => void;
+  onOpenTorrent?: () => void;
 }
 
 interface CarouselAction {
@@ -134,6 +136,7 @@ export function LandingPage({
   folders,
   onGoToLibrary,
   onOpenHelp,
+  onOpenTorrent,
 }: LandingPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -397,6 +400,17 @@ export function LandingPage({
                           disabled: loading,
                           tone: "neutral" as const,
                         },
+                        ...(onOpenTorrent
+                          ? [
+                              {
+                                id: "open-torrent",
+                                label: "Torrent Browser",
+                                icon: Download,
+                                onClick: onOpenTorrent,
+                                tone: "success" as const,
+                              },
+                            ]
+                          : []),
                       ]}
                     />
                   </>
@@ -476,6 +490,17 @@ export function LandingPage({
                                 onClick: () => fileInputRef.current?.click(),
                                 disabled: loading,
                                 tone: "success" as const,
+                              },
+                            ]
+                          : []),
+                        ...(onOpenTorrent
+                          ? [
+                              {
+                                id: "open-torrent",
+                                label: "Torrent Browser",
+                                icon: Download,
+                                onClick: onOpenTorrent,
+                                tone: "accent" as const,
                               },
                             ]
                           : []),

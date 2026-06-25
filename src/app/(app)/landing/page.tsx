@@ -64,6 +64,10 @@ function LendingPageContent() {
     router.push("/help");
   };
 
+  const handleOpenTorrent = () => {
+    router.push("/torrent-search");
+  };
+
   // Show loading while checking folders
   if (isLoading) {
     return (
@@ -101,6 +105,7 @@ function LendingPageContent() {
         folders={hasFolders ? folders : undefined}
         onGoToLibrary={hasFolders ? handleGoToLibrary : undefined}
         onOpenHelp={handleGoToHelp}
+        onOpenTorrent={handleOpenTorrent}
       />
       <ScanningProgress progress={scanProgress} isOpen={scanning} />
     </>

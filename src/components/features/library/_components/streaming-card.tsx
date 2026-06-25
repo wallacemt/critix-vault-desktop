@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X, Trash2, Eye, EyeOff } from "lucide-react";
+import { Play, Info, Film, Tv, Star, Clock, Calendar, Pencil, Check, X, Trash2, Eye, EyeOff, Download, Clapperboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { setSeriesEpisodesWatchStatus, toggleWatchStatus } from "@/services/databaseService";
@@ -20,12 +20,23 @@ import { getNextUnwatchedEpisode } from "@/utils/mediaUtils";
 
 interface StreamingCardProps {
   media: Media;
+  /**
+   * "library" (default): full action set — play, edit, delete, watched, hidden.
+   * "discovery": only a Download button; watched/edit/delete/hidden are suppressed.
+   */
+  mode?: "library" | "discovery";
   onClick?: (media: Media) => void;
   onPlay?: (media: Media) => void;
   onEdit?: (media: Media) => void;
   onDelete?: (media: Media) => void;
   onToggleHidden?: (media: Media) => Promise<void> | void;
   onWatchedChange?: () => Promise<void> | void;
+  /** Called when the user clicks Download in discovery mode. */
+  onDownload?: (media: Media) => void;
+  /** YouTube video key — when provided a Trailer button appears in discovery mode. */
+  trailerKey?: string;
+  /** Called when the user clicks the Trailer button in discovery mode. */
+  onPlayTrailer?: () => void;
   selected?: boolean;
   onToggleSelect?: (media: string) => void;
   viewMode?: "grid" | "list";
@@ -34,12 +45,16 @@ interface StreamingCardProps {
 
 export function StreamingCard({
   media,
+  mode = "library",
   onClick,
   onPlay,
   onEdit,
   onDelete,
   onToggleHidden,
   onWatchedChange,
+  onDownload,
+  trailerKey,
+  onPlayTrailer,
   selected = false,
   onToggleSelect,
   viewMode = "grid",
@@ -246,108 +261,142 @@ export function StreamingCard({
 
               {/* Actions */}
               <div className="flex gap-2 mt-2">
-                {!demoMode && onPlay && (
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPlay(media);
-                    }}
-                    className="bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold"
-                  >
-                    <Play className="w-4 h-4 mr-1 fill-current" />
-                    Assistir
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClick?.(media);
-                  }}
-                  className="bg-[var(--bg-surface-light)] border-[var(--border-color)]"
-                >
-                  <Info className="w-4 h-4 mr-1" />
-                  Detalhes
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={cn(
-                    "border-[var(--border-color)]",
-                    isWatched
-                      ? "bg-green-600/20 hover:bg-red-600/20 border-green-500/30"
-                      : "bg-[var(--bg-surface-light)] hover:bg-green-600/20",
-                  )}
-                  onClick={handleToggleWatched}
-                  title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
-                >
-                  {isWatched ? (
-                    <>
-                      <X className="w-4 h-4 mr-1" />
-                      Assistido
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4 mr-1" />
-                      Marcar
-                    </>
-                  )}
-                </Button>
-                {onToggleHidden && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleToggleHidden}
-                    className={cn(
-                      "border-[var(--border-color)]",
-                      isHidden
-                        ? "bg-amber-600/20 hover:bg-amber-600/30 border-amber-500/30 text-amber-300"
-                        : "bg-[var(--bg-surface-light)] hover:bg-amber-600/20",
+                {mode === "discovery" ? (
+                  // Discovery mode: Download + optional Trailer buttons
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDownload?.(media);
+                      }}
+                      className="bg-emerald-600/80 hover:bg-emerald-500 text-white"
+                    >
+                      <Download className="w-4 h-4 mr-1" />
+                      Baixar
+                    </Button>
+                    {trailerKey && onPlayTrailer && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlayTrailer();
+                        }}
+                        className="border-slate-600 bg-slate-800/60 text-slate-300 hover:bg-slate-700 hover:text-white"
+                      >
+                        <Clapperboard className="w-4 h-4 mr-1" />
+                        Trailer
+                      </Button>
                     )}
-                    title={isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
-                  >
-                    {isHidden ? (
-                      <>
-                        <Eye className="w-4 h-4 mr-1" />
-                        Mostrar
-                      </>
-                    ) : (
-                      <>
-                        <EyeOff className="w-4 h-4 mr-1" />
-                        Ocultar
-                      </>
+                  </>
+                ) : (
+                  // Library mode: full action set
+                  <>
+                    {!demoMode && onPlay && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlay(media);
+                        }}
+                        className="bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] font-semibold"
+                      >
+                        <Play className="w-4 h-4 mr-1 fill-current" />
+                        Assistir
+                      </Button>
                     )}
-                  </Button>
-                )}
-                {onEdit && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit(media);
-                    }}
-                    className="bg-[var(--bg-surface-light)] border-[var(--border-color)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-                  >
-                    <Pencil className="w-4 h-4 mr-1" />
-                    Editar
-                  </Button>
-                )}
-                {!demoMode && onDelete && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(media);
-                    }}
-                    className="border-red-700/50 text-red-400 hover:bg-red-900/20 hover:border-red-600 bg-[var(--bg-surface-light)]"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Excluir
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClick?.(media);
+                      }}
+                      className="bg-[var(--bg-surface-light)] border-[var(--border-color)]"
+                    >
+                      <Info className="w-4 h-4 mr-1" />
+                      Detalhes
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={cn(
+                        "border-[var(--border-color)]",
+                        isWatched
+                          ? "bg-green-600/20 hover:bg-red-600/20 border-green-500/30"
+                          : "bg-[var(--bg-surface-light)] hover:bg-green-600/20",
+                      )}
+                      onClick={handleToggleWatched}
+                      title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
+                    >
+                      {isWatched ? (
+                        <>
+                          <X className="w-4 h-4 mr-1" />
+                          Assistido
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 mr-1" />
+                          Marcar
+                        </>
+                      )}
+                    </Button>
+                    {onToggleHidden && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleToggleHidden}
+                        className={cn(
+                          "border-[var(--border-color)]",
+                          isHidden
+                            ? "bg-amber-600/20 hover:bg-amber-600/30 border-amber-500/30 text-amber-300"
+                            : "bg-[var(--bg-surface-light)] hover:bg-amber-600/20",
+                        )}
+                        title={isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
+                      >
+                        {isHidden ? (
+                          <>
+                            <Eye className="w-4 h-4 mr-1" />
+                            Mostrar
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="w-4 h-4 mr-1" />
+                            Ocultar
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {onEdit && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(media);
+                        }}
+                        className="bg-[var(--bg-surface-light)] border-[var(--border-color)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                      >
+                        <Pencil className="w-4 h-4 mr-1" />
+                        Editar
+                      </Button>
+                    )}
+                    {!demoMode && onDelete && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(media);
+                        }}
+                        className="border-red-700/50 text-red-400 hover:bg-red-900/20 hover:border-red-600 bg-[var(--bg-surface-light)]"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Excluir
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -491,84 +540,121 @@ export function StreamingCard({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                {!demoMode && onPlay && (
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 }}>
-                    <Button
-                      size="icon"
-                      className="w-14 h-14 rounded-full bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] shadow-lg"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlay(media);
-                      }}
-                    >
-                      <Play className="w-6 h-6 fill-current" />
-                    </Button>
-                  </motion.div>
-                )}
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.15 }}>
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className={cn(
-                      "w-14 h-14 rounded-full backdrop-blur-sm transition-colors",
-                      isWatched
-                        ? "bg-green-600/80 hover:bg-red-600/80 border-green-400"
-                        : "bg-gray-600/30 hover:bg-green-600/80 border-gray-400",
+                {mode === "discovery" ? (
+                  // Discovery mode: Download + optional Trailer buttons
+                  <>
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 }}>
+                      <Button
+                        size="icon"
+                        className="w-14 h-14 rounded-full bg-emerald-600/80 hover:bg-emerald-500 text-white shadow-lg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDownload?.(media);
+                        }}
+                        title="Baixar torrent"
+                      >
+                        <Download className="w-6 h-6" />
+                      </Button>
+                    </motion.div>
+                    {trailerKey && onPlayTrailer && (
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.15 }}>
+                        <Button
+                          size="icon"
+                          className="w-12 h-12 rounded-full bg-red-700/80 hover:bg-red-600 text-white shadow-lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPlayTrailer();
+                          }}
+                          title="Assistir trailer"
+                        >
+                          <Clapperboard className="w-5 h-5" />
+                        </Button>
+                      </motion.div>
                     )}
-                    onClick={handleToggleWatched}
-                    title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
-                  >
-                    {isWatched ? <X className="w-5 h-5" /> : <Check className="w-5 h-5" />}
-                  </Button>
-                </motion.div>
-                {onToggleHidden && (
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.18 }}>
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className={cn(
-                        "w-10 h-10 rounded-full backdrop-blur-sm transition-colors border",
-                        isHidden
-                          ? "bg-amber-600/80 hover:bg-amber-500 border-amber-300 text-white"
-                          : "bg-[var(--bg-surface)]/90 hover:bg-amber-600 hover:text-white border-[var(--border-color)]",
-                      )}
-                      onClick={handleToggleHidden}
-                      title={isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
-                    >
-                      {isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                    </Button>
-                  </motion.div>
-                )}
-                {onEdit && (
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}>
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="w-10 h-10 rounded-full bg-[var(--bg-surface)]/90 hover:bg-[var(--color-primary)] hover:text-[var(--color-on-primary)] border-[var(--border-color)] backdrop-blur-sm transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(media);
-                      }}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                  </motion.div>
-                )}
-                {!demoMode && onDelete && (
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.25 }}>
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="w-10 h-10 rounded-full bg-red-900/30 hover:bg-red-700 border-red-700 text-red-400 hover:text-white backdrop-blur-sm transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(media);
-                      }}
-                      title="Excluir da biblioteca"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </motion.div>
+                  </>
+                ) : (
+                  // Library mode: full action set
+                  <>
+                    {!demoMode && onPlay && (
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1 }}>
+                        <Button
+                          size="icon"
+                          className="w-14 h-14 rounded-full bg-gradient-to-r from-[var(--color-primary)] to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-[var(--color-on-primary)] shadow-lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPlay(media);
+                          }}
+                        >
+                          <Play className="w-6 h-6 fill-current" />
+                        </Button>
+                      </motion.div>
+                    )}
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.15 }}>
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        className={cn(
+                          "w-14 h-14 rounded-full backdrop-blur-sm transition-colors",
+                          isWatched
+                            ? "bg-green-600/80 hover:bg-red-600/80 border-green-400"
+                            : "bg-gray-600/30 hover:bg-green-600/80 border-gray-400",
+                        )}
+                        onClick={handleToggleWatched}
+                        title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
+                      >
+                        {isWatched ? <X className="w-5 h-5" /> : <Check className="w-5 h-5" />}
+                      </Button>
+                    </motion.div>
+                    {onToggleHidden && (
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.18 }}>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className={cn(
+                            "w-10 h-10 rounded-full backdrop-blur-sm transition-colors border",
+                            isHidden
+                              ? "bg-amber-600/80 hover:bg-amber-500 border-amber-300 text-white"
+                              : "bg-[var(--bg-surface)]/90 hover:bg-amber-600 hover:text-white border-[var(--border-color)]",
+                          )}
+                          onClick={handleToggleHidden}
+                          title={isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
+                        >
+                          {isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </Button>
+                      </motion.div>
+                    )}
+                    {onEdit && (
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className="w-10 h-10 rounded-full bg-[var(--bg-surface)]/90 hover:bg-[var(--color-primary)] hover:text-[var(--color-on-primary)] border-[var(--border-color)] backdrop-blur-sm transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(media);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </motion.div>
+                    )}
+                    {!demoMode && onDelete && (
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.25 }}>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className="w-10 h-10 rounded-full bg-red-900/30 hover:bg-red-700 border-red-700 text-red-400 hover:text-white backdrop-blur-sm transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(media);
+                          }}
+                          title="Excluir da biblioteca"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </motion.div>
+                    )}
+                  </>
                 )}
               </motion.div>
             )}

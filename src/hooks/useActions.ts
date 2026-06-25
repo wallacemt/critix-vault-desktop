@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { flushSync } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { tauriService } from "@/services/tauri";
+import type { AppSettings } from "@/services/tauri";
 import { folderScanService } from "@/services/folderScanService";
-import { useMediaContext } from "@/context/mediaContext";
+import { useMediaContext, type WatchSession } from "@/context/mediaContext";
 import { useFoldersContext } from "@/context/foldersContext";
 import {
   getMovies,
@@ -18,6 +18,22 @@ import { Movie } from "@/types/movie";
 import { Episode, Series } from "@/types/serie";
 import { registerEasterEggClue } from "@/lib/easter-egg";
 import { useApiConnectivity } from "@/context/apiConnectivityContext";
+import { usePlayerStore, type PlayableItem } from "@/stores/playerStore";
+
+function playableItemToWatchSession(item: PlayableItem): WatchSession {
+  if (item.mediaType === "MOVIE") {
+    return { type: "movie", mediaId: item.mediaId, title: item.title, returnPath: "/movie-details" };
+  }
+  return {
+    type: "episode",
+    mediaId: item.mediaId,
+    title: item.title,
+    episodeId: item.episodeId,
+    seasonNumber: item.seasonNumber,
+    episodeNumber: item.episodeNumber,
+    returnPath: "/series-details",
+  };
+}
 
 type LastWatchedReference = {
   seasonNumber: number;
@@ -80,7 +96,7 @@ const getLastWatchedReference = (history: WatchHistory[]): LastWatchedReference 
 };
 
 export function useActions() {
-  const { folders, addFolder, selectedFolder } = useFoldersContext();
+  const { folders, addFolder } = useFoldersContext();
   const {
     setCurrentMovie: setMovie,
     setCurrentSerie: setSerie,
@@ -92,33 +108,125 @@ export function useActions() {
   } = useMediaContext();
   const { isOnline } = useApiConnectivity();
   const router = useRouter();
-  const pathname = usePathname();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [playError, setPlayError] = useState<string | null>(null);
+  // pendingPlay lives in the shared Zustand store so PlayerChoiceGate
+  // (mounted in the layout) sees state set by any media page instance.
+  const pendingPlay = usePlayerStore((s) => s.pendingPlay);
+  const setPendingPlay = usePlayerStore((s) => s.setPendingPlay);
+
+  // Dispatches playback according to the user's saved preference.
+  // "ASK" sets pendingPlay → PlayerChoiceGate picks it up and shows the modal.
+  const dispatchPlay = async (
+    item: PlayableItem,
+    queue: PlayableItem[],
+    pref: string,
+  ): Promise<void> => {
+    if (pref === "INTERNAL") {
+      usePlayerStore.getState().openMedia(item, queue);
+      router.push("/player");
+      return;
+    }
+    if (pref === "EXTERNAL") {
+      await tauriService.openMedia(item.filePath);
+      setWatchSession(playableItemToWatchSession(item));
+      router.push("/watching");
+      return;
+    }
+    // Default: "ASK" — surface the choice modal.
+    setPendingPlay({ item, queue });
+  };
+
+  const handlePlayerChoice = async (
+    choice: "INTERNAL" | "EXTERNAL",
+    remember: boolean,
+  ): Promise<void> => {
+    if (!pendingPlay) return;
+
+    if (remember) {
+      try {
+        const current = await tauriService.getSettings();
+        await tauriService.saveSettings({ ...current, preferred_player: choice });
+      } catch (err) {
+        console.error("Failed to persist player preference:", err);
+      }
+    }
+
+    if (choice === "INTERNAL") {
+      usePlayerStore.getState().openMedia(pendingPlay.item, pendingPlay.queue);
+      setPendingPlay(null);
+      router.push("/player");
+    } else {
+      const { item } = pendingPlay;
+      setPendingPlay(null);
+      await tauriService.openMedia(item.filePath);
+      setWatchSession(playableItemToWatchSession(item));
+      router.push("/watching");
+    }
+  };
 
   const playEpisodeForSeries = async (seriesToPlay: Series, episode: Episode) => {
     if (!episode.filePath) {
       throw new Error("Episode file path not available");
     }
 
-    await tauriService.openMedia(episode.filePath);
-    flushSync(() => {
+    // Build the queue from the remaining episodes in the same season (those
+    // that come at or after the selected episode and have a file available).
+    const seasonEpisodes = seriesToPlay.seasons
+      .find((s) => s.seasonNumber === episode.season_number)
+      ?.episodes ?? [];
+
+    const seriesBackdropUrl = seriesToPlay.backdrop
+      ? `https://image.tmdb.org/t/p/w1280${seriesToPlay.backdrop}`
+      : undefined;
+
+    const queue: PlayableItem[] = seasonEpisodes
+      .filter((ep) => ep.available && ep.filePath)
+      .sort((a, b) => a.episode_number - b.episode_number)
+      .map((ep) => ({
+        mediaId: seriesToPlay.id,
+        episodeId: ep.id,
+        title: `${seriesToPlay.title} S${ep.season_number}E${ep.episode_number} — ${ep.title}`,
+        filePath: ep.filePath!,
+        mediaType: "SERIES" as const,
+        seasonNumber: ep.season_number,
+        episodeNumber: ep.episode_number,
+        backdropUrl: seriesBackdropUrl,
+      }));
+
+    const item: PlayableItem = {
+      mediaId: seriesToPlay.id,
+      episodeId: episode.id,
+      title: `${seriesToPlay.title} S${episode.season_number}E${episode.episode_number} — ${episode.title}`,
+      filePath: episode.filePath,
+      mediaType: "SERIES",
+      seasonNumber: episode.season_number,
+      episodeNumber: episode.episode_number,
+      backdropUrl: seriesBackdropUrl,
+    };
+
+    const settings = await tauriService.getSettings().catch(() => null);
+    const pref = settings?.preferred_player ?? "ASK";
+
+    if (pref === "EXTERNAL") {
+      await tauriService.openMedia(episode.filePath);
       setSerie(seriesToPlay);
       setWatchSession({
         type: "episode",
         mediaId: seriesToPlay.id,
         title: seriesToPlay.title,
-        returnPath: pathname,
         episodeId: episode.id,
         episodeTitle: episode.title,
         seasonNumber: episode.season_number,
         episodeNumber: episode.episode_number,
-        backdrop: episode.still_path ? `https://image.tmdb.org/t/p/original${episode.still_path}` : seriesToPlay.backdrop,
+        returnPath: "/series-details",
       });
-    });
+      router.push("/watching");
+      return;
+    }
 
-    router.push("/watching");
+    await dispatchPlay(item, queue, pref);
   };
 
   const handleSplashReady = () => {
@@ -131,21 +239,17 @@ export function useActions() {
 
   const handleAddFolder = async () => {
     try {
-      if (!isOnline) {
-        alert("Modo offline ativo. Reconecte para escanear e associar mídias automaticamente.");
-        return;
-      }
-
       setScanning(true);
       setScanProgress(0);
 
-      // Open folder dialog
+      // Folder selection is a local OS dialog — it must not depend on connectivity.
       const selectedPath = await tauriService.selectFolder();
       if (!selectedPath) {
         setScanning(false);
         return;
       }
 
+      // Verify the path is readable before proceeding.
       let preScanFiles: string[] = [];
       try {
         preScanFiles = await tauriService.scanFolder(selectedPath);
@@ -163,6 +267,18 @@ export function useActions() {
 
       // Add folder to context (will persist automatically via database)
       const folder = await addFolder(selectedPath);
+
+      // Metadata scan requires connectivity. If offline, persist the folder and
+      // notify the user — they can rescan later when back online.
+      if (!isOnline) {
+        setScanning(false);
+        router.push("/library");
+        alert(
+          "Pasta adicionada, mas o scan de metadados está pendente: o app está offline. " +
+          "Reabra o app com conexão ativa para escanear automaticamente.",
+        );
+        return;
+      }
 
       // Get existing media from database before scanning
       const existingMovies = await getMovies();
@@ -230,17 +346,32 @@ export function useActions() {
   const handlePlayMovie = async (movie: Movie) => {
     setPlayError(null);
     try {
-      await tauriService.openMedia(movie.filePath);
-      flushSync(() => {
+      const settings = await tauriService.getSettings().catch(() => null);
+      const pref = settings?.preferred_player ?? "ASK";
+
+      if (pref === "EXTERNAL") {
+        await tauriService.openMedia(movie.filePath);
         setWatchSession({
           type: "movie",
           mediaId: movie.id,
           title: movie.title,
-          returnPath: pathname,
-          backdrop: movie.backdrop || movie.poster,
+          returnPath: "/movie-details",
         });
-      });
-      router.push("/watching");
+        router.push("/watching");
+        return;
+      }
+
+      const item: PlayableItem = {
+        mediaId: movie.id,
+        title: movie.title,
+        filePath: movie.filePath,
+        mediaType: "MOVIE",
+        backdropUrl: movie.backdrop
+          ? `https://image.tmdb.org/t/p/w1280${movie.backdrop}`
+          : undefined,
+      };
+
+      await dispatchPlay(item, [item], pref);
     } catch (error) {
       console.error("Failed to play movie:", error);
       const message =
@@ -356,5 +487,8 @@ export function useActions() {
     scanProgress,
     playError,
     clearPlayError: () => setPlayError(null),
+    pendingPlay,
+    setPendingPlay,
+    handlePlayerChoice,
   };
 }

@@ -168,18 +168,18 @@ export async function getPrismaClient() {
   }
 
   initializationPromise = (async () => {
-    // Get database path
-    dbPath = getDbPath();
-    console.log("📦 Database path:", dbPath);
+    // Use local vars; only assign to module-level singletons on full success.
+    const resolvedDbPath = getDbPath();
+    console.log("📦 Database path:", resolvedDbPath);
 
     // Ensure directory exists
-    const dbDir = path.dirname(dbPath);
+    const dbDir = path.dirname(resolvedDbPath);
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
 
     // Initialize schema if database is new
-    const isNewDb = !fs.existsSync(dbPath);
+    const isNewDb = !fs.existsSync(resolvedDbPath);
     if (isNewDb) {
       console.log("🆕 Creating new database...");
     }
@@ -193,16 +193,21 @@ export async function getPrismaClient() {
     };
 
     const { PrismaBetterSqlite3 } = await import("@prisma/adapter-better-sqlite3");
-    const adapter = new PrismaBetterSqlite3({ url: dbPath });
-    prismaInstance = new PrismaClient({
+    const adapter = new PrismaBetterSqlite3({ url: resolvedDbPath });
+    const client = new PrismaClient({
       ...baseClientOptions,
       adapter,
     });
 
     // Always run migration sync so existing databases receive new schema updates.
-    await initializeDatabase(dbPath);
+    await initializeDatabase(resolvedDbPath);
 
-    await validateSchemaReady(prismaInstance);
+    // Validate before committing the singleton — throws on ABI mismatch or schema failure.
+    await validateSchemaReady(client);
+
+    // Only assign after full success so a failed init never caches a broken client.
+    prismaInstance = client;
+    dbPath = resolvedDbPath;
 
     console.log("✅ Prisma Client initialized");
     return prismaInstance;
@@ -210,6 +215,11 @@ export async function getPrismaClient() {
 
   try {
     return await initializationPromise;
+  } catch (err) {
+    // Reset both singletons so the next call can retry from scratch.
+    prismaInstance = null;
+    dbPath = "";
+    throw err;
   } finally {
     initializationPromise = null;
   }

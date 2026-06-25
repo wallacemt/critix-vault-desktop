@@ -6,9 +6,12 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_PREFIXES = ["/status", "/media/"];
 
+const TIMEOUT_MS = 15_000;
+// Only idempotent methods are retried; POST/PUT/PATCH bodies are already consumed.
+const MAX_RETRIES = 2;
+
 const getExternalApiBase = (): string => {
   const raw = process.env.CRITIX_EXTERNAL_API_URL?.trim() || process.env.NEXT_PUBLIC_CRITIX_API_URL?.trim();
-
   if (!raw) {
     logger.error("External API URL not configured. Set CRITIX_EXTERNAL_API_URL in your .env file.", null, {
       CRITIX_EXTERNAL_API_URL: process.env.CRITIX_EXTERNAL_API_URL ?? "(not set)",
@@ -69,28 +72,49 @@ const forward = async (request: NextRequest, pathSegments: string[]) => {
     init.body = await request.arrayBuffer();
   }
 
-  try {
-    logger.info(`[external-proxy] ${request.method} ${target.toString()}`);
-    const response = await fetch(target, { ...init, signal: AbortSignal.timeout(5_000) });
-    const responseHeaders = new Headers(response.headers);
-    responseHeaders.delete("content-encoding");
-    responseHeaders.delete("transfer-encoding");
+  const isIdempotent = !methodAllowsBody(request.method);
+  const maxAttempts = isIdempotent ? MAX_RETRIES : 1;
+  let lastError: unknown;
 
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders,
-    });
-  } catch (error) {
-    logger.error("Failed to proxy external API request", error, {
-      incomingPath,
-      target: target.toString(),
-      method: request.method,
-    });
-    return errorResponse(502, "EXTERNAL_API_ERROR", "Failed to connect to external API", {
-      target: target.toString(),
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1) await new Promise((r) => setTimeout(r, 500 * (attempt - 1)));
+    try {
+      logger.info(`[external-proxy] ${request.method} ${target.toString()}`);
+      const response = await fetch(target, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const responseHeaders = new Headers(response.headers);
+      responseHeaders.delete("content-encoding");
+      responseHeaders.delete("transfer-encoding");
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+      });
+    } catch (error) {
+      lastError = error;
+      const isTimeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+      if (isTimeout && attempt < maxAttempts) {
+        logger.warn(`[external-proxy] Timeout on attempt ${attempt}/${maxAttempts}, retrying... (${target.toString()})`);
+        continue;
+      }
+      break;
+    }
   }
+
+  const isTimeout =
+    lastError instanceof Error && (lastError.name === "TimeoutError" || lastError.name === "AbortError");
+  logger.error("Failed to proxy external API request", lastError, {
+    incomingPath,
+    target: target.toString(),
+    method: request.method,
+  });
+  // 504 for our own timeout; 502 when upstream returned an error or refused connection.
+  return errorResponse(
+    isTimeout ? 504 : 502,
+    isTimeout ? "GATEWAY_TIMEOUT" : "EXTERNAL_API_ERROR",
+    isTimeout ? "External API timed out" : "Failed to connect to external API",
+    { target: target.toString() },
+  );
 };
 
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

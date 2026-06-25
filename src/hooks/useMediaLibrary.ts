@@ -170,8 +170,12 @@ export function useMediaLibrary(folderId: string | null, showHidden: boolean = f
     }
   }, [folderId, showHidden]);
 
-  const scanFolder = async (folderPath: string) => {
-    if (!folderId) return;
+  // scanFolderById accepts an explicit targetFolderId so callers like
+  // handleConfirmScan can scan any folder without the hook's selected-folder
+  // closure capturing the wrong ID.
+  const scanFolder = async (folderPath: string, targetFolderId?: string) => {
+    const effectiveFolderId = targetFolderId ?? folderId;
+    if (!effectiveFolderId) return;
 
     if (!isOnline) {
       setError("Modo offline ativo. Reconecte para escanear pastas e buscar correspondencias online.");
@@ -181,10 +185,10 @@ export function useMediaLibrary(folderId: string | null, showHidden: boolean = f
     // Get existing media for this folder (for intelligent rescan)
     const allMovies = await getMovies();
     const allSeries = await getSeries();
-    const existingMovies = allMovies.filter((m) => m.folderId === folderId);
-    const existingSeries = allSeries.filter((s) => s.folderId === folderId);
-    const otherMovies = allMovies.filter((m) => m.folderId !== folderId);
-    const otherSeries = allSeries.filter((s) => s.folderId !== folderId);
+    const existingMovies = allMovies.filter((m) => m.folderId === effectiveFolderId);
+    const existingSeries = allSeries.filter((s) => s.folderId === effectiveFolderId);
+    const otherMovies = allMovies.filter((m) => m.folderId !== effectiveFolderId);
+    const otherSeries = allSeries.filter((s) => s.folderId !== effectiveFolderId);
 
     try {
       setScanning(true);
@@ -196,7 +200,7 @@ export function useMediaLibrary(folderId: string | null, showHidden: boolean = f
       // Scan the folder using Rust + API — pass existing media so the service
       // skips files already in the database (incremental scan).
       const result = await folderScanService.scanAndMatchFolder(
-        folderId,
+        effectiveFolderId,
         folderPath,
         (progress) => {
           const percent = progress.totalFiles > 0 ? (progress.processedFiles / progress.totalFiles) * 100 : 0;

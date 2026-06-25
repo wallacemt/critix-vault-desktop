@@ -123,8 +123,12 @@ class FolderScanService {
       try {
         files = await this.scanFolderRecursive(folderPath);
       } catch (scanError) {
-        const errorMessage =
-          scanError instanceof Error ? scanError.message : "Erro ao acessar a pasta. Verifique as permissões.";
+        const rawMessage = scanError instanceof Error ? scanError.message : String(scanError);
+        // Distinguish "path not found" (common after restore from backup) from real permission errors.
+        const isNotFound = /not found|no such file|os error 2|cannot find/i.test(rawMessage);
+        const errorMessage = isNotFound
+          ? `A pasta "${folderPath}" não foi encontrada. Se os dados foram restaurados de outro computador, remova e adicione a pasta novamente apontando para o caminho correto.`
+          : `Erro ao acessar a pasta. Verifique as permissões. (${rawMessage})`;
         onProgress?.({
           status: "error",
           totalFiles: 0,
@@ -699,8 +703,24 @@ class FolderScanService {
    */
   private cleanMediaName(fileName: string): string {
     return fileName
-      .replace(/[\.\-_]/g, " ") // Replace separators with spaces
-      .replace(/\s+/g, " ") // Remove multiple spaces
+      // Remove bracketed/parenthesised noise like [720p], (BluRay), [PT-BR]
+      .replace(/[\[\(][^\]\)]*[\]\)]/g, "")
+      // Resolution tags
+      .replace(/\b\d{3,4}p\b/gi, "")
+      .replace(/\b(4k|2160p|uhd)\b/gi, "")
+      // Source / encode tags
+      .replace(/\b(bluray|blu-ray|brrip|webrip|web-dl|web|hdrip|hdtv|hdcam|dvdrip|dvdscr|dvd|hd|cam|ts|r5|scr)\b/gi, "")
+      .replace(/\b(xvid|x264|x265|h264|h265|h\.264|h\.265|hevc|avc|av1|vp9|10bit|8bit)\b/gi, "")
+      // Audio tags commonly appended by Brazilian release groups
+      .replace(/\b(dual|audio|dub|dublado|legendado|leg|nacional|nacional|portuguese|english|pt[-\s]?br|ptbr|pt)\b/gi, "")
+      .replace(/\b(dts|aac|ac3|mp3|flac|dolby|atmos|truehd|dd5\.1|dd2\.0)\b/gi, "")
+      // Numeric audio channel specs like "5 1", "5.1", "7 1", "2 0"
+      .replace(/\b[257]\s?[\.\-]?\s?1\b/g, "")
+      .replace(/\b2\s?[\.\-]?\s?0\b/g, "")
+      // Replace separators with spaces
+      .replace(/[\.\-_]/g, " ")
+      // Collapse whitespace
+      .replace(/\s+/g, " ")
       .trim();
   }
 

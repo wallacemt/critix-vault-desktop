@@ -118,9 +118,11 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                server::stop_server();
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::Destroyed = event {
+                    server::stop_server();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -131,6 +133,7 @@ pub fn run() {
             commands::settings::get_last_selected_folder,
             commands::settings::save_settings,
             commands::settings::get_settings,
+            commands::settings::set_torrent_credentials,
             // Image cache (offline functionality)
             commands::cache::cache_image,
             commands::cache::get_cached_image_path,
@@ -149,7 +152,15 @@ pub fn run() {
             commands::files::open_media,
             commands::files::get_file_metadata,
             commands::files::open_file_location,
-            commands::files::open_external_url
+            commands::files::open_external_url,
+            // Player path resolution & subtitle discovery
+            commands::player::resolve_media_path,
+            commands::player::list_sidecar_subtitles,
+            // Torrent integration (Phase 5)
+            commands::torrent::open_torrent_pane,
+            commands::torrent::intercept_torrent_link,
+            commands::torrent::proxy_torrent_api,
+            commands::torrent::search_torrents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

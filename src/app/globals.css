@@ -192,6 +192,55 @@ html {
   }
 }
 
+/* ── Vidstack subtitle/caption styling ─────────────────────────────────────────
+   Vidstack v1.x renders captions in light DOM via React using .vds-captions
+   container and [data-part='cue'] / [data-part='cue-display'] elements.
+   The default cue background is rgba(0,0,0,0.7) — override it via the CSS
+   custom properties that Vidstack reads internally.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Override Vidstack CSS custom properties to remove the black cue background */
+.vds-captions {
+  --media-cue-bg: transparent;
+  --media-cue-display-bg: transparent;
+}
+
+/* Remove background on the outer cue-display block */
+.vds-captions [data-part='cue-display'] {
+  background-color: transparent !important;
+}
+
+/* Style the actual cue text: no background, white text with stroke-style shadow */
+.vds-captions [data-part='cue'] {
+  background-color: transparent !important;
+  color: #ffffff !important;
+  font-size: 1.05rem !important;
+  line-height: 1.5 !important;
+  font-family: var(--font-sans-base) !important;
+  font-weight: 500 !important;
+  padding: 0 0.3em !important;
+  border-radius: 0 !important;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.95),
+    0 0 6px rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.9),
+    -1px -1px 0 rgba(0, 0, 0, 0.9),
+    1px -1px 0 rgba(0, 0, 0, 0.9),
+    -1px 1px 0 rgba(0, 0, 0, 0.9) !important;
+}
+
+/* Fallback: native browser ::cue for any <track> element rendered directly */
+::cue {
+  background-color: transparent;
+  color: #ffffff;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.95),
+    0 0 6px rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.9),
+    -1px -1px 0 rgba(0, 0, 0, 0.9);
+  font-weight: 500;
+}
+
 /* Tailwind custom utilities */
 @layer utilities {
   .bg-linear-to-b {
@@ -239,4 +288,51 @@ html {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+ 
+/*
+ * Vidstack v0.6.x rendering chain:
+ *   media-player (position:relative; contain:layout)
+ *     media-outlet (display:block; height:100%)
+ *       shadow-root  <- Maverick.js element, no explicit height
+ *         video      <- height:auto resolves to 0px (no containing block)
+ *
+ * height:100% on the video resolves against shadow-root which has no
+ * definite height, so the percentage chain collapses to 0px.
+ *
+ * Fix: position the video absolutely inside media-player (already has
+ * position:relative + contain:layout, making it the containing block for
+ * all absolutely-positioned descendants regardless of intermediate elements).
+ * translateZ(0) promotes the video to a GPU compositing layer so WebView
+ * doesn't paint it behind other stacking contexts.
+ */
+/*
+ * media-player contains two block children in its light DOM:
+ *   1. shadow-root  <- Maverick placeholder for the player itself (must NOT get height:100%)
+ *   2. media-outlet <- React child (must fill the player)
+ *        shadow-root  <- Maverick placeholder inside the outlet (must also fill)
+ *             video   <- height:auto collapses to 0px without explicit sizing
+ *
+ * Targeting "media-player shadow-root" (without the media-outlet intermediary)
+ * would match child #1, giving it 900px and pushing media-outlet out of the
+ * viewport. Selectors here are scoped to avoid that.
+ */
+media-player media-outlet {
+  display: block;
+  height: 100%;
+}
+
+media-outlet shadow-root {
+  display: block;
+  height: 100%;
+}
+
+media-outlet video {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  transform: translateZ(0) !important;
 }

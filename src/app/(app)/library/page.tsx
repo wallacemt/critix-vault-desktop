@@ -8,7 +8,6 @@ import { Series } from "@/types/serie";
 import { LoaderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-
 export default function LibraryPage() {
   const { folders, isLoading } = useFoldersContext();
   const { handleAddFolder, handleMediaClick, handlePlayMovie, handlePlaySeries, scanning, scanProgress } = useActions();
@@ -34,6 +33,7 @@ export default function LibraryPage() {
 
   return (
     <>
+
       {isLoading ? (
         <div className="flex items-center flex-col justify-center flex-1 h-screen w-full">
           <LoaderIcon className="animate-spin size-6" />

@@ -31,6 +31,7 @@ import {
   EyeOff,
   AlertTriangle,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
@@ -62,9 +63,13 @@ import { useApiConnectivity } from "@/context/apiConnectivityContext";
 
 interface SeriesDetailsProps {
   demoMode?: boolean;
+  /** When true the series was opened from the Torrent Browser. Only shows
+   * the Download torrent and Watch Trailer actions — library-specific
+   * controls (play, mark watched, edit, delete, seasons) are hidden. */
+  torrentMode?: boolean;
 }
 
-export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
+export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesDetailsProps) {
   const [backdropError, setBackdropError] = useState(false);
   const [posterError, setPosterError] = useState(false);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
@@ -103,6 +108,56 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
       ...(imagesData.poster?.slice(0, 6).map((img: any) => `https://image.tmdb.org/t/p/w500${img.file_path}`) ?? []),
     ] as string[];
   };
+
+  // When opened from the Torrent Browser, the series object only has minimal data.
+  // Fetch full details from the API so cast, videos, number of seasons, etc. are shown.
+  useEffect(() => {
+    if (!torrentMode || !series || !isOnline) return;
+    if (series.cast && series.cast.length > 0) return;
+
+    const enrichFromApi = async () => {
+      try {
+        const apiData = await apiService.getMediaDetailsById(series.id, "tv") as any;
+        if (!apiData) return;
+
+        const videos = apiData.videos?.results?.map((v: any) => ({
+          id: v.id, key: v.key, name: v.name, type: v.type, site: v.site, official: v.official,
+        })) ?? [];
+
+        const cast = apiData.credits?.cast?.slice(0, 20).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profile_path: c.profile_path ? `https://image.tmdb.org/t/p/w185${c.profile_path}` : undefined,
+          order: c.order,
+        })) ?? [];
+
+        const genres = apiData.genres?.map((g: any) => ({ id: g.id, name: g.name })) ?? series.genres ?? [];
+
+        onSeriesUpdate({
+          ...series,
+          title: apiData.name ?? series.title,
+          originalTitle: apiData.original_name ?? series.originalTitle,
+          overview: apiData.overview ?? series.overview,
+          poster: apiData.poster_path ? `https://image.tmdb.org/t/p/w500${apiData.poster_path}` : series.poster,
+          backdrop: apiData.backdrop_path ? `https://image.tmdb.org/t/p/original${apiData.backdrop_path}` : series.backdrop,
+          rating: apiData.vote_average ?? series.rating,
+          year: apiData.first_air_date?.slice(0, 4) ?? series.year,
+          genres,
+          videos,
+          cast,
+          numberOfSeasons: apiData.number_of_seasons ?? series.numberOfSeasons,
+          numberOfEpisodes: apiData.number_of_episodes ?? series.numberOfEpisodes,
+        });
+      } catch (err) {
+        console.error("[SeriesDetails] Failed to enrich torrent-mode series data:", err);
+      }
+    };
+
+    enrichFromApi();
+  // series is intentionally excluded: the cast-length guard prevents re-runs after enrichment.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [torrentMode, series?.id, isOnline]);
 
   // All hooks must be before early return
   // Auto-fetch ALL season + episode details from TMDB (including seasons not in local folder)
@@ -210,13 +265,16 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
 
         const updatedSeries = { ...series, seasons: updatedSeasons };
 
-        // Save updated series to database
-        const allSeries = await getSeries();
-        const updatedAllSeries = allSeries.map((s) =>
-          s.id === updatedSeries.id && s.folderId === updatedSeries.folderId ? updatedSeries : s,
-        );
-        await saveSeries(updatedAllSeries);
-        console.log(`✅ Saved all season details for: ${series.title}`);
+        // Persist to DB only when the series belongs to the local library.
+        // In torrentMode it exists only in context (not in SQLite).
+        if (!torrentMode) {
+          const allSeries = await getSeries();
+          const updatedAllSeries = allSeries.map((s) =>
+            s.id === updatedSeries.id && s.folderId === updatedSeries.folderId ? updatedSeries : s,
+          );
+          await saveSeries(updatedAllSeries);
+          console.log(`✅ Saved all season details for: ${series.title}`);
+        }
 
         if (onSeriesUpdate) {
           onSeriesUpdate(updatedSeries);
@@ -229,7 +287,9 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     };
 
     loadSeasonDetails();
-  }, [series?.id, isOnline]); // Only run when series ID changes
+  // series?.numberOfSeasons is included so the effect re-runs after the torrent-mode
+  // enrichment sets the correct season count (starts at 0 in the minimal DiscoveryItem).
+  }, [series?.id, series?.numberOfSeasons, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch gallery images from API
   useEffect(() => {
@@ -303,9 +363,9 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     }
   }, [series?.id, series?.seasons?.length]); // Re-run when series or seasons change
 
-  // Save series view action
+  // Save series view action (skip in torrentMode — series is not in the local DB)
   useEffect(() => {
-    if (!series) return;
+    if (!series || torrentMode) return;
 
     const saveView = async () => {
       try {
@@ -317,7 +377,7 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
     };
 
     saveView();
-  }, [series?.id]);
+  }, [series?.id, torrentMode]);
 
   if (!series) return null;
 
@@ -949,7 +1009,22 @@ export function SeriesDetails({ demoMode = false }: SeriesDetailsProps) {
               </div>
 
               {/* Actions */}
-              {!demoMode && (
+              {torrentMode ? (
+                /* Torrent context: only show Download torrent (back to picker) and Watch Trailer */
+                <div className="flex gap-3 flex-wrap">
+                  <Button
+                    size="lg"
+                    onClick={() => router.push("/torrent-search")}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl"
+                  >
+                    <Download className="w-5 h-5 mr-2" />
+                    Baixar Torrent
+                  </Button>
+                  {series.videos && series.videos.length > 0 && (
+                    <TrailerModal videos={series.videos} title={series.title} />
+                  )}
+                </div>
+              ) : !demoMode && (
                 <div className="flex flex-col gap-3">
                   {playError && (
                     <div className="flex items-start gap-3 rounded-xl bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-200">

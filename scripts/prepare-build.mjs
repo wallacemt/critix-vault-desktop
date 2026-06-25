@@ -492,7 +492,74 @@ async function validateServerBundle(serverDir) {
   console.log(`  ✅ Bundle validado: ${chunkFiles.length} chunk(s) em _next_build/server/chunks`);
 }
 
+/**
+ * Post-copy cleanup: removes dev-only artifacts that must not ship in production.
+ *
+ * - *.map files expose original source code to end users and are unnecessary at runtime.
+ * - node_modules/.cache directories are Turbopack/webpack build caches, not runtime deps.
+ */
+async function removeDevArtifacts(serverDir) {
+  const removeMapFiles = async (dir) => {
+    if (!existsSync(dir)) return;
+    let entries;
+    try { entries = await readdir(dir); } catch { return; }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      let s;
+      try { s = await lstat(fullPath); } catch { continue; }
+      if (s.isDirectory()) {
+        // node_modules/.cache is a build cache — remove the whole directory at once.
+        if (entry === ".cache") {
+          await rm(fullPath, { recursive: true, force: true });
+          continue;
+        }
+        await removeMapFiles(fullPath);
+      } else if (entry.endsWith(".map")) {
+        await rm(fullPath, { force: true });
+      }
+    }
+  };
+  await removeMapFiles(serverDir);
+  console.log("  ✅ Source maps e caches de dev removidos do bundle");
+}
+
+/**
+ * Asserts the current Node.js ABI (NODE_MODULE_VERSION) matches the Tauri-bundled
+ * Node runtime (MODULE_VERSION 147 = Node 26.x).
+ *
+ * better-sqlite3 is a native addon compiled for a specific ABI. If the build machine
+ * uses a different Node major than the bundled runtime, the addon will crash at startup
+ * with ERR_DLOPEN_FAILED / NODE_MODULE_VERSION mismatch.
+ */
+function assertNodeABI() {
+  // Tauri bundles Node 26.x (NODE_MODULE_VERSION 147).
+  const EXPECTED_MODULES_VERSION = 147;
+  const currentModulesVersion = Number(process.versions.modules);
+
+  if (currentModulesVersion !== EXPECTED_MODULES_VERSION) {
+    console.error(`
+❌ Node.js ABI mismatch detected!
+   Build machine: NODE_MODULE_VERSION ${currentModulesVersion} (Node ${process.version})
+   Tauri runtime: NODE_MODULE_VERSION ${EXPECTED_MODULES_VERSION} (Node 26.x)
+
+   The bundled better-sqlite3.node will crash at runtime with ERR_DLOPEN_FAILED.
+
+   Fix: switch to Node 26.x before building.
+     nvm use 26        (if using nvm)
+     fnm use 26        (if using fnm)
+
+   Then reinstall dependencies and rebuild:
+     npm install       (recompiles better-sqlite3 for Node 26)
+     bun run build:app
+`);
+    process.exit(1);
+  }
+
+  console.log(`  ✅ Node ABI check passed (NODE_MODULE_VERSION ${currentModulesVersion} = Node 26.x)`);
+}
+
 async function main() {
+  assertNodeABI();
   await syncTauriCspFromEnv();
 
   // -------------------------------------------------------
@@ -527,8 +594,9 @@ async function main() {
   }
 
   // Servidor standalone (dereferences symlinks, skips junctions and blocked native files)
-  // Skip 'src-tauri' to guard against Windows NTFS junction loops via node_modules
-  await cpSafe(STANDALONE, SERVER_DEST, { skipDirs: ["src-tauri"] });
+  // Skip 'src-tauri' to guard against Windows NTFS junction loops via node_modules.
+  // Skip '.map' files — source maps expose original source code and are not needed in production.
+  await cpSafe(STANDALONE, SERVER_DEST, { skipDirs: ["src-tauri"], skipFiles: [".map"] });
 
   // Assets estáticos (JS/CSS bundles)
   const staticDest = path.join(SERVER_DEST, ".next", "static");
@@ -543,7 +611,7 @@ async function main() {
 
   // Schema Prisma e banco SQLite (se existir)
   if (existsSync(PRISMA_SRC)) {
-    await cpSafe(PRISMA_SRC, path.join(SERVER_DEST, "prisma"), { skipFiles: [".db", ".db-journal", ".db-wal"] });
+    await cpSafe(PRISMA_SRC, path.join(SERVER_DEST, "prisma"), { skipFiles: [".db", ".db-journal", ".db-wal", ".map"] });
     console.log("  ✅ Pasta prisma copiada (sem arquivo .db)");
   }
 
@@ -573,6 +641,12 @@ async function main() {
   // -------------------------------------------------------
   console.log("🧪 Validando bundle do servidor...");
   await validateServerBundle(SERVER_DEST);
+
+  // -------------------------------------------------------
+  // 2e. Remove artefatos de desenvolvimento do bundle final
+  // -------------------------------------------------------
+  console.log("🗑️  Removendo artefatos de dev (source maps, caches)...");
+  await removeDevArtifacts(SERVER_DEST);
 
   // -------------------------------------------------------
   // 3. Cria o out/ com a tela de loading/redirect para o Tauri

@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/sidebar";
 import Image from "next/image";
 import { Button } from "./button";
-import { CircleHelp, FolderPlus, Home, Settings } from "lucide-react";
+import { CircleHelp, FolderPlus, Home, ScrollText, Settings } from "lucide-react";
+import { ChangelogBadge } from "@/components/features/changelog/ChangelogBadge";
 import { FolderList } from "../features/library/_components/folder-list";
 import { Folder } from "@/types/folder";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -26,8 +27,9 @@ interface AppSidebarProps {
   folders: Folder[];
   selectedFolder: Folder | null;
   handleFolderSelect: (folder: Folder | null) => Promise<void>;
-
   removeFolder: (folderId: string) => Promise<void>;
+  /** When true, renders a "New" dot badge next to the Changelog nav link. */
+  hasUnseenRelease?: boolean;
 }
 export function AppSidebar({
   onAddFolder,
@@ -35,6 +37,7 @@ export function AppSidebar({
   selectedFolder,
   handleFolderSelect,
   removeFolder,
+  hasUnseenRelease = false,
 }: AppSidebarProps) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -173,6 +176,28 @@ export function AppSidebar({
             {isCollapsed && (
               <TooltipContent side="right" sideOffset={8}>
                 Ajuda e FAQ
+              </TooltipContent>
+            )}
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                variant="ghost"
+                className="relative w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-light)] group-data-[collapsible=icon]:justify-center rounded-xl"
+              >
+                <Link href="/changelog" aria-label="Ir para Novidades">
+                  <span className="relative mr-2 h-4 w-4 shrink-0 group-data-[collapsible=icon]:mr-0">
+                    <ScrollText className="h-4 w-4" />
+                    <ChangelogBadge visible={hasUnseenRelease} />
+                  </span>
+                  <span className="group-data-[collapsible=icon]:hidden">Novidades</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {isCollapsed && (
+              <TooltipContent side="right" sideOffset={8}>
+                Novidades
               </TooltipContent>
             )}
           </Tooltip>

@@ -122,17 +122,47 @@ interface RustFolder {
   last_scanned?: string;
 }
 
+export type PreferredPlayer = "ASK" | "INTERNAL" | "EXTERNAL";
+
 interface AppSettings {
   default_player: string;
   enable_image_cache: boolean;
   auto_scan_on_startup: boolean;
   theme: string;
+  /** Controls which player the UI uses when the user opens media. */
+  preferred_player: PreferredPlayer;
+  /** Port the local BitTorrent client's web UI listens on (default 10800). */
+  torrent_client_port: number;
+  /** Optional username for the local BitTorrent client's web UI. */
+  torrent_client_user?: string;
+  /** Optional password for the local BitTorrent client's web UI. */
+  torrent_client_pass?: string;
+  /** Master switch for the torrent API proxy. Defaults to false (opt-in). */
+  torrent_proxy_enabled: boolean;
+  /** Last app version for which the user dismissed the "What's New" prompt.
+   *  Empty string on first run — treated as "already seen" (OQ-1). */
+  last_seen_version: string;
 }
 
 interface CacheInfo {
   total_size_bytes: number;
   image_count: number;
   data_file_size: number;
+}
+
+interface TorrentResult {
+  id: string;
+  name: string;
+  info_hash: string;
+  leechers: string;
+  seeders: string;
+  num_files: string;
+  size: string;
+  username: string;
+  added: string;
+  status: string;
+  category: string;
+  imdb: string;
 }
 
 // Conversion utilities
@@ -559,7 +589,58 @@ class TauriService {
   async openFileLocation(filePath: string): Promise<void> {
     return invoke("open_file_location", { filePath });
   }
+
+  // ============================================================================
+  // Torrent Integration (Phase 5)
+  // ============================================================================
+
+  /**
+   * Open the sandboxed torrent browser pane. If it is already open, focuses it.
+   */
+  async openTorrentPane(): Promise<void> {
+    return invoke("open_torrent_pane");
+  }
+
+  async searchTorrents(query: string): Promise<TorrentResult[]> {
+    const raw = await invoke<unknown[]>("search_torrents", { query });
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((r) => {
+      const item = r as Record<string, unknown>;
+      return item.info_hash && String(item.info_hash) !== "0000000000000000000000000000000000000000";
+    }) as TorrentResult[];
+  }
+
+  /**
+   * Validate and hand a magnet link to the OS torrent client.
+   * The Rust side rejects anything that is not a well-formed magnet URI.
+   */
+  async interceptTorrentLink(link: string): Promise<void> {
+    return invoke("intercept_torrent_link", { link });
+  }
+
+  /**
+   * Proxy a torrent list request to the local BitTorrent client.
+   * Port and credentials are read from Rust-side settings — the renderer
+   * passes no arguments.
+   */
+  async proxyTorrentApi(): Promise<unknown> {
+    return invoke("proxy_torrent_api");
+  }
+
+  /**
+   * Write-only command for torrent credentials (LSF-PHASE5-006).
+   *
+   * Credentials are sent to Rust in isolation via this dedicated command.
+   * `getSettings` never returns the password back to the renderer, so this
+   * is the only path credentials travel over IPC — and only inbound.
+   */
+  async setTorrentCredentials(
+    user: string | null,
+    pass: string | null,
+  ): Promise<void> {
+    return invoke("set_torrent_credentials", { user, pass });
+  }
 }
 
 export const tauriService = new TauriService();
-export type { AppSettings, CacheInfo };
+export type { AppSettings, CacheInfo, TorrentResult };

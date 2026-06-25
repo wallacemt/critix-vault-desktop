@@ -21,6 +21,7 @@ import { AppSidebar } from "@/components/ui/app-sidebar";
 import { FolderMediaHeader } from "./_components/folder-media-header";
 import { tauriService } from "@/services/tauri";
 import { BulkActionsBar } from "./_components/bulk-actions-bar";
+import { useChangelogContext } from "@/context/changelogContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface LibraryLayoutProps {
@@ -30,6 +31,7 @@ interface LibraryLayoutProps {
 }
 
 export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: LibraryLayoutProps) {
+  const { hasUnseenRelease } = useChangelogContext();
   const {
     folders,
     selectedFolder,
@@ -224,8 +226,8 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
           folders,
           selectedFolder,
           handleFolderSelect,
-
           removeFolder,
+          hasUnseenRelease,
         }}
       />
 

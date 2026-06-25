@@ -83,7 +83,6 @@ export function FolderList({ folders, selectedFolder, handleFolderSelect, remove
                   <p className="truncate font-display text-sm font-semibold text-[var(--text-primary)]">
                     {folder.name}
                   </p>
-                  <p className="truncate font-sans text-xs text-[var(--text-secondary)]">{count} itens</p>
                 </div>
 
                 <Button

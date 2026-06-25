@@ -1,0 +1,37 @@
+# Tauri 2.x requires explicit ACL declarations for all custom invoke commands.
+# Without this file, all app-level commands are blocked in production builds.
+# Referenced in capabilities/default.json as "critix-vault:allow-app-commands".
+
+[[permission]]
+identifier = "allow-app-commands"
+description = "Allows all custom application commands registered via invoke_handler."
+commands.allow = [
+  "cache_image",
+  "clear_all_data",
+  "export_data",
+  "get_cache_info",
+  "get_cached_image_path",
+  "get_data_directory",
+  "get_file_metadata",
+  "get_last_selected_folder",
+  "get_settings",
+  "import_data",
+  "intercept_torrent_link",
+  "is_image_cached",
+  "list_sidecar_subtitles",
+  "open_external_url",
+  "open_file_location",
+  "open_media",
+  "open_torrent_pane",
+  "proxy_torrent_api",
+  "resolve_media_path",
+  "save_last_selected_folder",
+  "save_settings",
+  "scan_folder",
+  "search_torrents",
+  "select_folder_dialog",
+  "select_media_file_dialog",
+  "select_media_files_dialog",
+  "set_torrent_credentials",
+  "write_text_file",
+]

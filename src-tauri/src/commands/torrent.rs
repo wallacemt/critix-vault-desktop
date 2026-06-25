@@ -68,7 +68,9 @@ pub async fn search_torrents(query: String) -> Result<serde_json::Value, String>
 /// - Must start with `magnet:` (case-insensitive)
 /// - Must contain the `xt=urn:` parameter that identifies the info-hash
 #[tauri::command]
-pub fn intercept_torrent_link(app: tauri::AppHandle, link: String) -> Result<(), String> {
+pub fn intercept_torrent_link(link: String) -> Result<(), String> {
+    use std::process::Command;
+
     let trimmed = link.trim();
     let lower = trimmed.to_ascii_lowercase();
 
@@ -79,11 +81,35 @@ pub fn intercept_torrent_link(app: tauri::AppHandle, link: String) -> Result<(),
         return Err("rejected: invalid magnet link (no xt=urn: parameter)".into());
     }
 
-    // Open with the original (not lowercased) string so the hash is preserved.
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(trimmed, None::<&str>)
-        .map_err(|e| e.to_string())
+    // Use the OS shell to hand the validated magnet URI to the registered
+    // protocol handler (e.g. qBittorrent, uTorrent). `cmd /C start` is the
+    // most reliable path on Windows for custom URI schemes; xdg-open on Linux
+    // and `open` on macOS serve the same purpose.
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", trimmed])
+            .spawn()
+            .map_err(|e| format!("Falha ao abrir link magnet: {e}"))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("Falha ao abrir link magnet: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("Falha ao abrir link magnet: {e}"))?;
+    }
+
+    Ok(())
 }
 
 /// Proxies a torrent list request to the local uTorrent/BitTorrent client.

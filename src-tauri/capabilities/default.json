@@ -3,6 +3,13 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main", "torrent-pane"],
+  "local": true,
+  "remote": {
+    "urls": [
+      "http://localhost:*",
+      "http://127.0.0.1:*"
+    ]
+  },
   "permissions": [
     "core:default",
     "opener:default",
@@ -12,6 +19,7 @@
     "process:allow-restart",
     "updater:default",
     "core:webview:allow-create-webview-window",
-    { "identifier": "opener:allow-open-url", "allow": [{ "url": "magnet:*" }] }
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "magnet:*" }] },
+    "allow-app-commands"
   ]
 }

@@ -45,43 +45,49 @@ pub fn open_external_url(url: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn select_media_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let file_path = app
-        .dialog()
-        .file()
-        .set_title("Selecione um arquivo de vídeo")
-        .add_filter(
-            "Vídeo",
-            &[
-                "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts",
-            ],
-        )
-        .blocking_pick_file();
 
-    match file_path {
-        Some(path) => Ok(Some(path.to_string())),
-        None => Ok(None),
-    }
+    let result = tokio::task::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Selecione um arquivo de vídeo")
+            .add_filter(
+                "Vídeo",
+                &[
+                    "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts",
+                ],
+            )
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(result.map(|p| p.to_string()))
 }
 
 #[tauri::command]
 pub async fn select_media_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let files = app
-        .dialog()
-        .file()
-        .set_title("Selecione os arquivos de vídeo")
-        .add_filter(
-            "Vídeo",
-            &[
-                "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts",
-            ],
-        )
-        .blocking_pick_files();
 
-    match files {
-        Some(paths) => Ok(paths.into_iter().map(|path| path.to_string()).collect()),
-        None => Ok(Vec::new()),
-    }
+    let result = tokio::task::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Selecione os arquivos de vídeo")
+            .add_filter(
+                "Vídeo",
+                &[
+                    "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts",
+                ],
+            )
+            .blocking_pick_files()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(result
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| p.to_string())
+        .collect())
 }
 
 #[tauri::command]

@@ -9,6 +9,8 @@ lerna-debug.log*
 /resources
 node_modules
 dist
+.claude
+.serena
 dist-ssr
 /.next
 /out

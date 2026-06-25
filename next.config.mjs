@@ -20,6 +20,24 @@ const nextConfig = {
   // warnings and the ReferenceError: location is not defined crash.
   serverExternalPackages: ["better-sqlite3", "@prisma/client", "@prisma/adapter-better-sqlite3", "@tauri-apps/api"],
 
+  // Prevent NFT from scanning large directories that are never needed at runtime
+  // in the standalone output. The fs.existsSync(dynamicPath) in prisma.ts causes
+  // NFT to trace ~17k files; excluding these well-known-large trees collapses that.
+  //
+  // src-tauri/** is critical: the Rust build target (src-tauri/target) can exceed
+  // 10 GB and is never part of the Next.js runtime. Without this exclusion NFT
+  // follows node_modules symlinks/junctions that resolve into the Tauri tree and
+  // copies the entire artifact cache into .next/standalone.
+  outputFileTracingIgnores: [
+    "node_modules/@swc/**",
+    "node_modules/next/dist/compiled/jest-worker/**",
+    "node_modules/@esbuild/**",
+    "node_modules/rollup/**",
+    "node_modules/webpack/**",
+    "node_modules/terser/**",
+    "src-tauri/**",
+  ],
+
   experimental: {
     // Only load the icons/components actually used from these barrel-file-heavy
     // packages, instead of pulling in the entire library on every import.

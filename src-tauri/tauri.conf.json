@@ -34,7 +34,7 @@
       "active": true,
       "dialog": false,
       "endpoints": ["https://github.com/wallacemt/critix-vault-desktop/releases/latest/download/latest.json"],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQzM0M1ODZGNTlBNDU0RjMKUldUelZLUlpiMWc4MHhRN2RKNlIzaC9jdTQ2d1lhSzltY3V5eE8vNnlQNlJITndxZjZ5byt5RU0K"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwOTc2M0RGRTgwNzk0RkYKUldUL2xBZm8zMk9YZ09vVGtDMWt3ekZGdEd1cVlvSUNGaHhCS3JvL0FZL3VneGRHcTFTeTRrdCsK"
     }
   },
   "bundle": {

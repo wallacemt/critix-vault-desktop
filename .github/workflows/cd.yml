@@ -100,6 +100,7 @@ jobs:
             NEXT_PUBLIC_CRITIX_API_URL: ${{ secrets['BACKEND_URL'] }}
             CRITIX_EXTERNAL_API_URL: ${{ secrets['BACKEND_URL'] }}
             TAURI_SIGNING_PRIVATE_KEY: ${{ secrets['TAURI_SIGNING_PRIVATE_KEY'] }}
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets['TAURI_SIGNING_PRIVATE_KEY_PASSWORD'] }}
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
@@ -114,6 +115,11 @@ jobs:
 
                   if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
                     echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is required for release pipeline."
+                    exit 1
+                  fi
+
+                  if [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+                    echo "::error::TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret is required for release pipeline."
                     exit 1
                   fi
 

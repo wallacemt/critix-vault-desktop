@@ -44,7 +44,7 @@ export function StreamingGrid({
   if (media.length === 0) {
     return (
       <motion.div
-        className="flex flex-col items-center justify-center py-24 text-center"
+        className="flex flex-col items-center justify-center py-24 text-center fixed translatex-1/2 left-1/2 "
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >

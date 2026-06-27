@@ -16,7 +16,7 @@ import { setSeriesEpisodesWatchStatus, toggleWatchStatus } from "@/services/data
 import { Media, MediaType } from "@/types/media";
 import { Series } from "@/types/serie";
 import { useFoldersContext } from "@/context/foldersContext";
-import { getNextUnwatchedEpisode } from "@/utils/mediaUtils";
+import { getLastWatchedEpisode } from "@/utils/mediaUtils";
 
 interface StreamingCardProps {
   media: Media;
@@ -61,11 +61,14 @@ export function StreamingCard({
   demoMode = false,
 }: StreamingCardProps) {
   const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const { refreshFolders } = useFoldersContext();
   // Derive directly from props so card stays in sync with refreshMedia() reloads
   const isWatched = media.isWatched ?? false;
   const isHidden = media.isHidden ?? false;
+  // Subtly highlight media the user is actively watching (has lastWatchedAt, not yet completed).
+  const isInProgress = !isWatched && !!media.lastWatchedAt;
 
   const getMediaIcon = (type: MediaType) => {
     switch (type) {
@@ -80,7 +83,8 @@ export function StreamingCard({
   };
 
   const MediaIcon = getMediaIcon(media.type);
-  const currentEpisode = media.type === "MOVIE" ? null : getNextUnwatchedEpisode(media as Series);
+  // Show last watched episode, not next to watch — and only when ≥1 episode has been watched.
+  const lastWatchedEp = media.type === "MOVIE" ? null : getLastWatchedEpisode(media as Series);
 
   const formatDuration = (minutes?: number) => {
     if (!minutes) return null;
@@ -148,6 +152,9 @@ export function StreamingCard({
           className={cn(
             "relative overflow-hidden border-[var(--border-color)] bg-[var(--bg-surface)] cursor-pointer transition-all duration-300 hover:border-amber-400/50",
             selected && "border-2 border-amber-400 bg-amber-400/8",
+            // DEF-007: match the grid view's in-progress ring so the indicator is
+            // consistent across both view modes.
+            isInProgress && !selected && "ring-1 ring-amber-500/40",
           )}
           onClick={() => onClick?.(media)}
           onContextMenu={(e) => {
@@ -174,12 +181,22 @@ export function StreamingCard({
             {/* Poster thumbnail */}
             <div className="relative w-30 flex-shrink-0 rounded-lg overflow-hidden">
               {media.poster && !imageError ? (
-                <img
-                  src={media.poster}
-                  alt={media.title}
-                  className={cn("w-full h-full object-cover", isHidden && "opacity-20")}
-                  onError={() => setImageError(true)}
-                />
+                <>
+                  {!imageLoaded && (
+                    <div className="absolute inset-0 bg-zinc-800 animate-pulse" />
+                  )}
+                  <img
+                    src={media.poster}
+                    alt={media.title}
+                    className={cn(
+                      "w-full h-full object-cover transition-opacity duration-300",
+                      isHidden && "opacity-20",
+                      !imageLoaded && "opacity-0",
+                    )}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={() => setImageError(true)}
+                  />
+                </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
                   <MediaIcon className="w-8 h-8 text-slate-600" />
@@ -205,9 +222,9 @@ export function StreamingCard({
                   >
                     {media.type === "ANIME" ? "Anime" : media.type}
                   </Badge>
-                  {media.type !== "MOVIE" && (currentEpisode || isWatched) && (
+                  {media.type !== "MOVIE" && (lastWatchedEp || isWatched) && (
                     <Badge className="shrink-0 border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
-                      {isWatched ? "Concluída" : `T${currentEpisode?.seasonNumber}:E${currentEpisode?.episodeNumber}`}
+                      {isWatched ? "Concluída" : `T${lastWatchedEp?.seasonNumber}:E${lastWatchedEp?.episodeNumber}`}
                     </Badge>
                   )}
                   {isHidden && (
@@ -417,8 +434,11 @@ export function StreamingCard({
     >
       <Card
         className={cn(
-          "group relative overflow-hidden rounded-lg  bg-surface-crx  cursor-pointer transition-all duration-300 hover:border-amber-400/50 hover:shadow-2xl hover:shadow-amber-400/20 -p-2",
-          selected && "border-2 border-amber-400",isHidden && "opacity-60"
+          "group relative overflow-hidden rounded-lg bg-surface-crx cursor-pointer transition-all duration-300 hover:border-amber-400/50 hover:shadow-2xl hover:shadow-amber-400/20 -p-2",
+          selected && "border-2 border-amber-400",
+          // ponytail: subtle ring — only a ring, not a banner, to avoid visual noise
+          isInProgress && !selected && "ring-1 ring-amber-500/40",
+          isHidden && "opacity-60"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -446,14 +466,23 @@ export function StreamingCard({
           )}
           {/* Poster Image */}
           {media.poster && !imageError ? (
-            <motion.img
-              src={media.poster}
-              alt={media.title}
-              className={cn("w-full h-full object-cover")}
-              onError={() => setImageError(true)}
-              whileHover={{ scale: 1.1 }}
-              transition={{ duration: 0.3 }}
-            />
+            <>
+              {!imageLoaded && (
+                <div className="absolute inset-0 bg-zinc-800 animate-pulse" />
+              )}
+              <motion.img
+                src={media.poster}
+                alt={media.title}
+                className={cn(
+                  "w-full h-full object-cover transition-opacity duration-300",
+                  !imageLoaded && "opacity-0",
+                )}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageError(true)}
+                whileHover={{ scale: 1.1 }}
+                transition={{ duration: 0.3 }}
+              />
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
               <MediaIcon className="w-16 h-16 text-slate-600" />
@@ -505,14 +534,14 @@ export function StreamingCard({
             </motion.div>
           )}
 
-          {media.type !== "MOVIE" && (currentEpisode || isWatched) && (
+          {media.type !== "MOVIE" && (lastWatchedEp || isWatched) && (
             <motion.div
               className="absolute bottom-3 left-3"
               initial={{ opacity: 0, scale: 0 }}
               animate={{ opacity: 1, scale: 1 }}
             >
               <Badge className="text-xs backdrop-blur-sm bg-surface-crx text-primary rounded-lg">
-                {isWatched ? "Concluída" : `T${currentEpisode?.seasonNumber}:E${currentEpisode?.episodeNumber}`}
+                {isWatched ? "Concluída" : `T${lastWatchedEp?.seasonNumber}:E${lastWatchedEp?.episodeNumber}`}
               </Badge>
             </motion.div>
           )}

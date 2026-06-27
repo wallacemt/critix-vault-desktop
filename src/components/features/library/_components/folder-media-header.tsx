@@ -40,7 +40,7 @@ interface FolderMediaHeaderProps {
   watchedMonthFilter: string;
   watchedMonthOptions: Array<{ value: string; label: string }>;
   searchQuery: string;
-  sortBy: "modified" | "title" | "rating" | "duration" | "year";
+  sortBy: "modified" | "title" | "rating" | "duration" | "year" | "recently-watched";
   sortOrder: "asc" | "desc";
   statusFilter: "all" | "watched" | "unwatched";
   typeFilter: "all" | "movie" | "series" | "anime";
@@ -51,7 +51,7 @@ interface FolderMediaHeaderProps {
   setSearchQuery: Dispatch<SetStateAction<string>>;
   setActiveTab: Dispatch<SetStateAction<"all" | "movies" | "series" | "watched">>;
   setViewMode: Dispatch<SetStateAction<"grid" | "list">>;
-  setSortBy: Dispatch<SetStateAction<"modified" | "title" | "rating" | "duration" | "year">>;
+  setSortBy: Dispatch<SetStateAction<"modified" | "title" | "rating" | "duration" | "year" | "recently-watched">>;
   setSortOrder: Dispatch<SetStateAction<"asc" | "desc">>;
   setStatusFilter: Dispatch<SetStateAction<"all" | "watched" | "unwatched">>;
   setTypeFilter: Dispatch<SetStateAction<"all" | "movie" | "series" | "anime">>;
@@ -368,6 +368,11 @@ export function FolderMediaHeader({
                   <Select
                     value={sortValue}
                     onValueChange={(value) => {
+                      if (value === "recently-watched-desc") {
+                        setSortBy("recently-watched");
+                        setSortOrder("desc");
+                        return;
+                      }
                       const [field, order] = value.split("-") as [typeof sortBy, typeof sortOrder];
                       setSortBy(field);
                       setSortOrder(order);
@@ -378,6 +383,7 @@ export function FolderMediaHeader({
                       <SelectValue placeholder="Ordenar por" />
                     </SelectTrigger>
                     <SelectContent className="border-[var(--border-color)] bg-[var(--bg-surface)]">
+                      <SelectItem value="recently-watched-desc">Assistidos Recentemente</SelectItem>
                       <SelectItem value="modified-desc">Modificado (Mais Recente)</SelectItem>
                       <SelectItem value="modified-asc">Modificado (Mais Antigo)</SelectItem>
                       <SelectItem value="title-asc">Título (A-Z)</SelectItem>

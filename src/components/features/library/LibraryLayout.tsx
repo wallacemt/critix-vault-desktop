@@ -22,7 +22,11 @@ import { FolderMediaHeader } from "./_components/folder-media-header";
 import { tauriService } from "@/services/tauri";
 import { BulkActionsBar } from "./_components/bulk-actions-bar";
 import { useChangelogContext } from "@/context/changelogContext";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useBgTranscode, BG_TRANSCODE_KEY } from "@/hooks/useBgTranscode";
+import { BgTranscodePanel } from "./_components/bg-transcode-panel";
+import { AutoScanPanel } from "./_components/auto-scan-panel";
+import { TextureBackground } from "@/components/ui/texture-bg";
 
 interface LibraryLayoutProps {
   onAddFolder: () => void;
@@ -32,6 +36,12 @@ interface LibraryLayoutProps {
 
 export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: LibraryLayoutProps) {
   const { hasUnseenRelease } = useChangelogContext();
+
+  const [bgTranscodeEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(BG_TRANSCODE_KEY) === "true";
+  });
+
   const {
     folders,
     selectedFolder,
@@ -86,6 +96,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     selectedCount,
     toggleMediaSelection,
     clearSelection,
+    selectAllMedia,
     bulkMarkSelectedAsWatched,
     bulkDeleteSelectedMedia,
     bulkSelectionAllWatched,
@@ -106,14 +117,56 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     handleToggleHidden,
     refreshMedia,
   } = useLibraryLeyout();
+
+  // DEF-003: Use the full, unfiltered library for the background transcode queue.
+  // filteredMedia() is a subset (respects activeTab, search, filters) and starts empty
+  // on mount — the queue would never start. watchedMovies + unwatchedMovies + watchedSeries
+  // + unwatchedSeries covers every item regardless of active filters or tab.
+  const allLibraryMedia = useMemo(
+    () => [...watchedMovies, ...unwatchedMovies, ...watchedSeries, ...unwatchedSeries],
+    [watchedMovies, unwatchedMovies, watchedSeries, unwatchedSeries],
+  );
+  const bgTranscodeStatus = useBgTranscode(allLibraryMedia, bgTranscodeEnabled);
+
+  // Library keyboard shortcuts — keys configurable in Settings
   useEffect(() => {
-    if (selectedCount === 0) return;
+    function match(stored: string | null, fallback: string, e: KeyboardEvent): boolean {
+      const s = (stored ?? fallback).toLowerCase();
+      const parts = s.split("+");
+      const key = parts[parts.length - 1];
+      return (
+        e.key.toLowerCase() === key &&
+        e.ctrlKey === parts.includes("ctrl") &&
+        e.shiftKey === parts.includes("shift") &&
+        e.altKey === parts.includes("alt")
+      );
+    }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") clearSelection();
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const ls = localStorage;
+      if (e.key === "Escape") {
+        clearSelection();
+        return;
+      }
+      if (match(ls.getItem("critix_key_select_all"), "ctrl+a", e)) {
+        e.preventDefault();
+        selectAllMedia();
+        return;
+      }
+      if (match(ls.getItem("critix_key_delete"), "Delete", e) && selectedCount > 0) {
+        e.preventDefault();
+        if (window.confirm(`Remover ${selectedCount} mídia(s) selecionada(s)?`)) bulkDeleteSelectedMedia();
+        return;
+      }
+      if (match(ls.getItem("critix_key_mark_watched"), "w", e) && selectedCount > 0) {
+        e.preventDefault();
+        bulkMarkSelectedAsWatched();
+        return;
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedCount, clearSelection]);
+  }, [selectedCount, clearSelection, selectAllMedia, bulkDeleteSelectedMedia, bulkMarkSelectedAsWatched]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -233,6 +286,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
 
       {/* Main Content with SidebarInset */}
       <SidebarInset className="flex-1 flex flex-col overflow-x-hidden">
+        <TextureBackground/>
         {selectedFolder ? (
           <motion.div
             ref={scrollContainerRef}
@@ -445,18 +499,11 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
           />
         )}
 
+        {/* Background transcode queue — collapsible side panel */}
+        <BgTranscodePanel status={bgTranscodeStatus} />
+
         {/* Auto-scanning indicator */}
-        {isAutoScanning && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 right-4 z-40 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg flex items-center gap-2"
-          >
-            <Scan className="h-4 w-4 animate-spin" />
-            <span className="font-medium">Scanning for new media...</span>
-          </motion.div>
-        )}
+        <AutoScanPanel active={isAutoScanning} />
 
         {/* Edit Media Modal */}
         {editingMedia && (

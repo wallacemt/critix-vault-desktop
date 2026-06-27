@@ -80,11 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <PlayerChoiceGate />
       <TorrentStatusStrip enabled={torrentProxyEnabled} />
-      <WhatsNewModal
-        entry={whatsNew.currentEntry}
-        open={whatsNewOpen}
-        onClose={handleWhatsNewClose}
-      />
+      <WhatsNewModal entry={whatsNew.currentEntry} open={whatsNewOpen} onClose={handleWhatsNewClose} />
     </ChangelogProvider>
   );
 }

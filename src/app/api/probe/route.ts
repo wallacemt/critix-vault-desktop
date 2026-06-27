@@ -46,6 +46,8 @@ export interface AudioProbeResult {
   ffprobeAvailable: boolean;
   subtitleStreams: SubtitleStreamInfo[];
   audioStreams: AudioStreamInfo[];
+  /** Total duration in seconds (from ffprobe format metadata). Undefined for safe/non-probed files. */
+  durationSeconds?: number;
 }
 
 // In-memory probe cache — codecs don't change while the app is running.
@@ -87,11 +89,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(SAFE_RESULT(false));
   }
 
-  // One call to get all streams (audio + subtitles).
+  // One call to get all streams (audio + subtitles) plus format duration.
   const ffprobeArgs = [
     "-v", "quiet",
     "-print_format", "json",
     "-show_streams",
+    "-show_format",
     resolved,
   ];
 
@@ -104,6 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         channels?: number;
         tags?: { language?: string; title?: string };
       }>;
+      format?: { duration?: string };
     };
 
     const allStreams = info.streams ?? [];
@@ -153,12 +157,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       `audio=${audioStreams.length} subs=${subtitleStreams.length}`,
     );
 
+    const rawDuration = parseFloat(info.format?.duration ?? "");
+    const durationSeconds = Number.isFinite(rawDuration) && rawDuration > 0
+      ? rawDuration
+      : undefined;
+
     const result: AudioProbeResult = {
       audioCodec: firstAudioCodec,
       needsTranscode,
       ffprobeAvailable: true,
       subtitleStreams,
       audioStreams,
+      durationSeconds,
     };
 
     probeCache.set(resolved, result);

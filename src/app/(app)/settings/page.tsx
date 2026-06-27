@@ -37,6 +37,9 @@ import {
   Library,
   Play,
   Magnet,
+  Keyboard,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { AppSettings } from "@/services/tauri";
 import type { PreferredPlayer } from "@/services/tauri";
@@ -131,6 +134,94 @@ export default function SettingsPage() {
   const [torrentUser, setTorrentUser] = useState("");
   const [torrentPass, setTorrentPass] = useState("");
   const [savingCredentials, setSavingCredentials] = useState(false);
+  const [bgTranscode, setBgTranscode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("critix_bg_transcode") === "true";
+  });
+
+  const handleBgTranscodeToggle = () => {
+    const next = !bgTranscode;
+    setBgTranscode(next);
+    localStorage.setItem("critix_bg_transcode", String(next));
+  };
+
+  const [speedUpKey, setSpeedUpKey] = useState<string>(() =>
+    typeof window === "undefined" ? "]" : (localStorage.getItem("critix_speed_up_key") ?? "]"),
+  );
+  const [speedDownKey, setSpeedDownKey] = useState<string>(() =>
+    typeof window === "undefined" ? "[" : (localStorage.getItem("critix_speed_down_key") ?? "["),
+  );
+  const [recordingKey, setRecordingKey] = useState<"up" | "down" | null>(null);
+
+  useEffect(() => {
+    if (!recordingKey) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecordingKey(null);
+        return;
+      }
+      if (recordingKey === "up") {
+        setSpeedUpKey(e.key);
+        localStorage.setItem("critix_speed_up_key", e.key);
+      } else {
+        setSpeedDownKey(e.key);
+        localStorage.setItem("critix_speed_down_key", e.key);
+      }
+      setRecordingKey(null);
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, [recordingKey]);
+
+  // ── Library keyboard shortcuts ──────────────────────────────────────────────
+  type LibShortcutKey = "select_all" | "delete" | "mark_watched";
+  const LIB_SHORTCUT_DEFAULTS: Record<LibShortcutKey, string> = {
+    select_all: "ctrl+a",
+    delete: "Delete",
+    mark_watched: "w",
+  };
+  const [libShortcuts, setLibShortcuts] = useState<Record<LibShortcutKey, string>>(() => {
+    if (typeof window === "undefined") return LIB_SHORTCUT_DEFAULTS;
+    return {
+      select_all: localStorage.getItem("critix_key_select_all") ?? LIB_SHORTCUT_DEFAULTS.select_all,
+      delete: localStorage.getItem("critix_key_delete") ?? LIB_SHORTCUT_DEFAULTS.delete,
+      mark_watched: localStorage.getItem("critix_key_mark_watched") ?? LIB_SHORTCUT_DEFAULTS.mark_watched,
+    };
+  });
+  const [recordingLib, setRecordingLib] = useState<LibShortcutKey | null>(null);
+
+  useEffect(() => {
+    if (!recordingLib) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecordingLib(null);
+        return;
+      }
+      if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push("ctrl");
+      if (e.shiftKey) parts.push("shift");
+      if (e.altKey) parts.push("alt");
+      parts.push(e.key === " " ? "Space" : e.key);
+      const combo = parts.join("+");
+      localStorage.setItem(`critix_key_${recordingLib}`, combo);
+      setLibShortcuts((s) => ({ ...s, [recordingLib]: combo }));
+      setRecordingLib(null);
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, [recordingLib]);
+
+  function fmtKey(s: string) {
+    return s
+      .split("+")
+      .map((k) => (k === "ctrl" ? "Ctrl" : k === "shift" ? "Shift" : k === "alt" ? "Alt" : k))
+      .join(" + ");
+  }
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMsg({ type, text });
@@ -426,7 +517,7 @@ export default function SettingsPage() {
   const totalItems = info ? info.counts.movies + info.counts.series : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white ">
       {/* Status Toast */}
       {statusMsg && (
         <motion.div
@@ -783,6 +874,31 @@ export default function SettingsPage() {
                 />
               </button>
             </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl border mt-4 border-slate-700">
+              <div className="flex-1 pr-4">
+                <h4 className="font-medium text-white text-sm mb-1">Transcode de áudio em segundo plano</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Pré-processa o áudio de arquivos MKV/AVI em segundo plano após carregar a biblioteca. Quando ativo, o
+                  player abre instantaneamente para mídias já transcodificadas (cache). Processa a faixa padrão (stream
+                  0) de cada arquivo, mais recentes primeiro.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={bgTranscode}
+                onClick={handleBgTranscodeToggle}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  bgTranscode ? "bg-amber-500" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                    bgTranscode ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </motion.section>
 
           {/* Player preference */}
@@ -854,6 +970,135 @@ export default function SettingsPage() {
             </div>
           </motion.section>
 
+          {/* Player speed shortcuts */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.17 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-amber-600/20 border border-amber-600/30 flex items-center justify-center">
+                <Keyboard className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Atalhos de Velocidade</h2>
+                <p className="text-xs text-slate-500">
+                  Teclas para aumentar / diminuir a velocidade no player interno. Scroll também funciona.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {(
+                [
+                  { label: "Aumentar velocidade", icon: ChevronUp, key: speedUpKey, which: "up" as const },
+                  { label: "Diminuir velocidade", icon: ChevronDown, key: speedDownKey, which: "down" as const },
+                ] as const
+              ).map(({ label, icon: Icon, key, which }) => (
+                <div
+                  key={which}
+                  className="flex items-center justify-between p-4 rounded-xl border border-slate-700 bg-slate-800/50"
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm text-white">{label}</span>
+                  </div>
+                  <button
+                    onClick={() => setRecordingKey(recordingKey === which ? null : which)}
+                    className={`min-w-[80px] px-3 py-1.5 rounded-lg border text-sm font-mono transition-colors ${
+                      recordingKey === which
+                        ? "border-amber-500 bg-amber-500/15 text-amber-300 animate-pulse"
+                        : "border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500"
+                    }`}
+                  >
+                    {recordingKey === which ? "Pressione…" : key}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-slate-600">
+              Clique no botão de tecla e pressione qualquer tecla para redefinir. Esc cancela.
+            </p>
+          </motion.section>
+
+          {/* Library keyboard shortcuts */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.19 }}
+            className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-600/30 flex items-center justify-center">
+                <Keyboard className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white font-display">Atalhos da Biblioteca</h2>
+                <p className="text-xs text-slate-500">
+                  Atalhos de teclado para ações na biblioteca. Clique para redefinir.
+                </p>
+              </div>
+            </div>
+
+            {/* Guide table — fixed shortcuts */}
+            <div className="mb-4 rounded-xl border border-slate-700 overflow-hidden">
+              {[{ label: "Limpar seleção", key: "Esc", fixed: true }].map(({ label, key }) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/60 last:border-0 bg-slate-800/30"
+                >
+                  <span className="text-sm text-slate-300">{label}</span>
+                  <kbd className="px-2 py-1 rounded bg-slate-700 text-slate-300 text-xs font-mono">{key}</kbd>
+                </div>
+              ))}
+            </div>
+
+            {/* Configurable shortcuts */}
+            <div className="flex flex-col gap-2">
+              {(
+                [
+                  { id: "select_all" as LibShortcutKey, label: "Selecionar todos", icon: ChevronDown },
+                  { id: "delete" as LibShortcutKey, label: "Deletar selecionados", icon: ChevronDown },
+                  { id: "mark_watched" as LibShortcutKey, label: "Marcar como assistido", icon: ChevronDown },
+                ] as const
+              ).map(({ id, label }) => (
+                <div
+                  key={id}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-700 bg-slate-800/50"
+                >
+                  <span className="text-sm text-white">{label}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRecordingLib(recordingLib === id ? null : id)}
+                      className={`min-w-[100px] px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
+                        recordingLib === id
+                          ? "border-indigo-500 bg-indigo-500/15 text-indigo-300 animate-pulse"
+                          : "border-slate-600 bg-slate-700/50 text-slate-300 hover:border-slate-500"
+                      }`}
+                    >
+                      {recordingLib === id ? "Pressione…" : fmtKey(libShortcuts[id])}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const def = LIB_SHORTCUT_DEFAULTS[id];
+                        localStorage.setItem(`critix_key_${id}`, def);
+                        setLibShortcuts((s) => ({ ...s, [id]: def }));
+                      }}
+                      className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                      title="Restaurar padrão"
+                    >
+                      reset
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-slate-600">
+              Esc cancela a gravação. Combinações com Ctrl/Shift/Alt são suportadas.
+            </p>
+          </motion.section>
+
           {/* Torrent Client */}
           <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -879,8 +1124,8 @@ export default function SettingsPage() {
                 <div className="flex-1 pr-4">
                   <h4 className="font-medium text-white text-sm mb-1">Ativar monitoramento de torrents</h4>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    Habilita o proxy de status do cliente BitTorrent local. Quando desativado, nenhuma
-                    conexão de rede é iniciada para o cliente torrent.
+                    Habilita o proxy de status do cliente BitTorrent local. Quando desativado, nenhuma conexão de rede é
+                    iniciada para o cliente torrent.
                   </p>
                 </div>
                 <button
@@ -919,9 +1164,8 @@ export default function SettingsPage() {
                   Porta da interface web
                 </label>
                 <p className="text-xs text-slate-500">
-                  Porta em que o cliente torrent escuta. O padrão é{" "}
-                  <code className="text-slate-400">10800</code> para evitar conflito com a porta interna{" "}
-                  <code className="text-slate-400">8080</code> do app.
+                  Porta em que o cliente torrent escuta. O padrão é <code className="text-slate-400">10800</code> para
+                  evitar conflito com a porta interna <code className="text-slate-400">8080</code> do app.
                 </p>
                 <input
                   id="torrent-port"
@@ -991,10 +1235,7 @@ export default function SettingsPage() {
                   onClick={async () => {
                     setSavingCredentials(true);
                     try {
-                      await tauriService.setTorrentCredentials(
-                        torrentUser || null,
-                        torrentPass || null,
-                      );
+                      await tauriService.setTorrentCredentials(torrentUser || null, torrentPass || null);
                       // Clear the password field after a successful save — the
                       // value now lives only on the Rust side.
                       setTorrentPass("");
@@ -1020,8 +1261,8 @@ export default function SettingsPage() {
               <div className="flex items-start gap-2 p-3 bg-slate-800/30 rounded-lg border border-slate-700/50">
                 <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  As credenciais são armazenadas localmente no arquivo de configuração do app.
-                  A senha nunca é retornada ao renderer após ser salva.
+                  As credenciais são armazenadas localmente no arquivo de configuração do app. A senha nunca é retornada
+                  ao renderer após ser salva.
                 </p>
               </div>
             </div>

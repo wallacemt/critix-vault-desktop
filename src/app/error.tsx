@@ -28,41 +28,17 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
       </div>
 
       <div className="relative z-10 flex flex-col items-center text-center max-w-lg w-full">
-        {/* Logo */}
-        <div className="mb-8 opacity-60 hover:opacity-90 transition-opacity">
-          <Image
-            src="/images/logo-short.png"
-            alt="Critix"
-            width={44}
-            height={44}
-          />
-        </div>
-
         {/* Error icon + illustration */}
         <div className="relative mb-6">
-          <div className="w-24 h-24 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="w-10 h-10 text-red-400" strokeWidth={1.5} />
-          </div>
-          <div className="opacity-50 mt-2">
-            <Image
-              src="/images/503.svg"
-              alt=""
-              width={200}
-              height={184}
-              className="object-contain mx-auto"
-            />
+          <div className="opacity-80 mt-2 animate-pulse">
+            <Image src="/images/503.svg" alt="" width={200} height={184} className="object-contain mx-auto " />
           </div>
         </div>
 
         {/* Heading */}
-        <h1
-          className="text-2xl font-bold text-[var(--text-primary)] mb-2 font-display"
-        >
-          Algo deu errado
-        </h1>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2 font-display">Algo deu errado</h1>
         <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-8 max-w-sm">
-          Ocorreu um erro inesperado nesta cena. Você pode tentar novamente ou
-          voltar ao início.
+          Ocorreu um erro inesperado nesta cena. Você pode tentar novamente ou voltar ao início.
         </p>
 
         {/* Actions */}
@@ -97,22 +73,14 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
               className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]
                          hover:text-[var(--text-secondary)] transition-colors mx-auto mb-2"
             >
-              {detailsOpen ? (
-                <ChevronUp className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
+              {detailsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               Detalhes do erro
             </button>
 
             {detailsOpen && (
-              <div
-                className="rounded-xl border border-red-500/15 bg-red-950/20 p-4 text-left"
-              >
+              <div className="rounded-xl border border-red-500/15 bg-red-950/20 p-4 text-left">
                 {error.digest && (
-                  <p className="text-xs text-[var(--text-muted)] mb-2 font-mono">
-                    Digest: {error.digest}
-                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mb-2 font-mono">Digest: {error.digest}</p>
                 )}
                 <p className="text-xs text-red-300/80 font-mono break-all leading-relaxed">
                   {error.message || "Erro desconhecido"}
@@ -122,9 +90,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
           </div>
         )}
 
-        <p className="mt-10 text-xs text-[var(--text-muted)]">
-          Critix Vault · Erro de renderização
-        </p>
+        <p className="mt-10 text-xs text-[var(--text-muted)]">Critix Vault · Erro de renderização</p>
       </div>
     </div>
   );

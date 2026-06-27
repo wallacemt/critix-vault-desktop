@@ -10,12 +10,29 @@ export interface HlsSession {
   outputPath: string;
   startedAt: number;
   cached?: boolean;              // true = file is in persistent cache, don't delete on stop
+  /** 0-100 progress percentage, updated from FFmpeg -progress output. */
+  progress?: number;
+  /** Total duration in seconds passed from the client for progress calculation. */
+  durationSeconds?: number;
 }
 
-// globalThis guard keeps the Map across Next.js fast-refresh cycles.
-const g = globalThis as unknown as { _hlsSessions?: Map<string, HlsSession> };
+// globalThis guard keeps the Maps across Next.js fast-refresh cycles.
+const g = globalThis as unknown as {
+  _hlsSessions?: Map<string, HlsSession>;
+  _inFlightTranscodes?: Map<string, Promise<{ sessionId: string; hlsUrl: string }>>;
+};
 if (!g._hlsSessions) g._hlsSessions = new Map();
+if (!g._inFlightTranscodes) g._inFlightTranscodes = new Map();
+
 const sessions: Map<string, HlsSession> = g._hlsSessions;
+
+/**
+ * In-flight transcode guard keyed by content hash.
+ * If a transcode for a given hash is already running, new requests await this promise
+ * instead of spawning a second FFmpeg process on the same temp file.
+ */
+export const inFlightTranscodes: Map<string, Promise<{ sessionId: string; hlsUrl: string }>> =
+  g._inFlightTranscodes;
 
 export function getSession(id: string): HlsSession | undefined {
   return sessions.get(id);

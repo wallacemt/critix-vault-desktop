@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };
@@ -41,26 +41,6 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             width: "100%",
           }}
         >
-          {/* Icon */}
-          <div
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: "50%",
-              backgroundColor: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: "1.5rem",
-            }}
-          >
-            <AlertTriangle
-              style={{ width: 36, height: 36, color: "#f87171" }}
-              strokeWidth={1.5}
-            />
-          </div>
-
           {/* Logo text fallback */}
           <p
             style={{
@@ -96,8 +76,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               maxWidth: "340px",
             }}
           >
-            Ocorreu um erro que impediu o carregamento do aplicativo. Tente
-            recarregar ou reiniciar o Critix Vault.
+            Ocorreu um erro que impediu o carregamento do aplicativo. Tente recarregar ou reiniciar o Critix Vault.
           </p>
 
           {/* Reset button */}
@@ -118,13 +97,8 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               boxShadow: "0 0 16px rgba(255,193,7,0.3)",
               transition: "filter 0.15s",
             }}
-            onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.filter =
-                "brightness(1.1)")
-            }
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.filter = "none")
-            }
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.filter = "brightness(1.1)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.filter = "none")}
           >
             <RefreshCw style={{ width: 16, height: 16 }} />
             Tentar novamente

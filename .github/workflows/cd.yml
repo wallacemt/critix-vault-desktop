@@ -72,6 +72,33 @@ jobs:
                     --generate-notes \
                     $EXTRA
 
+                  # Prepend the new tag to release-update.yml options so the
+                  # dropdown stays current without manual edits.
+                  FILE=".github/workflows/release-update.yml"
+                  python3 - "$TAG" "$FILE" <<'EOF'
+import sys, pathlib
+
+tag, path = sys.argv[1], pathlib.Path(sys.argv[2])
+lines = path.read_text().splitlines(keepends=True)
+tag_line = f"                    - {tag}\n"
+
+if tag_line in lines:
+    sys.exit(0)  # already present
+
+for i, line in enumerate(lines):
+    if line.strip() == "options:":
+        lines.insert(i + 1, tag_line)
+        break
+
+path.write_text("".join(lines))
+EOF
+
+                  git config user.name  "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add "$FILE"
+                  git diff --cached --quiet || git commit -m "chore(workflows): add $TAG to release-update choices"
+                  git push
+
     build:
         name: Build - ${{ matrix.label }}
         needs: prepare

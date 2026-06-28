@@ -4,9 +4,12 @@ on:
     workflow_dispatch:
         inputs:
             tag:
-                description: "Tag da release existente (ex: v2.0.0)"
+                # Options list is maintained automatically by cd.yml after each release.
+                description: "Release para atualizar"
                 required: true
-                type: string
+                type: choice
+                options:
+                    - v2.0.0
 
 permissions:
     contents: write
@@ -47,6 +50,7 @@ jobs:
 
         steps:
             - name: Validate tag exists
+              shell: bash
               env:
                   GH_TOKEN: ${{ github.token }}
               run: |

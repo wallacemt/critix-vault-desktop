@@ -27,6 +27,10 @@ export function useMediaSelection() {
     setSelectedMediaIds(new Set());
   };
 
+  const selectAll = (ids: string[]) => {
+    setSelectedMediaIds(new Set(ids));
+  };
+
   return useMemo(
     () => ({
       selectedMediaIds,
@@ -34,6 +38,7 @@ export function useMediaSelection() {
       isSelected,
       toggleMediaSelection,
       clearSelection,
+      selectAll,
     }),
     [selectedMediaIds],
   );

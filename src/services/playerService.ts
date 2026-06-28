@@ -100,6 +100,8 @@ export interface AudioProbeResult {
   ffprobeAvailable: boolean;
   subtitleStreams: SubtitleStreamInfo[];
   audioStreams: AudioStreamInfo[];
+  /** Total duration in seconds from ffprobe. Undefined for safe containers that skip probing. */
+  durationSeconds?: number;
 }
 
 export async function probeAudio(filePath: string): Promise<AudioProbeResult> {
@@ -129,11 +131,17 @@ export async function startHlsSession(
   /** Relative index of the audio stream to transcode (from probe's audioStreams[]). */
   audioStream: number = 0,
   signal?: AbortSignal,
+  /** Total duration in seconds — enables server-side progress tracking. */
+  durationSeconds?: number,
+  /** Client-supplied sessionId so progress can be polled before the transcode completes. */
+  sessionId?: string,
 ): Promise<HlsSession | null> {
   try {
     const url = new URL(`${BASE}/api/hls/start`);
     url.searchParams.set("path", filePath);
     url.searchParams.set("audioStream", String(audioStream));
+    if (durationSeconds != null) url.searchParams.set("durationSeconds", String(durationSeconds));
+    if (sessionId) url.searchParams.set("sessionId", sessionId);
     const resp = await fetch(url.toString(), { method: "POST", signal });
     if (!resp.ok) {
       console.error(`[startHlsSession] HTTP ${resp.status}:`, await resp.text().catch(() => ""));
@@ -145,6 +153,19 @@ export async function startHlsSession(
     if (err instanceof DOMException && err.name === "AbortError") return null;
     console.error("[startHlsSession] Request failed:", err);
     return null;
+  }
+}
+
+export async function fetchHlsProgress(sessionId: string): Promise<number> {
+  try {
+    const resp = await fetch(`${BASE}/api/hls/progress?sessionId=${encodeURIComponent(sessionId)}`, {
+      cache: "no-store",
+    });
+    if (!resp.ok) return 0;
+    const { progress } = (await resp.json()) as { progress: number };
+    return progress ?? 0;
+  } catch {
+    return 0;
   }
 }
 

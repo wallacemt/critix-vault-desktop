@@ -15,7 +15,7 @@ const FILTER_KEY = "critix_filter_last";
 const PRESETS_KEY = "critix_filter_presets";
 
 type FilterSnapshot = {
-  sortBy: "modified" | "title" | "rating" | "duration" | "year";
+  sortBy: "modified" | "title" | "rating" | "duration" | "year" | "recently-watched";
   sortOrder: "asc" | "desc";
   statusFilter: "all" | "watched" | "unwatched";
   typeFilter: "all" | "movie" | "series" | "anime";
@@ -65,11 +65,11 @@ function loadFilterPresets(): FilterPreset[] {
 export const useLibraryLeyout = () => {
   const { folders, selectedFolder, selectFolder, removeFolder } = useFoldersContext();
   const { isOnline } = useApiConnectivity();
-  const { selectedMediaIds, selectedCount, isSelected, toggleMediaSelection, clearSelection } = useMediaSelection();
+  const { selectedMediaIds, selectedCount, isSelected, toggleMediaSelection, clearSelection, selectAll } = useMediaSelection();
   const [activeTab, setActiveTab] = useState<AppTabs>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">(() => loadFilterSnapshot().viewMode);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"modified" | "title" | "rating" | "duration" | "year">(() => loadFilterSnapshot().sortBy);
+  const [sortBy, setSortBy] = useState<"modified" | "title" | "rating" | "duration" | "year" | "recently-watched">(() => loadFilterSnapshot().sortBy);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => loadFilterSnapshot().sortOrder);
   const [statusFilter, setStatusFilter] = useState<"all" | "watched" | "unwatched">(() => loadFilterSnapshot().statusFilter);
   const [typeFilter, setTypeFilter] = useState<"all" | "movie" | "series" | "anime">(() => loadFilterSnapshot().typeFilter);
@@ -412,6 +412,11 @@ export const useLibraryLeyout = () => {
           compareA = a.year || 0;
           compareB = b.year || 0;
           break;
+        case "recently-watched":
+          // Media without a lastWatchedAt (never watched) always goes to the end.
+          compareA = a.lastWatchedAt ? new Date(a.lastWatchedAt).getTime() : 0;
+          compareB = b.lastWatchedAt ? new Date(b.lastWatchedAt).getTime() : 0;
+          break;
         default:
           return 0;
       }
@@ -553,6 +558,7 @@ export const useLibraryLeyout = () => {
     isSelected,
     toggleMediaSelection,
     clearSelection,
+    selectAllMedia: () => selectAll(filteredMedia().map((m) => m.id)),
     bulkMarkSelectedAsWatched,
     bulkDeleteSelectedMedia,
     bulkSelectionAllWatched,

@@ -147,7 +147,7 @@ function FoundItemsPanel({
       </div>
 
       {/* Preview list */}
-      <ul className="space-y-2">
+      <ul className="space-y-2 max-h-92 overflow-y-auto pr-1">
         {visibleItems.map((item) => (
           <li key={item.id} className="flex items-center gap-2">
             {item.poster ? (

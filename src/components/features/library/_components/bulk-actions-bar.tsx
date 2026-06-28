@@ -14,11 +14,7 @@ interface BulkActionsBarProps {
 }
 
 export function BulkActionsBar({ selectedCount, onClearSelection, onMarkWatched, onDelete, allWatched = false }: BulkActionsBarProps) {
-  const handleDelete = async () => {
-    const confirmed = window.confirm(`Remover ${selectedCount} mídia(s) selecionada(s)?`);
-    if (!confirmed) return;
-    await onDelete();
-  };
+  const handleDelete = () => onDelete();
 
   return (
     <motion.div

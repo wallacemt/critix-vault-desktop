@@ -13,7 +13,7 @@ import "@vidstack/react/player/styles/base.css";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Volume2, Languages } from "lucide-react";
+import { Loader2, Volume2, Languages, AlertTriangle, RefreshCw, ExternalLink } from "lucide-react";
 import { FfmpegInstallModal } from "./FfmpegInstallModal";
 import { PlayerContextMenu } from "./PlayerContextMenu";
 
@@ -30,6 +30,7 @@ import {
   probeAudio,
   startHlsSession,
   stopHlsSession,
+  fetchHlsProgress,
 } from "@/services/playerService";
 import type { SubtitleEntry, SubtitleStreamInfo, AudioStreamInfo } from "@/types/player";
 
@@ -51,9 +52,15 @@ interface PlayerLogicProps {
   resumeTime: number;
   /** One-shot seek override applied after a source switch (transcode ready). */
   seekOnReadyRef: React.MutableRefObject<number | null>;
+  /**
+   * DEF-005: When true, the raw stream is playing while FFmpeg runs. Errors are
+   * expected (unsupported audio codec) and should be suppressed WITHOUT consuming
+   * errorHandledRef, so a post-transcode error on the transcoded MP4 can still fire.
+   */
+  isTranscoding: boolean;
 }
 
-function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef }: PlayerLogicProps) {
+function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef, isTranscoding }: PlayerLogicProps) {
   const currentTime = useMediaState("currentTime");
   const duration = useMediaState("duration");
   const paused = useMediaState("paused");
@@ -71,6 +78,9 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef 
   const prevPausedRef = useRef(true);
   const onEndedRef = useRef(onEnded);
   const onUnsupportedRef = useRef(onUnsupported);
+  // Prevents the error handler from firing more than once per item (vidstack can
+  // emit multiple error events for the same failure).
+  const errorHandledRef = useRef(false);
 
   onEndedRef.current = onEnded;
   onUnsupportedRef.current = onUnsupported;
@@ -81,10 +91,17 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef 
   useEffect(() => { setDuration(duration); }, [duration, setDuration]);
   useEffect(() => { setPlaybackRate(mediaPlaybackRate); }, [mediaPlaybackRate, setPlaybackRate]);
 
-  // Hard decode error → fall back to external player
+  // Hard decode error — notify parent once per item. Parent shows an error overlay
+  // rather than auto-opening the external player.
+  // DEF-005: During transcoding the raw AC3/DTS stream is expected to fail — suppress it
+  // WITHOUT consuming errorHandledRef. This way, if the transcoded MP4 subsequently fails,
+  // errorHandledRef is still available and the overlay will correctly appear.
   useEffect(() => {
-    if (error) onUnsupportedRef.current();
-  }, [error]);
+    if (!error || errorHandledRef.current) return;
+    if (isTranscoding) return; // Expected error while raw stream plays — don't consume the slot
+    errorHandledRef.current = true;
+    onUnsupportedRef.current();
+  }, [error, isTranscoding]);
 
   // Apply resume offset (or source-switch seek) the first time the player is ready.
   useEffect(() => {
@@ -105,6 +122,7 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef 
 
   useEffect(() => {
     resumeAppliedRef.current = false;
+    errorHandledRef.current = false;
   }, [item.mediaId, item.episodeId]);
 
   const buildSaveOpts = useCallback(
@@ -178,7 +196,60 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // before the probe runs (useEffect fires after the render), producing silent
   // playback on files with unsupported audio codecs.
   const [transcode, setTranscode] = useState<TranscodeState>({ status: "probing" });
-  const { playbackRate } = usePlayerStore();
+  // Set to true when the player itself reports an error (distinct from transcode errors).
+  // Shows a recovery overlay instead of auto-opening the external player.
+  const [playerError, setPlayerError] = useState(false);
+  // 0-100 transcode progress percentage (updated while FFmpeg is running).
+  const [transcodeProgress, setTranscodeProgress] = useState(0);
+  // sessionId known before FFmpeg finishes — allows polling the progress endpoint.
+  const pendingSessionIdRef = useRef<string | null>(null);
+  const { playbackRate, setPlaybackRate } = usePlayerStore();
+
+  // ── Speed control ────────────────────────────────────────────────────────────
+  const SPEED_STEP = 0.1;
+  const SPEED_MIN = 0.1;
+  const SPEED_MAX = 4;
+
+  const playbackRateRef = useRef(playbackRate);
+  playbackRateRef.current = playbackRate;
+  const speedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [speedToast, setSpeedToast] = useState<number | null>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  const changeRate = useCallback((delta: number) => {
+    // Round to 1 decimal to avoid floating-point drift (0.1 + 0.2 = 0.30000000000004)
+    const next = Math.round(Math.max(SPEED_MIN, Math.min(SPEED_MAX, playbackRateRef.current + delta * SPEED_STEP)) * 10) / 10;
+    setPlaybackRate(next);
+    if (speedToastTimer.current) clearTimeout(speedToastTimer.current);
+    setSpeedToast(next);
+    speedToastTimer.current = setTimeout(() => setSpeedToast(null), 1500);
+  }, [setPlaybackRate]);
+
+  // Scroll anywhere on the player → change speed (non-passive so preventDefault works)
+  useEffect(() => {
+    const el = playerContainerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      changeRate(e.deltaY < 0 ? 1 : -1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [changeRate]);
+
+  // Keyboard shortcuts — keys configurable in Settings, defaults [ / ]
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const upKey = localStorage.getItem("critix_speed_up_key") ?? "]";
+      const downKey = localStorage.getItem("critix_speed_down_key") ?? "[";
+      if (e.key === upKey) { e.preventDefault(); changeRate(1); }
+      else if (e.key === downKey) { e.preventDefault(); changeRate(-1); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [changeRate]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   // One-shot seek after a transcoded source is loaded mid-playback.
   const seekOnReadyRef = useRef<number | null>(null);
@@ -208,6 +279,12 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       activeSessionRef.current = null;
     }
   }, []);
+
+  // Clear player-level error when the item changes so the error overlay doesn't
+  // carry over to the next episode.
+  useEffect(() => {
+    setPlayerError(false);
+  }, [item.filePath, item.mediaId, item.episodeId]);
 
   // When item changes: stop previous HLS session, reset state, re-probe.
   useEffect(() => {
@@ -286,8 +363,15 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       const selectedCodec = selectedStream?.codec ?? probe.audioCodec ?? "unknown";
       setActiveAudioStream(selectedStream);
       setTranscode({ status: "transcoding", codec: selectedCodec });
+      setTranscodeProgress(0);
 
-      const session = await startHlsSession(item.filePath, selectedAudioIndex, abortCtrl.signal);
+      // Generate sessionId client-side so progress polling can start immediately.
+      const clientSessionId = crypto.randomUUID();
+      pendingSessionIdRef.current = clientSessionId;
+
+      // DEF-001: pass durationSeconds from ffprobe so the server can compute progress %.
+      const session = await startHlsSession(item.filePath, selectedAudioIndex, abortCtrl.signal, probe.durationSeconds, clientSessionId);
+      pendingSessionIdRef.current = null;
       if (cancelled) return;
 
       if (!session) {
@@ -323,6 +407,18 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // Stop the HLS session when the component unmounts.
   useEffect(() => () => { stopActiveSession(); }, [stopActiveSession]);
 
+  // Poll transcode progress every 2 s while FFmpeg is running.
+  useEffect(() => {
+    if (transcode.status !== "transcoding") return;
+    const interval = setInterval(async () => {
+      const sid = pendingSessionIdRef.current;
+      if (!sid) return;
+      const pct = await fetchHlsProgress(sid);
+      setTranscodeProgress(pct);
+    }, 2_000);
+    return () => clearInterval(interval);
+  }, [transcode.status]);
+
   // Load sidecar subtitle files alongside the video.
   useEffect(() => {
     listSidecarSubtitles(item.filePath)
@@ -354,15 +450,22 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   const playerReady = !isProbing && !isSelectingAudio;
 
   // While FFmpeg is running, the raw stream (with unsupported audio codec) is expected to
-  // fail in WebView2. Suppress the external-player fallback so the transcode can finish.
+  // fail in WebView2 — suppress so the transcode can finish undisturbed.
+  // Once transcoding is done, a playback error shows a recovery overlay instead of
+  // auto-opening the external player (Task 1: user gets "Try again" / "Open external").
   const handleUnsupported = useCallback(() => {
     if (isTranscoding) return;
-    onUnsupported();
-  }, [isTranscoding, onUnsupported]);
+    setPlayerError(true);
+  }, [isTranscoding]);
 
   // Re-run audio selection and re-transcode with the new chosen track.
   function handleRePick() {
     seekOnReadyRef.current = usePlayerStore.getState().positionSeconds;
+    setRePickCounter((c) => c + 1);
+  }
+
+  function handleRetryAfterError() {
+    setPlayerError(false);
     setRePickCounter((c) => c + 1);
   }
 
@@ -373,9 +476,18 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
 
   return (
     <div
+      ref={playerContainerRef}
       className="relative flex-1 min-h-0"
       onContextMenu={handleContextMenu}
     >
+      {/* Speed toast — brief centered overlay when speed changes via scroll/keyboard */}
+      {speedToast !== null && (
+        <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="bg-black/70 text-white rounded-2xl px-6 py-3 text-3xl font-bold tabular-nums backdrop-blur-sm">
+            {speedToast}x
+          </div>
+        </div>
+      )}
       {/* Probe loading overlay — only shown during the fast ffprobe step (1-3 s) */}
       <AnimatePresence>
         {isProbing && (
@@ -459,7 +571,59 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
         )}
       </AnimatePresence>
 
-      {/* Non-blocking transcoding badge — video is already visible while FFmpeg runs */}
+      {/* Playback error overlay — shown when the video itself fails to play.
+          User can retry (re-probe + re-transcode) or open in external player. */}
+      <AnimatePresence>
+        {playerError && (
+          <motion.div
+            key="player-error"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-30 flex items-center justify-center bg-black/85"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 26 }}
+              className="w-80 rounded-2xl border border-white/10 bg-zinc-900/95 backdrop-blur-xl shadow-2xl p-6 flex flex-col items-center gap-4 text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-white mb-1">Erro ao reproduzir</h2>
+                <p className="text-xs text-zinc-400">
+                  O player não conseguiu reproduzir este arquivo. Tente novamente ou abra em um player externo.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 w-full">
+                <button
+                  onClick={handleRetryAfterError}
+                  className="flex items-center justify-center gap-2 w-full rounded-xl px-4 py-2.5
+                             bg-amber-500/15 border border-amber-500/30 text-amber-300
+                             hover:bg-amber-500/25 transition-all text-sm font-medium"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Tentar novamente
+                </button>
+                <button
+                  onClick={onUnsupported}
+                  className="flex items-center justify-center gap-2 w-full rounded-xl px-4 py-2.5
+                             bg-white/5 border border-white/10 text-white/70
+                             hover:bg-white/10 hover:text-white transition-all text-sm font-medium"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Abrir no player externo
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Non-blocking transcoding badge + progress bar — video is already visible while FFmpeg runs */}
       <AnimatePresence>
         {isTranscoding && (
           <motion.div
@@ -467,12 +631,30 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2
-                       rounded-full px-3 py-1.5 text-xs font-medium
-                       bg-black/70 border border-amber-500/30 text-amber-300 backdrop-blur-sm"
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5
+                       rounded-xl px-4 py-2 text-xs font-medium
+                       bg-black/80 border border-amber-500/30 text-amber-300 backdrop-blur-sm"
           >
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-            Preparando áudio ({(transcode as { codec: string }).codec.toUpperCase()} → AAC) — sem som até finalizar...
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
+              <span>
+                Preparando áudio ({(transcode as { codec: string }).codec.toUpperCase()} → AAC)
+                {transcodeProgress > 0 ? ` — ${transcodeProgress}%` : " — sem som até finalizar..."}
+              </span>
+            </div>
+            {/* Progress bar — fills based on reported %, indeterminate pulse when 0% */}
+            <div className="w-48 h-1 rounded-full bg-white/10 overflow-hidden">
+              {transcodeProgress > 0 ? (
+                <motion.div
+                  className="h-full bg-amber-400 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${transcodeProgress}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              ) : (
+                <div className="h-full w-1/3 bg-amber-400/60 rounded-full animate-pulse" />
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -556,6 +738,7 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
             onUnsupported={handleUnsupported}
             resumeTime={resumeTime}
             seekOnReadyRef={seekOnReadyRef}
+            isTranscoding={isTranscoding}
           />
 
           {/* Custom right-click context menu */}

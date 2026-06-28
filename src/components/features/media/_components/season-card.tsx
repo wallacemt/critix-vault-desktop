@@ -8,6 +8,7 @@ import { Check, CheckCircle2, ChevronDown, ChevronUp, Loader2, Play, RotateCw, X
 import { useState } from "react";
 import { EpisodeCard } from "./episode-card";
 import { getImageUrl } from "@/utils/mediaUtils";
+import { LazyImage } from "@/components/ui/lazy-image";
 
 interface SeasonCardProps {
   season: Season;
@@ -71,11 +72,16 @@ export function SeasonCard({
           {/* Season Poster */}
           <div className="w-24 aspect-[2/3] rounded overflow-hidden flex-shrink-0 bg-slate-800">
             {season.poster && !posterError ? (
-              <img
+              <LazyImage
                 src={getImageUrl(season.poster)}
                 alt={season.name}
                 className="w-full h-full object-cover"
                 onError={() => setPosterError(true)}
+                fallback={
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Play className="w-8 h-8 text-slate-600" />
+                  </div>
+                }
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">

@@ -23,6 +23,17 @@ import { tauriService } from "@/services/tauri";
 import { BulkActionsBar } from "./_components/bulk-actions-bar";
 import { useChangelogContext } from "@/context/changelogContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 import { useBgTranscode, BG_TRANSCODE_KEY } from "@/hooks/useBgTranscode";
 import { BgTranscodePanel } from "./_components/bg-transcode-panel";
 import { AutoScanPanel } from "./_components/auto-scan-panel";
@@ -41,6 +52,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     if (typeof window === "undefined") return false;
     return localStorage.getItem(BG_TRANSCODE_KEY) === "true";
   });
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const {
     folders,
@@ -155,7 +167,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
       }
       if (match(ls.getItem("critix_key_delete"), "Delete", e) && selectedCount > 0) {
         e.preventDefault();
-        if (window.confirm(`Remover ${selectedCount} mídia(s) selecionada(s)?`)) bulkDeleteSelectedMedia();
+        setShowBulkDeleteConfirm(true);
         return;
       }
       if (match(ls.getItem("critix_key_mark_watched"), "w", e) && selectedCount > 0) {
@@ -467,7 +479,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
               selectedCount={selectedCount}
               onClearSelection={clearSelection}
               onMarkWatched={bulkMarkSelectedAsWatched}
-              onDelete={bulkDeleteSelectedMedia}
+              onDelete={() => setShowBulkDeleteConfirm(true)}
               allWatched={bulkSelectionAllWatched}
             />
           )}
@@ -537,6 +549,31 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
           media={deletingMedia}
           isDeleting={isDeletingMedia}
         />
+
+        {/* Bulk delete confirmation dialog */}
+        <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-destructive" />
+                Remover {selectedCount} mídia{selectedCount !== 1 ? "s" : ""}?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                As mídias serão removidas da biblioteca. Os arquivos físicos <strong>não</strong> serão deletados.
+                Você pode adicioná-las novamente fazendo um novo scan da pasta.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={() => { bulkDeleteSelectedMedia(); setShowBulkDeleteConfirm(false); }}
+              >
+                Remover
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarInset>
 
       {/* Custom scrollbar styles */}

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getImageUrl } from "@/utils/mediaUtils";
+import { LazyImage } from "@/components/ui/lazy-image";
 
 interface EpisodeCardProps {
   episode: Episode;
@@ -46,11 +47,16 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
         onClick={() => episode.available && onPlay(episode)}
       >
         {episode.still_path && !stillError ? (
-          <img
+          <LazyImage
             src={getImageUrl(episode.still_path)}
             alt={episode.title}
             className="w-full h-full object-cover"
             onError={() => setStillError(true)}
+            fallback={
+              <div className="w-full h-full flex items-center justify-center">
+                <Play className="w-6 h-6 text-slate-600" />
+              </div>
+            }
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

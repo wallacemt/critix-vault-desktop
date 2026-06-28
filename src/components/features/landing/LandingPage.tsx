@@ -220,7 +220,18 @@ export function LandingPage({
   ];
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[var(--bg-body)] relative overflow-hidden">
+    <div ref={containerRef} className="min-h-screen bg-body-crx relative overflow-hidden inset-0">
+      <div
+        className="absolute inset-0 z-0 opacity-90 pointer-events-none"
+        style={{
+          backgroundImage:
+            "url('https://images.unsplash.com/photo-1514306191717-452ec28c7814?q=100&w=1200&auto=format&fit=crop')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="absolute inset-0   bg-gradient-to-b from-[#121212]/80 via-[#121212]/95 to-[#121212]"></div>
+      </div>
       {/* Animated background gradients */}
       <div className="absolute inset-1 z-1 overflow-hidden pointer-events-none">
         <motion.div
@@ -290,7 +301,6 @@ export function LandingPage({
                 className="drop-shadow-2xl"
                 priority
               />
-             
             </motion.div>
 
             {/* Subtitle */}

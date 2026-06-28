@@ -15,7 +15,6 @@
 		- Ordem de processamento: mídia mais recente para mais antiga
 		- Áudios transcodificados são armazenados em cache
 		- Resultado: carregamento mais rápido ao selecionar idioma, reduzindo cold start
-
 - [ ] Task 3: Adicionar barra de progresso durante transcode de áudio
 	- Funcionalidade: Exibir indicador visual de progresso durante o processamento.
 	- Comportamento:
@@ -30,3 +29,7 @@
 		- Investigar vazamento de memória
 		- Revisar lógica de limpeza de recursos após player interno
 		- Otimizar processamento de áudios
+- [] Task 5: UI/UX da biblioteca, nao semantico para usuarios.
+	- Problema: Quando assisto uma media, e tem o badge que mostra qual a temporada e episodio estou, nao esta atualizando corretamente.
+	- Solucao: Melhorar esse bagde e deixar ele dinamico e fazer ficar vizivel, apenas de medias que estou asssistindo pelo menos mais de um episodio ex: tenho uma media que adicionei, e nisso o badge nao aparece, porem se assistir um episodio e estiver no dois ele exibe mostrando o ultimo ep e a temporada.
+	- Nos filtros das medias,adicionar uma opcao mostrar com interacoes recentes, ex: tenho uma serie que estou assistindo, porem quando acesso o app queria que ela ficasse em primeiro e em destaque (sutil), pois estou assistindo ela no momento.

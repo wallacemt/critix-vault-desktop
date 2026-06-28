@@ -54,9 +54,34 @@ export function startQueue(paths: string[], origin: string): void {
         q.status = { ...q.status, current: filePath };
 
         try {
+          // Probe first: skip files that don't need transcoding, select preferred audio stream.
+          const probeUrl = new URL(`${origin}/api/probe`);
+          probeUrl.searchParams.set("path", filePath);
+          const probeRes = await fetch(probeUrl.toString(), { signal });
+          if (!probeRes.ok) continue;
+
+          const probe = (await probeRes.json()) as {
+            needsTranscode: boolean;
+            audioStreams: Array<{ relativeIndex: number; language: string | null; needsTranscode: boolean }>;
+          };
+
+          if (!probe.needsTranscode) {
+            // File already has a browser-compatible audio codec — nothing to do.
+            continue;
+          }
+
+          // Prefer Portuguese track; fall back to first track that needs transcode.
+          const PT_LANGS = new Set(["por", "pt", "pt-BR", "pt-br"]);
+          const preferred =
+            probe.audioStreams.find((s) => s.needsTranscode && s.language && PT_LANGS.has(s.language)) ??
+            probe.audioStreams.find((s) => s.needsTranscode) ??
+            probe.audioStreams[0];
+
+          const audioStream = preferred?.relativeIndex ?? 0;
+
           const url = new URL(`${origin}/api/hls/start`);
           url.searchParams.set("path", filePath);
-          url.searchParams.set("audioStream", "0");
+          url.searchParams.set("audioStream", String(audioStream));
           // Fire-and-await: waits for FFmpeg to finish before moving to the next file.
           // This is intentional — sequential processing avoids saturating the CPU.
           await fetch(url.toString(), { method: "POST", signal });

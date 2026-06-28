@@ -2,24 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import { mkdir, rename, stat } from "fs/promises";
 import { join } from "path";
-import { tmpdir } from "os";
-import { randomUUID, createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { resolveAndGuardPath } from "@/lib/streaming";
 import { findBinary } from "@/lib/find-binary";
+import { getTranscodeCacheDir, transcodeHash } from "@/lib/transcode-cache";
 import { setSession, getSession, pruneOldSessions, inFlightTranscodes } from "../sessions";
 
 // Allow up to 10 minutes for transcoding large files.
 // (Only relevant in serverless deploys; local Tauri server has no hard limit.)
 export const maxDuration = 600;
-
-function getTranscodeCacheDir(): string {
-  const dataDir = process.env.CRITIX_DATA_DIR;
-  return dataDir ? join(dataDir, "transcodes") : join(tmpdir(), "critix_tc_cache");
-}
-
-function transcodeHash(resolved: string, audioStream: number): string {
-  return createHash("sha1").update(`${resolved}:a${audioStream}`).digest("hex");
-}
 
 async function findCachedTranscode(resolved: string, audioStream: number): Promise<string | null> {
   const hash = transcodeHash(resolved, audioStream);

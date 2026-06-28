@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { deleteTranscodeForFile } from "@/lib/transcode-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,20 @@ export async function POST(request: NextRequest) {
           watchedAt: new Date(),
         },
       });
+    }
+
+    // Auto-delete transcode cache when media is marked as completed.
+    if (completed) {
+      const db2 = await prisma();
+      let filePath: string | null | undefined;
+      if (mediaType === "MOVIE") {
+        const movie = await db2.movie.findUnique({ where: { id: mediaId }, select: { filePath: true } });
+        filePath = movie?.filePath;
+      } else if (normalizedEpisodeId) {
+        const episode = await db2.episode.findUnique({ where: { id: normalizedEpisodeId }, select: { filePath: true } });
+        filePath = episode?.filePath;
+      }
+      if (filePath) deleteTranscodeForFile(filePath).catch(() => undefined);
     }
 
     return NextResponse.json(result, { status: 200 });

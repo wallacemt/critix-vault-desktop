@@ -10,6 +10,7 @@ import fs from "fs";
 import { getDatabaseFilePath } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { errorResponse, successResponse } from "@/lib/api-response";
+import { getTranscodeCacheSize } from "@/lib/transcode-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -28,18 +29,20 @@ export async function GET() {
 
     // Get counts from DB
     const db = await prisma();
-    const [folderCount, movieCount, seriesCount, watchHistoryCount, episodeCount] = await Promise.all([
+    const [folderCount, movieCount, seriesCount, watchHistoryCount, episodeCount, transcodeSize] = await Promise.all([
       db.folder.count(),
       db.movie.count(),
       db.series.count(),
       db.watchHistory.count(),
       db.episode.count(),
+      getTranscodeCacheSize(),
     ]);
 
     return successResponse({
       dbPath,
       dbSize,
       dataDirectory: path.dirname(dbPath),
+      transcodeSize,
       counts: {
         folders: folderCount,
         movies: movieCount,

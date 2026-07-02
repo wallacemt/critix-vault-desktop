@@ -57,7 +57,7 @@ class ApiService {
     try {
       const response = await this.request<ApiStatus>(
         "/status",
-        { signal: AbortSignal.timeout(8_000) },
+        { signal: AbortSignal.timeout(20_000) },
         { allowWhenOffline: true },
       );
 

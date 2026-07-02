@@ -81,6 +81,10 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef,
   // Prevents the error handler from firing more than once per item (vidstack can
   // emit multiple error events for the same failure).
   const errorHandledRef = useRef(false);
+  // Tracks the error suppressed during transcoding so we can skip it when
+  // isTranscoding flips to false — Vidstack hasn't reset its error state yet
+  // at that point (source switch is asynchronous), causing a false positive overlay.
+  const suppressedErrorRef = useRef<typeof error>(null);
 
   onEndedRef.current = onEnded;
   onUnsupportedRef.current = onUnsupported;
@@ -93,12 +97,18 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef,
 
   // Hard decode error — notify parent once per item. Parent shows an error overlay
   // rather than auto-opening the external player.
-  // DEF-005: During transcoding the raw AC3/DTS stream is expected to fail — suppress it
-  // WITHOUT consuming errorHandledRef. This way, if the transcoded MP4 subsequently fails,
-  // errorHandledRef is still available and the overlay will correctly appear.
+  // DEF-005: During transcoding the raw AC3/DTS stream is expected to fail — suppress it.
+  // We store the suppressed error reference so that when isTranscoding flips to false
+  // (source switch to transcoded MP4), the stale raw-stream error is identified and
+  // skipped. A genuinely new error from the MP4 will be a different object and will fire.
   useEffect(() => {
     if (!error || errorHandledRef.current) return;
-    if (isTranscoding) return; // Expected error while raw stream plays — don't consume the slot
+    if (isTranscoding) {
+      suppressedErrorRef.current = error; // ponytail: track stale error to filter post-transcode
+      return;
+    }
+    if (error === suppressedErrorRef.current) return; // stale raw-stream error — Vidstack hasn't reset yet
+    suppressedErrorRef.current = null;
     errorHandledRef.current = true;
     onUnsupportedRef.current();
   }, [error, isTranscoding]);
@@ -123,6 +133,7 @@ function PlayerLogic({ item, onEnded, onUnsupported, resumeTime, seekOnReadyRef,
   useEffect(() => {
     resumeAppliedRef.current = false;
     errorHandledRef.current = false;
+    suppressedErrorRef.current = null;
   }, [item.mediaId, item.episodeId]);
 
   const buildSaveOpts = useCallback(

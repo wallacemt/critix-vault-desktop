@@ -153,12 +153,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     durationSeconds,
   });
 
-  // Parse -progress pipe:1 output to update session progress percentage.
-  // FFmpeg writes key=value lines; out_time_ms/out_time_us give elapsed microseconds.
-  // DEF-009: also handle `out_time_us` (some FFmpeg builds) and tolerate `N/A` early values.
-  if (ffmpeg.stdout && durationSeconds) {
+  // Always consume stdout to prevent pipe deadlock on Windows (4 KB pipe buffer fills
+  // in ~26 s with -progress pipe:1 -stats_period 2; FFmpeg blocks and never exits).
+  // When durationSeconds is available, also parse progress percentage.
+  if (ffmpeg.stdout) {
     let buf = "";
     ffmpeg.stdout.on("data", (chunk: Buffer) => {
+      if (!durationSeconds) return; // drain without parsing
       buf += chunk.toString();
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";

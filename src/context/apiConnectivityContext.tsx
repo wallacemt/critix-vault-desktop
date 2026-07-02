@@ -4,8 +4,8 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { apiService } from "@/services/api";
 import { ApiStatus } from "@/types/api";
 
-const ONLINE_POLL_INTERVAL_MS = 90_000;
-const OFFLINE_POLL_INTERVAL_MS = 30_000;
+const ONLINE_POLL_INTERVAL_MS = 300_000;  // 5 min
+const OFFLINE_POLL_INTERVAL_MS = 120_000; // 2 min
 
 interface ApiConnectivityContextType {
   status: ApiStatus | null;

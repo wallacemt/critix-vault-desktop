@@ -21,7 +21,6 @@
         "date-fns": "^4.1.0",
         "framer-motion": "^12.28.1",
         "gsap": "^3.14.2",
-        "lightningcss-linux-x64-gnu": "^1.32.0",
         "lucide-react": "^0.562.0",
         "next": "16.2.9",
         "nprogress": "^0.2.0",

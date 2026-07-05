@@ -525,37 +525,39 @@ async function removeDevArtifacts(serverDir) {
 
 /**
  * Asserts the current Node.js ABI (NODE_MODULE_VERSION) matches the Tauri-bundled
- * Node runtime (MODULE_VERSION 147 = Node 26.x).
+ * Node runtime (MODULE_VERSION 137 = Node 24.x — see the portable node.exe version
+ * downloaded by scripts/build-msix.ps1 and .github/workflows/msix-build.yml).
  *
  * better-sqlite3 is a native addon compiled for a specific ABI. If the build machine
  * uses a different Node major than the bundled runtime, the addon will crash at startup
  * with ERR_DLOPEN_FAILED / NODE_MODULE_VERSION mismatch.
  */
 function assertNodeABI() {
-  // Tauri bundles Node 26.x (NODE_MODULE_VERSION 147).
-  const EXPECTED_MODULES_VERSION = 147;
+  // Tauri bundles Node 24.x (NODE_MODULE_VERSION 137). Keep in sync with the
+  // $nodeVersion downloaded in scripts/build-msix.ps1 and msix-build.yml.
+  const EXPECTED_MODULES_VERSION = 137;
   const currentModulesVersion = Number(process.versions.modules);
 
   if (currentModulesVersion !== EXPECTED_MODULES_VERSION) {
     console.error(`
 ❌ Node.js ABI mismatch detected!
    Build machine: NODE_MODULE_VERSION ${currentModulesVersion} (Node ${process.version})
-   Tauri runtime: NODE_MODULE_VERSION ${EXPECTED_MODULES_VERSION} (Node 26.x)
+   Tauri runtime: NODE_MODULE_VERSION ${EXPECTED_MODULES_VERSION} (Node 24.x)
 
    The bundled better-sqlite3.node will crash at runtime with ERR_DLOPEN_FAILED.
 
-   Fix: switch to Node 26.x before building.
-     nvm use 26        (if using nvm)
-     fnm use 26        (if using fnm)
+   Fix: switch to Node 24.x before building.
+     nvm use 24        (if using nvm)
+     fnm use 24        (if using fnm)
 
    Then reinstall dependencies and rebuild:
-     npm install       (recompiles better-sqlite3 for Node 26)
+     npm install       (recompiles better-sqlite3 for Node 24)
      bun run build:app
 `);
     process.exit(1);
   }
 
-  console.log(`  ✅ Node ABI check passed (NODE_MODULE_VERSION ${currentModulesVersion} = Node 26.x)`);
+  console.log(`  ✅ Node ABI check passed (NODE_MODULE_VERSION ${currentModulesVersion} = Node 24.x)`);
 }
 
 async function main() {

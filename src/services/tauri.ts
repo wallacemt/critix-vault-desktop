@@ -142,6 +142,9 @@ interface AppSettings {
   /** Last app version for which the user dismissed the "What's New" prompt.
    *  Empty string on first run — treated as "already seen" (OQ-1). */
   last_seen_version: string;
+  /** Master switch for the filesystem watcher that auto-rescans a tracked
+   *  folder when it changes. Defaults to true. */
+  auto_scan_on_change: boolean;
 }
 
 interface CacheInfo {
@@ -567,6 +570,15 @@ class TauriService {
    */
   async scanFolder(folderPath: string): Promise<string[]> {
     return invoke<string[]>("scan_folder", { folderPath });
+  }
+
+  /**
+   * (Re)starts the native filesystem watcher for exactly these folder paths.
+   * Call whenever the registered folder list changes — the Rust side replaces
+   * its whole watch set rather than diffing individual paths.
+   */
+  async watchFolders(paths: string[]): Promise<void> {
+    return invoke("watch_library_folders", { paths });
   }
 
   /**

@@ -17,6 +17,7 @@ mod commands;
 mod models;
 mod server;
 mod storage;
+mod watcher;
 
 use tauri::Manager;
 
@@ -128,6 +129,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Folder dialogs (UI only - storage moved to SQLite)
             commands::folders::select_folder_dialog,
+            commands::folders::watch_library_folders,
             // Settings & state (UI preferences only)
             commands::settings::save_last_selected_folder,
             commands::settings::get_last_selected_folder,

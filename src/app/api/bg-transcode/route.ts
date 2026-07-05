@@ -8,7 +8,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as { paths?: string[] };
   const paths = Array.isArray(body.paths) ? body.paths : [];
-  const origin = new URL(request.url).origin;
+  // See getRequestOrigin() in hls/start/route.ts: Next's standalone server has
+  // trustHostHeader:false, so request.url's derived origin is hardcoded to
+  // "localhost" regardless of the real Host header — use the raw header instead.
+  const origin = `http://${request.headers.get("host") ?? new URL(request.url).host}`;
   startQueue(paths, origin);
   return NextResponse.json({ ok: true });
 }

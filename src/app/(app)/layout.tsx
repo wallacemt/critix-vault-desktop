@@ -26,6 +26,7 @@
 
 import { useEffect, useState } from "react";
 import { useStartupAutoscan } from "@/hooks/useStartupAutoscan";
+import { useFolderWatcher } from "@/hooks/useFolderWatcher";
 import { useChangelog } from "@/hooks/useChangelog";
 import { useWhatsNew } from "@/hooks/useWhatsNew";
 import { AutoscanNotification } from "@/components/features/autoscan/AutoscanNotification";
@@ -37,6 +38,11 @@ import { tauriService } from "@/services/tauri";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const autoscan = useStartupAutoscan();
+  // Reacts to filesystem changes in tracked folders (Rust `notify` watcher +
+  // Tauri event) and reuses the same scan/match/notify pipeline as autoscan —
+  // rendered as its own <AutoscanNotification> below so the startup flow above
+  // is completely untouched.
+  const folderWatcher = useFolderWatcher();
   const [torrentProxyEnabled, setTorrentProxyEnabled] = useState(false);
 
   // Changelog data — fetched lazily after mount (does not block startup).
@@ -77,6 +83,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         unmatchedCount={autoscan.unmatchedCount}
         onConfirm={autoscan.confirm}
         onDismiss={autoscan.dismiss}
+      />
+      <AutoscanNotification
+        status={folderWatcher.status}
+        newMedia={{ movies: folderWatcher.newMovies, series: folderWatcher.newSeries }}
+        unmatchedCount={folderWatcher.unmatchedCount}
+        onConfirm={folderWatcher.confirm}
+        onDismiss={folderWatcher.dismiss}
       />
       <PlayerChoiceGate />
       <TorrentStatusStrip enabled={torrentProxyEnabled} />

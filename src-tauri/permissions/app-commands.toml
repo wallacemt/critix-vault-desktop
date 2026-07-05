@@ -33,5 +33,6 @@ commands.allow = [
   "select_media_file_dialog",
   "select_media_files_dialog",
   "set_torrent_credentials",
+  "watch_library_folders",
   "write_text_file",
 ]

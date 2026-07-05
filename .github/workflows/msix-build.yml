@@ -60,7 +60,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Must match the portable node.exe version below (24.4.0 = ABI 137),
+          # since scripts/prepare-build.mjs asserts the active Node's ABI
+          # equals the bundled runtime's ABI before packaging.
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -125,16 +128,19 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
-      # bun install resolves prebuilds against its own ABI (Node 22 / 137),
-      # but the node.exe bundled in src-tauri/resources/server is Node 20 (ABI 115).
-      # Without this step the app crashes at runtime with ERR_DLOPEN_FAILED
-      # / NODE_MODULE_VERSION 137 vs 115 on every Prisma query.
-      - name: Rebuild better-sqlite3 against bundled Node 20 ABI
+      # bun install resolves prebuilds against whatever ABI is currently active,
+      # which may not match the portable node.exe bundled above. --target pins
+      # the fetched prebuild to that exact ABI so this step no longer depends
+      # on the runner's active Node version. Without it the app crashes at
+      # runtime with ERR_DLOPEN_FAILED (NODE_MODULE_VERSION mismatch) on every
+      # Prisma query.
+      - name: Rebuild better-sqlite3 for bundled Node ABI
         shell: pwsh
         run: |
+          $nodeVersion = "24.4.0"
           Remove-Item -Recurse -Force node_modules\better-sqlite3\build -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force node_modules\better-sqlite3\prebuilds -ErrorAction SilentlyContinue
-          npm rebuild better-sqlite3 --build-from-source=false
+          npm.cmd rebuild better-sqlite3 --target=$nodeVersion --runtime=node
           if ($LASTEXITCODE -ne 0) { Write-Error "npm rebuild better-sqlite3 failed"; exit 1 }
           $bin = Get-ChildItem -Recurse -Filter "better_sqlite3.node" node_modules\better-sqlite3 | Select-Object -First 1
           if (-not $bin) { Write-Error "better_sqlite3.node not found after rebuild"; exit 1 }

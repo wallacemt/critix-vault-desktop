@@ -41,6 +41,12 @@ pub struct AppSettings {
     /// brand-new users with a changelog (OQ-1 resolved).
     #[serde(default)]
     pub last_seen_version: String,
+    /// Master switch for the filesystem watcher that triggers an automatic
+    /// rescan when a tracked folder changes. Defaults to true since it's the
+    /// expected always-on behavior; existing installs without this field yet
+    /// (pre-upgrade settings.json) also default to enabled via `default_true`.
+    #[serde(default = "default_true")]
+    pub auto_scan_on_change: bool,
 }
 
 impl Default for AppSettings {
@@ -56,6 +62,7 @@ impl Default for AppSettings {
             torrent_client_pass: None,
             torrent_proxy_enabled: false,
             last_seen_version: String::new(),
+            auto_scan_on_change: true,
         }
     }
 }

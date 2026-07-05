@@ -12,6 +12,18 @@ import { setSession, getSession, pruneOldSessions, inFlightTranscodes } from "..
 // (Only relevant in serverless deploys; local Tauri server has no hard limit.)
 export const maxDuration = 600;
 
+// Next's standalone server runs with trustHostHeader:false (self-hosted, no reverse
+// proxy declared), so it rewrites `request.url`'s host to a hardcoded "localhost"
+// regardless of the real Host header — even when the page itself is loaded at
+// 127.0.0.1. That mismatch makes the returned hlsUrl cross-origin from the page,
+// and the WebView2 video element gets CORS-blocked fetching it. The raw Host header
+// is unaffected by that rewrite and is already validated by proxy.ts's allowlist,
+// so build the origin from it directly instead of trusting request.url.
+function getRequestOrigin(request: NextRequest): string {
+  const host = request.headers.get("host") ?? new URL(request.url).host;
+  return `http://${host}`;
+}
+
 async function findCachedTranscode(resolved: string, audioStream: number): Promise<string | null> {
   const hash = transcodeHash(resolved, audioStream);
   const cacheFile = join(getTranscodeCacheDir(), `${hash}.mp4`);
@@ -67,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       startedAt: Date.now(),
       cached: true,
     });
-    const origin = new URL(request.url).origin;
+    const origin = getRequestOrigin(request);
     return NextResponse.json({
       sessionId,
       hlsUrl: `${origin}/api/hls/${sessionId}/video`,
@@ -119,9 +131,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // -map 0:a:<stream>   → the user-selected audio stream only
   // -movflags +faststart → moov atom at front for immediate seeking on full-file serve
   // -progress pipe:1    → write progress stats to stdout so we can track completion %
+  // -fflags +genpts -avoid_negative_ts make_zero → MKV sources (esp. WEB-DL rips remuxed
+  // from HLS/DASH) often carry non-monotonic/negative timestamps on the video stream.
+  // `-c:v copy` preserves them as-is, which some strict decoders (WebView2/Media
+  // Foundation) reject outright even though the MP4 byte layout is valid — normalizing
+  // here costs nothing extra (still no video re-encode) and fixes silent playback errors.
   const args = [
     "-hide_banner",
     "-loglevel", "error",
+    "-fflags", "+genpts",
     "-progress", "pipe:1",
     "-stats_period", "2",
     "-i", resolved,
@@ -130,6 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     "-c:v", "copy",
     "-c:a", "aac",
     "-b:a", "192k",
+    "-avoid_negative_ts", "make_zero",
     "-movflags", "+faststart",
     "-y",
     tempPath,
@@ -236,7 +255,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     cached: true,
   });
 
-  const origin = new URL(request.url).origin;
+  const origin = getRequestOrigin(request);
   const responsePayload = {
     sessionId,
     hlsUrl: `${origin}/api/hls/${sessionId}/video`,

@@ -49,6 +49,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { tauriService } from "@/services/tauri";
 import { openExternalLink } from "@/lib/external-link";
 import { APP_VERSION } from "@/lib/config";
+import { useFoldersContext } from "@/context/foldersContext";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -116,6 +117,7 @@ function unwrapApiResponse<T>(payload: ApiEnvelope<T>): T {
 }
 
 export default function SettingsPage() {
+  const { folders } = useFoldersContext();
   const [info, setInfo] = useState<DbInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
@@ -269,6 +271,22 @@ export default function SettingsPage() {
     try {
       await tauriService.saveSettings(updated);
       setAppSettings(updated);
+    } catch (err) {
+      console.error("Failed to save app settings:", err);
+      showStatus("error", "Erro ao salvar configuração.");
+    }
+  };
+
+  const handleFolderWatcherToggle = async () => {
+    if (!appSettings) return;
+    const enabled = !appSettings.auto_scan_on_change;
+    const updated: AppSettings = { ...appSettings, auto_scan_on_change: enabled };
+    try {
+      await tauriService.saveSettings(updated);
+      setAppSettings(updated);
+      // Apply immediately instead of waiting for the next folder add/remove —
+      // useFolderWatcher only re-reads this setting when the folder list changes.
+      await tauriService.watchFolders(enabled ? folders.map((f) => f.path) : []);
     } catch (err) {
       console.error("Failed to save app settings:", err);
       showStatus("error", "Erro ao salvar configuração.");
@@ -934,6 +952,31 @@ export default function SettingsPage() {
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
                     appSettings?.auto_scan_on_startup ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl border mt-4 border-slate-700">
+              <div className="flex-1 pr-4">
+                <h4 className="font-medium text-white text-sm mb-1">Escanear ao detectar mudanças</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Observa as pastas monitoradas e escaneia automaticamente assim que novos arquivos forem adicionados,
+                  sem precisar reiniciar o app.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={appSettings?.auto_scan_on_change ?? false}
+                onClick={handleFolderWatcherToggle}
+                disabled={appSettings === null}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
+                  appSettings?.auto_scan_on_change ? "bg-indigo-600" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                    appSettings?.auto_scan_on_change ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>

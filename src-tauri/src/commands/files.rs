@@ -179,6 +179,56 @@ pub fn open_file_location(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Opens a folder directly in the OS file manager (unlike `open_file_location`,
+/// which selects a *file* inside its parent folder).
+#[tauri::command]
+pub fn open_folder(folder_path: String) -> Result<(), String> {
+    let path = Path::new(&folder_path);
+
+    if !path.exists() {
+        return Err(format!("Folder not found: {}", folder_path));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&folder_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&folder_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let result = Command::new("xdg-open").arg(&folder_path).spawn();
+
+        if result.is_err() {
+            let managers = ["nautilus", "dolphin", "thunar", "nemo", "caja"];
+            let mut opened = false;
+
+            for manager in &managers {
+                if Command::new(manager).arg(&folder_path).spawn().is_ok() {
+                    opened = true;
+                    break;
+                }
+            }
+
+            if !opened {
+                return Err("No file manager found. Please install xdg-utils or a supported file manager.".to_string());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_media(file_path: String, player: Option<String>) -> Result<(), String> {
     let player = player.unwrap_or_else(|| "default".into());

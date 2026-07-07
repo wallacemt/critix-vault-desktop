@@ -21,6 +21,7 @@ commands.allow = [
   "list_sidecar_subtitles",
   "open_external_url",
   "open_file_location",
+  "open_folder",
   "open_media",
   "open_torrent_pane",
   "proxy_torrent_api",

@@ -154,6 +154,7 @@ pub fn run() {
             commands::files::open_media,
             commands::files::get_file_metadata,
             commands::files::open_file_location,
+            commands::files::open_folder,
             commands::files::open_external_url,
             // Player path resolution & subtitle discovery
             commands::player::resolve_media_path,

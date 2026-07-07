@@ -6,6 +6,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
@@ -24,10 +25,13 @@ import {
   Eye,
   EyeOff,
   Download,
+  Zap,
+  Loader2,
 } from "lucide-react";
 import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
+import { isAtRisk, queueTranscodePaths } from "@/hooks/useBgTranscode";
 import { fetchMediaImages } from "@/services/mediaService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { markAsWatched, clearWatchHistory, removeMovie, saveMovies, setMediaHidden } from "@/services/databaseService";
@@ -59,6 +63,8 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
   const [isDeleting, setIsDeleting] = useState(false);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isRefreshingGallery, setIsRefreshingGallery] = useState(false);
+  const [isQueuingTranscode, setIsQueuingTranscode] = useState(false);
+  const [transcodeQueued, setTranscodeQueued] = useState(false);
 
   const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
   const { handlePlayMovie: onPlay, playError, clearPlayError } = useActions();
@@ -190,6 +196,22 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
     } catch (error) {
       console.error("Error opening folder:", error);
       alert(`Erro ao abrir pasta: ${error}`);
+    }
+  };
+
+  const handleQueueTranscode = async () => {
+    if (!currentMovie.filePath) return;
+
+    setIsQueuingTranscode(true);
+    try {
+      await queueTranscodePaths([currentMovie.filePath]);
+      setTranscodeQueued(true);
+      setTimeout(() => setTranscodeQueued(false), 3000);
+    } catch (error) {
+      console.error("Error queuing transcode:", error);
+      alert(`Erro ao adicionar à fila de transcode: ${error}`);
+    } finally {
+      setIsQueuingTranscode(false);
     }
   };
 
@@ -427,47 +449,55 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
                       </>
                     )}
                   </Button>
-                  <Button
-                    size="lg"
+                  <TooltipIconButton
                     variant="outline"
                     onClick={handleMarkAsWatched}
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl"
+                    label={currentMovie.isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
                   >
-                    {currentMovie.isWatched ? (
-                      <>
-                        <X className="w-5 h-5 mr-2" />
-                        Desmarcar
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-5 h-5 mr-2" />
-                        Marcar como Assistido
-                      </>
-                    )}
-                  </Button>
+                    {currentMovie.isWatched ? <X className="w-5 h-5" /> : <Check className="w-5 h-5" />}
+                  </TooltipIconButton>
                   {currentMovie.videos && currentMovie.videos.length > 0 && (
                     <TrailerModal videos={currentMovie.videos} title={currentMovie.title} />
                   )}
-                  <Button
-                    size="lg"
+                  <TooltipIconButton
                     variant="outline"
                     onClick={handleOpenFolder}
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl"
+                    label="Abrir pasta do arquivo"
                   >
-                    <FolderOpen className="w-5 h-5 mr-2" />
-                    Abrir Pasta
-                  </Button>
-                  <Button
-                    size="lg"
+                    <FolderOpen className="w-5 h-5" />
+                  </TooltipIconButton>
+                  {currentMovie.filePath && isAtRisk(currentMovie.filePath) && (
+                    <TooltipIconButton
+                      variant="outline"
+                      onClick={handleQueueTranscode}
+                      disabled={isQueuingTranscode}
+                      className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl"
+                      label={
+                        transcodeQueued
+                          ? "Adicionado à fila de transcode"
+                          : "Pré-processar áudio (evita espera no player)"
+                      }
+                    >
+                      {isQueuingTranscode ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : transcodeQueued ? (
+                        <Check className="w-5 h-5" />
+                      ) : (
+                        <Zap className="w-5 h-5" />
+                      )}
+                    </TooltipIconButton>
+                  )}
+                  <TooltipIconButton
                     variant="outline"
                     onClick={() => setShowEditDialog(true)}
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl text-blue-400 hover:text-blue-300"
+                    label="Editar informações do filme"
                   >
-                    <Pencil className="w-5 h-5 mr-2" />
-                    Editar
-                  </Button>
-                  <Button
-                    size="lg"
+                    <Pencil className="w-5 h-5" />
+                  </TooltipIconButton>
+                  <TooltipIconButton
                     variant="outline"
                     onClick={async () => {
                       const next = !currentMovie.isHidden;
@@ -475,28 +505,18 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
                       setCurrentMovie({ ...currentMovie, isHidden: next });
                     }}
                     className="bg-slate-800/80 border-slate-700 hover:bg-slate-800 backdrop-blur-xl rounded-2xl text-amber-300 hover:text-amber-200"
+                    label={currentMovie.isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
                   >
-                    {currentMovie.isHidden ? (
-                      <>
-                        <Eye className="w-5 h-5 mr-2" />
-                        Mostrar
-                      </>
-                    ) : (
-                      <>
-                        <EyeOff className="w-5 h-5 mr-2" />
-                        Ocultar
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    size="lg"
+                    {currentMovie.isHidden ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                  </TooltipIconButton>
+                  <TooltipIconButton
                     variant="outline"
                     onClick={() => setShowDeleteDialog(true)}
                     className="bg-red-900/20 border-red-700 hover:bg-red-900/40 backdrop-blur-xl rounded-2xl text-red-400 hover:text-red-300"
+                    label="Excluir filme"
                   >
-                    <Trash2 className="w-5 h-5 mr-2" />
-                    Excluir
-                  </Button>
+                    <Trash2 className="w-5 h-5" />
+                  </TooltipIconButton>
                 </div>
                 </div>
               )}

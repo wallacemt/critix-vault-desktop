@@ -16,6 +16,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Volume2, Languages, AlertTriangle, RefreshCw, ExternalLink } from "lucide-react";
 import { FfmpegInstallModal } from "./FfmpegInstallModal";
 import { PlayerContextMenu } from "./PlayerContextMenu";
+import { useSSE } from "@/hooks/useSSE";
 
 import type { PlayableItem } from "@/stores/playerStore";
 import { usePlayerStore } from "@/stores/playerStore";
@@ -30,7 +31,6 @@ import {
   probeAudio,
   startHlsSession,
   stopHlsSession,
-  fetchHlsProgress,
 } from "@/services/playerService";
 import type { SubtitleEntry, SubtitleStreamInfo, AudioStreamInfo } from "@/types/player";
 
@@ -210,10 +210,16 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
   // Set to true when the player itself reports an error (distinct from transcode errors).
   // Shows a recovery overlay instead of auto-opening the external player.
   const [playerError, setPlayerError] = useState(false);
-  // 0-100 transcode progress percentage (updated while FFmpeg is running).
-  const [transcodeProgress, setTranscodeProgress] = useState(0);
-  // sessionId known before FFmpeg finishes — allows polling the progress endpoint.
-  const pendingSessionIdRef = useRef<string | null>(null);
+  // sessionId known before FFmpeg finishes — allows subscribing to the progress
+  // SSE stream immediately.
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  // 0-100 transcode progress percentage, pushed by the SSE stream while FFmpeg runs.
+  const transcodeProgress = useSSE<{ progress: number }>(
+    transcode.status === "transcoding" && pendingSessionId
+      ? `/api/hls/progress?sessionId=${encodeURIComponent(pendingSessionId)}`
+      : null,
+    { progress: 0 },
+  ).progress;
   const { playbackRate, setPlaybackRate } = usePlayerStore();
 
   // ── Speed control ────────────────────────────────────────────────────────────
@@ -374,15 +380,14 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
       const selectedCodec = selectedStream?.codec ?? probe.audioCodec ?? "unknown";
       setActiveAudioStream(selectedStream);
       setTranscode({ status: "transcoding", codec: selectedCodec });
-      setTranscodeProgress(0);
 
-      // Generate sessionId client-side so progress polling can start immediately.
+      // Generate sessionId client-side so the progress SSE stream can subscribe immediately.
       const clientSessionId = crypto.randomUUID();
-      pendingSessionIdRef.current = clientSessionId;
+      setPendingSessionId(clientSessionId);
 
       // DEF-001: pass durationSeconds from ffprobe so the server can compute progress %.
       const session = await startHlsSession(item.filePath, selectedAudioIndex, abortCtrl.signal, probe.durationSeconds, clientSessionId);
-      pendingSessionIdRef.current = null;
+      setPendingSessionId(null);
       if (cancelled) return;
 
       if (!session) {
@@ -417,18 +422,6 @@ export function VideoSurface({ item, onEnded, onClose: _onClose, onUnsupported }
 
   // Stop the HLS session when the component unmounts.
   useEffect(() => () => { stopActiveSession(); }, [stopActiveSession]);
-
-  // Poll transcode progress every 2 s while FFmpeg is running.
-  useEffect(() => {
-    if (transcode.status !== "transcoding") return;
-    const interval = setInterval(async () => {
-      const sid = pendingSessionIdRef.current;
-      if (!sid) return;
-      const pct = await fetchHlsProgress(sid);
-      setTranscodeProgress(pct);
-    }, 2_000);
-    return () => clearInterval(interval);
-  }, [transcode.status]);
 
   // Load sidecar subtitle files alongside the video.
   useEffect(() => {

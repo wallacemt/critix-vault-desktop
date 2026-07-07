@@ -10,7 +10,7 @@ import fs from "fs";
 import { getDatabaseFilePath } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { errorResponse, successResponse } from "@/lib/api-response";
-import { getTranscodeCacheSize } from "@/lib/transcode-cache";
+import { getTranscodeCacheSize, getTranscodeCacheDir } from "@/lib/transcode-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,7 @@ export async function GET() {
       dbSize,
       dataDirectory: path.dirname(dbPath),
       transcodeSize,
+      transcodeCacheDir: getTranscodeCacheDir(),
       counts: {
         folders: folderCount,
         movies: movieCount,

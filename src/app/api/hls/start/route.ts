@@ -125,6 +125,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     resolveInFlight = res;
     rejectInFlight = rej;
   });
+  // Without a concurrent duplicate request, nothing else ever awaits this promise —
+  // rejecting it below (FFmpeg killed/failed) would then be an unhandled rejection,
+  // which can crash the whole bundled Next.js process. This silent catch doesn't
+  // suppress the error for real waiters: any other request that does
+  // `await inFlightTranscodes.get(hash)` still gets its own rejection independently.
+  inFlightPromise.catch(() => {});
   inFlightTranscodes.set(hash, inFlightPromise);
 
   // -map 0:v:0          → first video stream (copy, no re-encode)

@@ -3,6 +3,7 @@ import { Episode } from "@/types/serie";
 import { Play, Check, X, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Badge } from "@/components/ui/badge";
 import { getImageUrl } from "@/utils/mediaUtils";
 import { LazyImage } from "@/components/ui/lazy-image";
@@ -98,7 +99,7 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
       {/* Actions */}
       <div className="flex items-center gap-2 flex-shrink-0">
         {/* Watch Toggle Button */}
-        <Button
+        <TooltipIconButton
           size="icon"
           variant="outline"
           className={cn(
@@ -108,22 +109,22 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
               : "bg-slate-800/50 hover:bg-green-600/20 border-slate-700 hover:border-green-500/30",
           )}
           onClick={handleWatchToggle}
-          title={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
+          label={isWatched ? "Desmarcar como assistido" : "Marcar como assistido"}
         >
           {isWatched ? <X className="w-4 h-4 text-red-400" /> : <Check className="w-4 h-4 text-green-400" />}
-        </Button>
+        </TooltipIconButton>
 
         {/* Edit Button */}
         {onEdit && (
-          <Button
+          <TooltipIconButton
             size="icon"
             variant="outline"
             className="w-9 h-9 rounded-full bg-slate-800/50 hover:bg-slate-700 border-slate-700"
             onClick={handleEdit}
-            title="Editar episódio"
+            label="Editar episódio"
           >
             <Pencil className="w-4 h-4" />
-          </Button>
+          </TooltipIconButton>
         )}
 
         {/* Play Button */}

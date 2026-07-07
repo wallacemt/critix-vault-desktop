@@ -1,14 +1,27 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Card } from "@/components/ui/card";
 import { Episode, Season } from "@/types/serie";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Loader2, Play, RotateCw, X, XCircle } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  FolderOpen,
+  Loader2,
+  Play,
+  RotateCw,
+  X,
+  XCircle,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
 import { EpisodeCard } from "./episode-card";
 import { getImageUrl } from "@/utils/mediaUtils";
 import { LazyImage } from "@/components/ui/lazy-image";
+import { isAtRisk } from "@/hooks/useBgTranscode";
 
 interface SeasonCardProps {
   season: Season;
@@ -20,6 +33,8 @@ interface SeasonCardProps {
   onEpisodeWatchToggle?: (episode: Episode, isWatched: boolean) => void;
   onSeasonWatchToggle?: (season: Season, isWatched: boolean) => void;
   onSeasonRefresh?: (season: Season) => Promise<void> | void;
+  onOpenFolder?: (season: Season) => void;
+  onQueueTranscode?: (season: Season) => Promise<void> | void;
 }
 
 export function SeasonCard({
@@ -32,10 +47,16 @@ export function SeasonCard({
   onEpisodeWatchToggle,
   onSeasonWatchToggle,
   onSeasonRefresh,
+  onOpenFolder,
+  onQueueTranscode,
 }: SeasonCardProps) {
   const [posterError, setPosterError] = useState(false);
   const [isTogglingWatched, setIsTogglingWatched] = useState(false);
   const [isRefreshingSeason, setIsRefreshingSeason] = useState(false);
+  const [isQueuingTranscode, setIsQueuingTranscode] = useState(false);
+  const [transcodeQueued, setTranscodeQueued] = useState(false);
+
+  const hasAtRiskEpisodes = season.episodes?.some((ep) => ep.filePath && isAtRisk(ep.filePath));
 
   // Season is watched if it has episodes and all are watched
   const hasEpisodes = season.episodes && season.episodes.length > 0;
@@ -60,6 +81,24 @@ export function SeasonCard({
       await onSeasonRefresh(season);
     } finally {
       setIsRefreshingSeason(false);
+    }
+  };
+
+  const handleOpenFolder = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onOpenFolder?.(season);
+  };
+
+  const handleQueueTranscode = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onQueueTranscode) return;
+    setIsQueuingTranscode(true);
+    try {
+      await onQueueTranscode(season);
+      setTranscodeQueued(true);
+      setTimeout(() => setTranscodeQueued(false), 3000);
+    } finally {
+      setIsQueuingTranscode(false);
     }
   };
 
@@ -127,30 +166,56 @@ export function SeasonCard({
         </button>
 
         {/* Season watch toggle button (outside expand button) */}
-        {(hasEpisodes || onSeasonRefresh) && (
+        {(hasEpisodes || onSeasonRefresh || onOpenFolder || onQueueTranscode) && (
           <div className="pr-6 flex items-center gap-2">
+            {season.folderPath && onOpenFolder && (
+              <TooltipIconButton
+                size="icon-sm"
+                variant="outline"
+                onClick={handleOpenFolder}
+                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                label="Abrir pasta da temporada"
+              >
+                <FolderOpen className="w-4 h-4" />
+              </TooltipIconButton>
+            )}
+            {hasAtRiskEpisodes && onQueueTranscode && (
+              <TooltipIconButton
+                size="icon-sm"
+                variant="outline"
+                onClick={handleQueueTranscode}
+                disabled={isQueuingTranscode}
+                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-amber-600/20 hover:border-amber-500 hover:text-amber-300"
+                label={
+                  transcodeQueued
+                    ? "Adicionado à fila de transcode"
+                    : "Pré-processar áudio da temporada (evita espera no player)"
+                }
+              >
+                {isQueuingTranscode ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : transcodeQueued ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Zap className="w-4 h-4" />
+                )}
+              </TooltipIconButton>
+            )}
             {onSeasonRefresh && (
-              <Button
-                size="sm"
+              <TooltipIconButton
+                size="icon-sm"
                 variant="outline"
                 onClick={handleSeasonRefresh}
                 disabled={isRefreshingSeason}
                 className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-blue-600/20 hover:border-blue-500 hover:text-blue-300"
-                title="Atualizar episódios desta temporada"
+                label="Atualizar episódios desta temporada"
               >
-                {isRefreshingSeason ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <RotateCw className="w-4 h-4 mr-1" />
-                    Atualizar Temporada
-                  </>
-                )}
-              </Button>
+                {isRefreshingSeason ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+              </TooltipIconButton>
             )}
             {hasEpisodes && onSeasonWatchToggle && (
-              <Button
-                size="sm"
+              <TooltipIconButton
+                size="icon-sm"
                 variant="outline"
                 onClick={handleSeasonWatchToggle}
                 disabled={isTogglingWatched}
@@ -159,22 +224,16 @@ export function SeasonCard({
                     ? "bg-green-600/20 border-green-600 text-green-400 hover:bg-red-600/20 hover:border-red-600 hover:text-red-400"
                     : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-green-600/20 hover:border-green-600 hover:text-green-400"
                 }
-                title={isSeasonWatched ? "Desmarcar temporada como assistida" : "Marcar temporada como assistida"}
+                label={isSeasonWatched ? "Desmarcar temporada como assistida" : "Marcar temporada como assistida"}
               >
                 {isTogglingWatched ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : isSeasonWatched ? (
-                  <>
-                    <X className="w-4 h-4 mr-1" />
-                    Desmarcar
-                  </>
+                  <X className="w-4 h-4" />
                 ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-1" />
-                    Marcar Assistida
-                  </>
+                  <Check className="w-4 h-4" />
                 )}
-              </Button>
+              </TooltipIconButton>
             )}
           </div>
         )}

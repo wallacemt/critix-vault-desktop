@@ -64,6 +64,7 @@ interface DbInfo {
   dbSize: number;
   dataDirectory: string;
   transcodeSize?: number;
+  transcodeCacheDir?: string;
   counts: {
     folders: number;
     movies: number;
@@ -678,41 +679,64 @@ export default function SettingsPage() {
                         <p className="text-xs text-amber-300 font-semibold">{formatBytes(info.transcodeSize)}</p>
                       </div>
                     </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={clearingTranscode || info.transcodeSize === 0}
-                          className="text-amber-400 hover:text-amber-200 hover:bg-amber-500/10 text-xs"
-                        >
-                          {clearingTranscode ? (
-                            <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                          )}
-                          Limpar cache
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-slate-900 border-slate-700">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-white">Limpar cache de transcode?</AlertDialogTitle>
-                          <AlertDialogDescription className="text-slate-400">
-                            Isso apaga todos os arquivos de áudio pré-processados ({formatBytes(info.transcodeSize ?? 0)}).
-                            O player vai reprocessar o áudio da mídia ao abrir novamente.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="border-slate-700 text-slate-300">Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={handleClearTranscodeCache}
-                            className="bg-amber-600 hover:bg-amber-500 text-white"
+                    <div className="flex items-center gap-1">
+                      {info.transcodeCacheDir && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={async () => {
+                                try {
+                                  await tauriService.openFolder(info.transcodeCacheDir!);
+                                } catch {
+                                  alert("Erro ao abrir pasta (ela pode ainda não existir — nenhum áudio foi transcodificado ainda).");
+                                }
+                              }}
+                              className="text-amber-400 hover:text-amber-200 hover:bg-amber-500/10"
+                            >
+                              <FolderOpen className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Abrir pasta do cache de transcode</TooltipContent>
+                        </Tooltip>
+                      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={clearingTranscode || info.transcodeSize === 0}
+                            className="text-amber-400 hover:text-amber-200 hover:bg-amber-500/10 text-xs"
                           >
-                            Limpar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                            {clearingTranscode ? (
+                              <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                            )}
+                            Limpar cache
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-slate-900 border-slate-700">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-white">Limpar cache de transcode?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-400">
+                              Isso apaga todos os arquivos de áudio pré-processados ({formatBytes(info.transcodeSize ?? 0)}).
+                              O player vai reprocessar o áudio da mídia ao abrir novamente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="border-slate-700 text-slate-300">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleClearTranscodeCache}
+                              className="bg-amber-600 hover:bg-amber-500 text-white"
+                            >
+                              Limpar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 )}
 

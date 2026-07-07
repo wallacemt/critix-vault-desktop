@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useSSE } from "@/hooks/useSSE";
 import type { Media } from "@/types/media";
 import type { Series } from "@/types/serie";
 
@@ -8,9 +9,28 @@ export const BG_TRANSCODE_KEY = "critix_bg_transcode";
 
 const AT_RISK = new Set([".mkv", ".avi", ".mov", ".ts", ".m2ts"]);
 
-function isAtRisk(filePath: string): boolean {
+export function isAtRisk(filePath: string): boolean {
   const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   return AT_RISK.has(ext);
+}
+
+/**
+ * Push file paths onto the server-side background transcode queue
+ * (same singleton the library-wide auto-scan uses — see startQueue in
+ * app/api/bg-transcode/queue.ts). Non-AT_RISK paths are filtered out since
+ * the queue would just probe and skip them anyway.
+ */
+export async function queueTranscodePaths(paths: string[]): Promise<void> {
+  const atRisk = paths.filter(isAtRisk);
+  if (atRisk.length === 0) return;
+  // ponytail: startQueue() no-ops if a queue is already running (single global
+  // queue, no append) — a click while one is in flight is silently dropped.
+  // Add a merge-into-running-queue path if that turns out to matter in practice.
+  await fetch("/api/bg-transcode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths: atRisk }),
+  });
 }
 
 /** Collect all AT_RISK file paths from the media list (movies + series episodes). */
@@ -41,19 +61,25 @@ export interface BgTranscodeStatus {
 const IDLE: BgTranscodeStatus = { active: false, total: 0, done: 0, current: null };
 
 /**
- * Thin client wrapper around the server-side background transcode queue
- * (POST /api/bg-transcode to start, DELETE to stop, GET to poll status).
+ * Auto-starts the server-side background transcode queue for the whole
+ * library when the user has the auto-scan setting enabled. Status display is
+ * handled separately by useBgTranscodeStatus (mounted once at the app layout
+ * level) so it stays visible regardless of this setting — a manual
+ * "Pré-processar" click elsewhere pushes onto the same server queue and
+ * should show progress even if library-wide auto-scan is off.
  *
- * The actual long-running work runs in the Next.js server process as a module
- * singleton — completely outside React's lifecycle, no update-depth issues.
+ * No "stop when disabled" effect here: `enabled` is read once from
+ * localStorage by the caller (LibraryLayout) and never changes within a
+ * mount, so such an effect could only ever fire once — right as this hook
+ * mounts with the setting off (the default) — which would unconditionally
+ * DELETE the shared server-side queue on every navigation to the library
+ * page, killing an unrelated manually-queued transcode in progress.
  */
-export function useBgTranscode(media: Media[], enabled: boolean): BgTranscodeStatus {
-  const [status, setStatus] = useState<BgTranscodeStatus>(IDLE);
+export function useBgTranscodeAutoStart(media: Media[], enabled: boolean): void {
   // Guard: only send the start request once per media batch.
   const startedRef = useRef(false);
 
   // Start queue once when enabled and media has loaded.
-  // No setStatus here — the poll effect below handles state updates.
   useEffect(() => {
     if (!enabled || media.length === 0 || startedRef.current) return;
 
@@ -66,45 +92,20 @@ export function useBgTranscode(media: Media[], enabled: boolean): BgTranscodeSta
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paths }),
     }).catch(console.error);
-  // media dep is safe here: we only send one fetch (startedRef guard), never call setStatus,
-  // so re-running this effect on a new media reference cannot cause a render loop.
+  // media dep is safe here: we only send one fetch (startedRef guard), so
+  // re-running this effect on a new media reference cannot cause a render loop.
   }, [enabled, media]);
+}
 
-  // Stop when disabled.
-  // enabled is initialized from localStorage once and never changes — this effect
-  // runs once on mount. setStatus(IDLE) here is safe (single stable trigger).
-  useEffect(() => {
-    if (enabled) return;
-    startedRef.current = false;
-    fetch("/api/bg-transcode", { method: "DELETE" }).catch(console.error);
-    setStatus(IDLE);
-  }, [enabled]);
-
-  // Poll status every 3 s while enabled.
-  // Dep is [enabled] only (stable) — setStatus from poll results cannot feed back
-  // into deps, so there is no render loop possible here.
-  useEffect(() => {
-    if (!enabled) return;
-
-    let cancelled = false;
-
-    const poll = async () => {
-      while (!cancelled) {
-        try {
-          const res = await fetch("/api/bg-transcode");
-          if (res.ok && !cancelled) {
-            setStatus((await res.json()) as BgTranscodeStatus);
-          }
-        } catch {
-          // network hiccup — keep polling
-        }
-        if (!cancelled) await new Promise<void>((r) => setTimeout(r, 3000));
-      }
-    };
-
-    poll();
-    return () => { cancelled = true; };
-  }, [enabled]);
-
-  return status;
+/**
+ * Subscribes to the server-side background transcode queue over SSE
+ * (GET /api/bg-transcode streams instead of returning one-shot JSON).
+ * Mounted once at the app layout level so the queue status/panel is visible
+ * on every route, not just the library page — the queue itself is a
+ * server-side singleton fed both by library-wide auto-scan
+ * (useBgTranscodeAutoStart) and by manual per-title "Pré-processar" clicks
+ * (queueTranscodePaths), so this subscription must not depend on either trigger.
+ */
+export function useBgTranscodeStatus(): BgTranscodeStatus {
+  return useSSE<BgTranscodeStatus>("/api/bg-transcode", IDLE);
 }

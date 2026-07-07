@@ -156,19 +156,6 @@ export async function startHlsSession(
   }
 }
 
-export async function fetchHlsProgress(sessionId: string): Promise<number> {
-  try {
-    const resp = await fetch(`${BASE}/api/hls/progress?sessionId=${encodeURIComponent(sessionId)}`, {
-      cache: "no-store",
-    });
-    if (!resp.ok) return 0;
-    const { progress } = (await resp.json()) as { progress: number };
-    return progress ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
 export async function stopHlsSession(sessionId: string): Promise<void> {
   try {
     await fetch(`${BASE}/api/hls/stop`, {

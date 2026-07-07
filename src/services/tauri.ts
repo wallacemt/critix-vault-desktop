@@ -602,6 +602,13 @@ class TauriService {
     return invoke("open_file_location", { filePath });
   }
 
+  /**
+   * Open a folder directly in the system file explorer (not select-in-parent).
+   */
+  async openFolder(folderPath: string): Promise<void> {
+    return invoke("open_folder", { folderPath });
+  }
+
   // ============================================================================
   // Torrent Integration (Phase 5)
   // ============================================================================

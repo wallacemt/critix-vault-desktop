@@ -18,6 +18,12 @@
  * Its `enabled` prop is driven by the `torrent_proxy_enabled` setting so
  * polling only starts when the user has explicitly opted in (CA-17).
  *
+ * BgTranscodePanel is mounted here (unconditionally) so background transcode
+ * progress is visible everywhere — the queue is a server-side singleton fed
+ * by both library-wide auto-scan and manual per-title "Pré-processar" clicks.
+ * Previously the panel only rendered inside LibraryLayout, so a manual click
+ * on the movie/series detail pages queued work with zero visible feedback.
+ *
  * WhatsNewModal is mounted here following the same pattern as AutoscanNotification:
  * a hook + a modal mounted in layout, shown once per version bump, non-blocking.
  * ChangelogProvider wraps children so the sidebar badge and the changelog page
@@ -29,9 +35,11 @@ import { useStartupAutoscan } from "@/hooks/useStartupAutoscan";
 import { useFolderWatcher } from "@/hooks/useFolderWatcher";
 import { useChangelog } from "@/hooks/useChangelog";
 import { useWhatsNew } from "@/hooks/useWhatsNew";
+import { useBgTranscodeStatus } from "@/hooks/useBgTranscode";
 import { AutoscanNotification } from "@/components/features/autoscan/AutoscanNotification";
 import { PlayerChoiceGate } from "@/components/features/player/PlayerChoiceGate";
 import { TorrentStatusStrip } from "@/components/features/torrent/TorrentStatusStrip";
+import { BgTranscodePanel } from "@/components/features/library/BgTranscodePanel";
 import { WhatsNewModal } from "@/components/features/changelog/WhatsNewModal";
 import { ChangelogProvider } from "@/context/changelogContext";
 import { tauriService } from "@/services/tauri";
@@ -44,6 +52,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // is completely untouched.
   const folderWatcher = useFolderWatcher();
   const [torrentProxyEnabled, setTorrentProxyEnabled] = useState(false);
+  const bgTranscodeStatus = useBgTranscodeStatus();
 
   // Changelog data — fetched lazily after mount (does not block startup).
   const changelog = useChangelog();
@@ -93,6 +102,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <PlayerChoiceGate />
       <TorrentStatusStrip enabled={torrentProxyEnabled} />
+      <BgTranscodePanel status={bgTranscodeStatus} />
       <WhatsNewModal entry={whatsNew.currentEntry} open={whatsNewOpen} onClose={handleWhatsNewClose} />
     </ChangelogProvider>
   );

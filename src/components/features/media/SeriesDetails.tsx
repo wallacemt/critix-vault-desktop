@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -36,6 +37,7 @@ import {
 import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
 import { rematchSeriesEpisodes, fetchSeasonDetails, fetchMediaImages } from "@/services/mediaService";
+import { queueTranscodePaths } from "@/hooks/useBgTranscode";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { tauriService } from "@/services/tauri";
 import { SeriesEditDialog } from "./_components/series-edit-dialog";
@@ -609,6 +611,30 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
     }
   };
 
+  const handleOpenSeasonFolder = async (season: Season) => {
+    if (!season.folderPath) {
+      alert("Nenhuma pasta local encontrada para esta temporada");
+      return;
+    }
+
+    try {
+      await tauriService.openFolder(season.folderPath);
+    } catch (error) {
+      console.error("Error opening season folder:", error);
+      alert(`Erro ao abrir pasta: ${error}`);
+    }
+  };
+
+  const handleQueueSeasonTranscode = async (season: Season) => {
+    const paths = season.episodes.map((ep) => ep.filePath).filter((p): p is string => Boolean(p));
+    try {
+      await queueTranscodePaths(paths);
+    } catch (error) {
+      console.error("Error queuing season transcode:", error);
+      alert(`Erro ao adicionar à fila de transcode: ${error}`);
+    }
+  };
+
   const handleRefreshSeason = async (season: Season) => {
     if (!isOnline) {
       alert("Modo offline ativo. A atualizacao de temporada requer conexao com a API externa.");
@@ -1052,8 +1078,7 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
                   {series.videos && series.videos.length > 0 && (
                     <TrailerModal videos={series.videos} title={series.title} />
                   )}
-                  <Button
-                    size="lg"
+                  <TooltipIconButton
                     variant="outline"
                     onClick={handleToggleSeriesWatched}
                     disabled={isTogglingWatched}
@@ -1062,40 +1087,37 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
                         ? "bg-green-900/30 border-green-600 text-green-400 hover:bg-green-900/50"
                         : "bg-slate-800/80 border-slate-700 hover:bg-slate-800"
                     }`}
+                    label={isSeriesWatched ? "Desmarcar como assistida" : "Marcar como assistida"}
                   >
                     {isTogglingWatched ? (
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      <Loader2 className="w-5 h-5 animate-spin" />
                     ) : isSeriesWatched ? (
-                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                      <CheckCircle2 className="w-5 h-5" />
                     ) : (
-                      <Eye className="w-5 h-5 mr-2" />
+                      <Eye className="w-5 h-5" />
                     )}
-                    {isSeriesWatched ? "Assistido" : "Marcar como Assistido"}
-                  </Button>
+                  </TooltipIconButton>
 
                   {filePath && (
-                    <Button
-                      size="lg"
+                    <TooltipIconButton
                       variant="outline"
                       onClick={handleOpenFolder}
                       className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl"
+                      label="Abrir pasta do arquivo"
                     >
-                      <FolderOpen className="w-5 h-5 mr-2" />
-                      Abrir Pasta
-                    </Button>
+                      <FolderOpen className="w-5 h-5" />
+                    </TooltipIconButton>
                   )}
-                  <Button
-                    size="lg"
+                  <TooltipIconButton
                     variant="outline"
                     onClick={() => setIsAdvancedEditOpen(true)}
                     className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl"
+                    label="Edição avançada da série"
                   >
-                    <Edit className="w-5 h-5 mr-2" />
-                    Edição Avançada
-                  </Button>
+                    <Edit className="w-5 h-5" />
+                  </TooltipIconButton>
                   {series && (
-                    <Button
-                      size="lg"
+                    <TooltipIconButton
                       variant="outline"
                       onClick={async () => {
                         const next = !series.isHidden;
@@ -1103,29 +1125,19 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
                         onSeriesUpdate({ ...series, isHidden: next });
                       }}
                       className="bg-slate-800/80 rounded-2xl border-slate-700 hover:bg-slate-800 backdrop-blur-xl text-amber-300 hover:text-amber-200"
+                      label={series.isHidden ? "Mostrar na biblioteca" : "Ocultar da biblioteca"}
                     >
-                      {series.isHidden ? (
-                        <>
-                          <Eye className="w-5 h-5 mr-2" />
-                          Mostrar
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="w-5 h-5 mr-2" />
-                          Ocultar
-                        </>
-                      )}
-                    </Button>
+                      {series.isHidden ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                    </TooltipIconButton>
                   )}
-                  <Button
-                    size="lg"
+                  <TooltipIconButton
                     variant="outline"
                     onClick={() => setShowDeleteDialog(true)}
                     className="bg-red-900/20 border-red-700 rounded-2xl hover:bg-red-900/40 backdrop-blur-xl text-red-400 hover:text-red-300"
+                    label="Excluir série"
                   >
-                    <Trash2 className="w-5 h-5 mr-2" />
-                    Excluir
-                  </Button>
+                    <Trash2 className="w-5 h-5" />
+                  </TooltipIconButton>
                   {rematchStatus && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
@@ -1213,6 +1225,8 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
                     onEpisodeWatchToggle={handleEpisodeWatchToggle}
                     onSeasonWatchToggle={handleSeasonWatchToggle}
                     onSeasonRefresh={isOnline ? handleRefreshSeason : undefined}
+                    onOpenFolder={handleOpenSeasonFolder}
+                    onQueueTranscode={handleQueueSeasonTranscode}
                   />
                 </motion.div>
               ))}

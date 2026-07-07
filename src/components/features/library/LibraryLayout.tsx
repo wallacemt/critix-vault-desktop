@@ -34,8 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { useBgTranscode, BG_TRANSCODE_KEY } from "@/hooks/useBgTranscode";
-import { BgTranscodePanel } from "./_components/bg-transcode-panel";
+import { useBgTranscodeAutoStart, BG_TRANSCODE_KEY } from "@/hooks/useBgTranscode";
 import { AutoScanPanel } from "./_components/auto-scan-panel";
 import { TextureBackground } from "@/components/ui/texture-bg";
 
@@ -138,7 +137,7 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
     () => [...watchedMovies, ...unwatchedMovies, ...watchedSeries, ...unwatchedSeries],
     [watchedMovies, unwatchedMovies, watchedSeries, unwatchedSeries],
   );
-  const bgTranscodeStatus = useBgTranscode(allLibraryMedia, bgTranscodeEnabled);
+  useBgTranscodeAutoStart(allLibraryMedia, bgTranscodeEnabled);
 
   // Library keyboard shortcuts — keys configurable in Settings
   useEffect(() => {
@@ -510,9 +509,6 @@ export function LibraryLayout({ onAddFolder, onMediaClick, onMediaPlay }: Librar
             series={newMediaNotification.series}
           />
         )}
-
-        {/* Background transcode queue — collapsible side panel */}
-        <BgTranscodePanel status={bgTranscodeStatus} />
 
         {/* Auto-scanning indicator */}
         <AutoScanPanel active={isAutoScanning} />

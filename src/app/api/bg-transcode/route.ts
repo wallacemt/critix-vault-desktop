@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getQueueStatus, startQueue, stopQueue } from "./queue";
+import { sseFromSnapshot } from "@/lib/sse";
 
-export async function GET() {
-  return NextResponse.json(getQueueStatus());
+export const dynamic = "force-dynamic";
+
+// SSE stream instead of one-shot JSON: the queue status is already
+// server-side in-memory state, so this pushes it to the client on change
+// instead of the client re-fetching every few seconds.
+export async function GET(request: NextRequest) {
+  return sseFromSnapshot(request, getQueueStatus, 1000);
 }
 
 export async function POST(request: NextRequest) {

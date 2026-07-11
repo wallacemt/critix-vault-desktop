@@ -31,6 +31,8 @@ jobs:
       BACKEND_URL: ${{ secrets.BACKEND_URL }}
       NEXT_PUBLIC_CRITIX_API_URL: ${{ secrets.BACKEND_URL }}
       CRITIX_EXTERNAL_API_URL: ${{ secrets.BACKEND_URL }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
     steps:
       # ──────────────────────────────────────────────
@@ -74,12 +76,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       # ──────────────────────────────────────────────
-      # 1b. Validate MSIX_PUBLISHER_CN before spending build time
+      # 1b. Validate required secrets before spending build time
       # ──────────────────────────────────────────────
-      - name: Validate MSIX_PUBLISHER_CN secret
+      - name: Validate required secrets
         shell: pwsh
         env:
           MSIX_PUBLISHER_CN: ${{ secrets.MSIX_PUBLISHER_CN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:MSIX_PUBLISHER_CN)) {
             Write-Host "ERROR: Secret MSIX_PUBLISHER_CN is not configured."
@@ -89,6 +93,20 @@ jobs:
             exit 1
           }
           Write-Host "MSIX_PUBLISHER_CN is set."
+
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Host "ERROR: Secret TAURI_SIGNING_PRIVATE_KEY is not configured."
+            Write-Host "  tauri.conf.json has updater.active=true with a pubkey, so every"
+            Write-Host "  'tauri build' requires the matching private key to sign artifacts."
+            exit 1
+          }
+          Write-Host "TAURI_SIGNING_PRIVATE_KEY is set."
+
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            Write-Host "ERROR: Secret TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not configured."
+            exit 1
+          }
+          Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set."
 
       # ──────────────────────────────────────────────
       # 2. Bundle portable Node.js (fixes Store sandbox crash)

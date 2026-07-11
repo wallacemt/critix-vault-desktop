@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSSE } from "@/hooks/useSSE";
 import type { Media } from "@/types/media";
 import type { Series } from "@/types/serie";
@@ -108,4 +108,48 @@ export function useBgTranscodeAutoStart(media: Media[], enabled: boolean): void 
  */
 export function useBgTranscodeStatus(): BgTranscodeStatus {
   return useSSE<BgTranscodeStatus>("/api/bg-transcode", IDLE);
+}
+
+/**
+ * Batch-checks which of the given file paths already have a completed audio
+ * transcode cached on disk, so episode/movie cards can show an "áudio pronto"
+ * badge without the user opening the player. Only AT_RISK paths are ever
+ * queried — everything else is web-compatible already and never transcodes.
+ *
+ * Pass `refreshToken` (e.g. the `done` counter from useBgTranscodeStatus) to
+ * re-check after the background queue finishes another file, so badges flip
+ * to "ready" live instead of only after a page reload.
+ */
+export function useTranscodeStatus(paths: string[], refreshToken?: unknown): Record<string, boolean> {
+  const [statuses, setStatuses] = useState<Record<string, boolean>>({});
+  const atRiskPaths = paths.filter(isAtRisk);
+  const pathsKey = atRiskPaths.slice().sort().join("|");
+
+  useEffect(() => {
+    if (atRiskPaths.length === 0) {
+      setStatuses({});
+      return;
+    }
+
+    let cancelled = false;
+    fetch("/api/transcode-cache/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: atRiskPaths }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { statuses?: Record<string, boolean> } | null) => {
+        if (!cancelled && data?.statuses) setStatuses(data.statuses);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  // atRiskPaths is intentionally excluded: pathsKey is its stable serialization,
+  // and re-deriving it every render would otherwise re-fetch on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathsKey, refreshToken]);
+
+  return statuses;
 }

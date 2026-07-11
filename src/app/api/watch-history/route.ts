@@ -179,14 +179,17 @@ export async function DELETE(request: NextRequest) {
 
     const db = await prisma();
 
-    // Delete by episodeId if provided, otherwise by mediaId
+    // Delete by episodeId if provided, otherwise by mediaId. The mediaId-only path is
+    // only ever used for movies (series/anime always clear per-episode) — scoped to
+    // mediaType: "MOVIE" so it can't cross-delete a series' watch history that happens
+    // to share the same id (TMDB movie and tv ids are separate namespaces and can collide).
     if (episodeId) {
       await db.watchHistory.deleteMany({
         where: { episodeId },
       });
     } else if (mediaId) {
       await db.watchHistory.deleteMany({
-        where: { mediaId },
+        where: { mediaId, mediaType: "MOVIE", episodeId: null },
       });
     }
 

@@ -35,6 +35,11 @@ interface SeasonCardProps {
   onSeasonRefresh?: (season: Season) => Promise<void> | void;
   onOpenFolder?: (season: Season) => void;
   onQueueTranscode?: (season: Season) => Promise<void> | void;
+  /** Keyed by episode.filePath — true when a completed audio transcode is already cached. */
+  transcodeStatuses?: Record<string, boolean>;
+  /** filePath of the episode currently being processed by the background transcode queue, if any. */
+  transcodingPath?: string | null;
+  onQueueEpisodeTranscode?: (episode: Episode) => Promise<void> | void;
 }
 
 export function SeasonCard({
@@ -49,6 +54,9 @@ export function SeasonCard({
   onSeasonRefresh,
   onOpenFolder,
   onQueueTranscode,
+  transcodeStatuses,
+  transcodingPath,
+  onQueueEpisodeTranscode,
 }: SeasonCardProps) {
   const [posterError, setPosterError] = useState(false);
   const [isTogglingWatched, setIsTogglingWatched] = useState(false);
@@ -259,6 +267,9 @@ export function SeasonCard({
                     onPlay={onPlayEpisode}
                     onEdit={onEditEpisode}
                     onWatchToggle={onEpisodeWatchToggle}
+                    isTranscoded={!!episode.filePath && !!transcodeStatuses?.[episode.filePath]}
+                    isTranscoding={!!episode.filePath && episode.filePath === transcodingPath}
+                    onQueueTranscode={onQueueEpisodeTranscode}
                   />
                 ))
             )}

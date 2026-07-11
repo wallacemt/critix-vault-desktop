@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils";
 import { Episode } from "@/types/serie";
-import { Play, Check, X, Pencil } from "lucide-react";
+import { Play, Check, X, Pencil, Volume2, Loader2, Zap } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Badge } from "@/components/ui/badge";
 import { getImageUrl } from "@/utils/mediaUtils";
 import { LazyImage } from "@/components/ui/lazy-image";
+import { isAtRisk } from "@/hooks/useBgTranscode";
 
 interface EpisodeCardProps {
   episode: Episode;
@@ -14,12 +15,29 @@ interface EpisodeCardProps {
   onPlay: (episode: Episode) => void;
   onEdit?: (episode: Episode) => void;
   onWatchToggle?: (episode: Episode, isWatched: boolean) => void;
+  /** True when a completed, up-to-date audio transcode is already cached for this episode. */
+  isTranscoded?: boolean;
+  /** True when this episode is the one currently being processed by the background transcode queue. */
+  isTranscoding?: boolean;
+  /** Queues just this episode's audio transcode without opening the player. Only rendered when the
+   * episode is AT_RISK and not already transcoded/transcoding. */
+  onQueueTranscode?: (episode: Episode) => Promise<void> | void;
 }
 
-export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }: EpisodeCardProps) {
+export function EpisodeCard({
+  episode,
+  seriesId,
+  onPlay,
+  onEdit,
+  onWatchToggle,
+  isTranscoded = false,
+  isTranscoding = false,
+  onQueueTranscode,
+}: EpisodeCardProps) {
   const [stillError, setStillError] = useState(false);
   const [isWatched, setIsWatched] = useState(episode.isWatched ?? false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isQueuingTranscode, setIsQueuingTranscode] = useState(false);
 
   const handleWatchToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -32,6 +50,20 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
     e.stopPropagation();
     onEdit?.(episode);
   };
+
+  const handleQueueTranscode = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onQueueTranscode) return;
+    setIsQueuingTranscode(true);
+    try {
+      await onQueueTranscode(episode);
+    } finally {
+      setIsQueuingTranscode(false);
+    }
+  };
+
+  const showTranscodeAction =
+    !!episode.filePath && isAtRisk(episode.filePath) && !isTranscoded && !isTranscoding && !!onQueueTranscode;
 
   return (
     <div
@@ -81,6 +113,21 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
             Assistido
           </Badge>
         )}
+
+        {/* Audio Transcode Status Badge */}
+        {isTranscoding ? (
+          <Badge className="absolute top-2 left-2 text-xs bg-amber-600/90 text-white border-amber-400">
+            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            Transcodificando
+          </Badge>
+        ) : (
+          isTranscoded && (
+            <Badge className="absolute top-2 left-2 text-xs bg-blue-600/90 text-white border-blue-400">
+              <Volume2 className="w-3 h-3 mr-1" />
+              Áudio pronto
+            </Badge>
+          )
+        )}
       </div>
 
       {/* Episode Info */}
@@ -113,6 +160,24 @@ export function EpisodeCard({ episode, seriesId, onPlay, onEdit, onWatchToggle }
         >
           {isWatched ? <X className="w-4 h-4 text-red-400" /> : <Check className="w-4 h-4 text-green-400" />}
         </TooltipIconButton>
+
+        {/* Queue Transcode Button */}
+        {showTranscodeAction && (
+          <TooltipIconButton
+            size="icon"
+            variant="outline"
+            className="w-9 h-9 rounded-full bg-slate-800/50 hover:bg-amber-600/20 border-slate-700 hover:border-amber-500/30"
+            onClick={handleQueueTranscode}
+            disabled={isQueuingTranscode}
+            label="Pré-processar áudio deste episódio (evita espera no player)"
+          >
+            {isQueuingTranscode ? (
+              <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+            ) : (
+              <Zap className="w-4 h-4 text-amber-400" />
+            )}
+          </TooltipIconButton>
+        )}
 
         {/* Edit Button */}
         {onEdit && (

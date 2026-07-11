@@ -27,11 +27,12 @@ import {
   Download,
   Zap,
   Loader2,
+  Volume2,
 } from "lucide-react";
 import { Movie } from "@/types/movie";
 import { useState, useEffect } from "react";
 import { tauriService } from "@/services/tauri";
-import { isAtRisk, queueTranscodePaths } from "@/hooks/useBgTranscode";
+import { isAtRisk, queueTranscodePaths, useBgTranscodeStatus, useTranscodeStatus } from "@/hooks/useBgTranscode";
 import { fetchMediaImages } from "@/services/mediaService";
 import { DeleteMediaDialog } from "@/components/features/library/_components/delete-media-dialog";
 import { markAsWatched, clearWatchHistory, removeMovie, saveMovies, setMediaHidden } from "@/services/databaseService";
@@ -69,6 +70,13 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
   const { movie: currentMovie, setCurrentMovie, refreshMedia } = useMediaContext();
   const { handlePlayMovie: onPlay, playError, clearPlayError } = useActions();
   const { isOnline } = useApiConnectivity();
+  const bgTranscodeStatus = useBgTranscodeStatus();
+  const transcodeStatuses = useTranscodeStatus(
+    currentMovie?.filePath ? [currentMovie.filePath] : [],
+    bgTranscodeStatus.done,
+  );
+  const isTranscoded = !!currentMovie?.filePath && !!transcodeStatuses[currentMovie.filePath];
+  const isTranscoding = !!currentMovie?.filePath && currentMovie.filePath === bgTranscodeStatus.current;
 
   const router = useRouter();
 
@@ -404,6 +412,19 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
                     <span>{currentMovie.rating.toFixed(1)}/10</span>
                   </div>
                 )}
+                {isTranscoding ? (
+                  <Badge className="text-xs bg-amber-600/90 text-white border-amber-400">
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    Transcodificando áudio
+                  </Badge>
+                ) : (
+                  isTranscoded && (
+                    <Badge className="text-xs bg-blue-600/90 text-white border-blue-400">
+                      <Volume2 className="w-3 h-3 mr-1" />
+                      Áudio pronto
+                    </Badge>
+                  )
+                )}
               </div>
 
               {/* Actions */}
@@ -468,7 +489,7 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
                   >
                     <FolderOpen className="w-5 h-5" />
                   </TooltipIconButton>
-                  {currentMovie.filePath && isAtRisk(currentMovie.filePath) && (
+                  {currentMovie.filePath && isAtRisk(currentMovie.filePath) && !isTranscoded && !isTranscoding && (
                     <TooltipIconButton
                       variant="outline"
                       onClick={handleQueueTranscode}

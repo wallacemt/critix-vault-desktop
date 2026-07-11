@@ -26,6 +26,30 @@ export async function getTranscodeCacheSize(): Promise<number> {
   }
 }
 
+// Tries audio streams 0-15 — covers virtually all multi-track files. Mirrors the
+// cache-hit check in /api/hls/start (findCachedTranscode): a cache file only counts
+// if it's at least as new as the source, so a re-downloaded/replaced file correctly
+// reports as not-yet-transcoded.
+export async function isFileTranscoded(filePath: string): Promise<boolean> {
+  const dir = getTranscodeCacheDir();
+  let srcMtimeMs: number;
+  try {
+    srcMtimeMs = (await stat(filePath)).mtimeMs;
+  } catch {
+    return false;
+  }
+  for (let audioStream = 0; audioStream < 16; audioStream++) {
+    const hash = transcodeHash(filePath, audioStream);
+    try {
+      const cacheStat = await stat(join(dir, `${hash}.mp4`));
+      if (srcMtimeMs <= cacheStat.mtimeMs) return true;
+    } catch {
+      // this audio stream has no cached transcode — try the next one
+    }
+  }
+  return false;
+}
+
 // Tries audio streams 0-15 — covers virtually all multi-track files.
 export async function deleteTranscodeForFile(filePath: string): Promise<void> {
   const dir = getTranscodeCacheDir();

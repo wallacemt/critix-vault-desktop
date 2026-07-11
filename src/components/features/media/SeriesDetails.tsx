@@ -37,7 +37,7 @@ import {
 import { Season, Episode, Series } from "@/types/serie";
 import { cn } from "@/lib/utils";
 import { rematchSeriesEpisodes, fetchSeasonDetails, fetchMediaImages } from "@/services/mediaService";
-import { queueTranscodePaths } from "@/hooks/useBgTranscode";
+import { queueTranscodePaths, useBgTranscodeStatus, useTranscodeStatus } from "@/hooks/useBgTranscode";
 import { EditMediaModal } from "@/components/ui/edit-media-modal";
 import { tauriService } from "@/services/tauri";
 import { SeriesEditDialog } from "./_components/series-edit-dialog";
@@ -97,6 +97,11 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
   const { isOnline } = useApiConnectivity();
   const seriesSeasons = Array.isArray(series?.seasons) ? series.seasons : [];
   const [filePath, setFilePath] = useState("");
+  const episodeFilePaths = seriesSeasons.flatMap((season) =>
+    season.episodes.map((ep) => ep.filePath).filter((p): p is string => Boolean(p)),
+  );
+  const bgTranscodeStatus = useBgTranscodeStatus();
+  const transcodeStatuses = useTranscodeStatus(episodeFilePaths, bgTranscodeStatus.done);
   const isSeriesFullyWatched = (seasons: Season[]) => {
     const episodes = seasons.flatMap((season) => season.episodes || []);
     if (episodes.length === 0) return false;
@@ -631,6 +636,16 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
       await queueTranscodePaths(paths);
     } catch (error) {
       console.error("Error queuing season transcode:", error);
+      alert(`Erro ao adicionar à fila de transcode: ${error}`);
+    }
+  };
+
+  const handleQueueEpisodeTranscode = async (episode: Episode) => {
+    if (!episode.filePath) return;
+    try {
+      await queueTranscodePaths([episode.filePath]);
+    } catch (error) {
+      console.error("Error queuing episode transcode:", error);
       alert(`Erro ao adicionar à fila de transcode: ${error}`);
     }
   };
@@ -1227,6 +1242,9 @@ export function SeriesDetails({ demoMode = false, torrentMode = false }: SeriesD
                     onSeasonRefresh={isOnline ? handleRefreshSeason : undefined}
                     onOpenFolder={handleOpenSeasonFolder}
                     onQueueTranscode={handleQueueSeasonTranscode}
+                    transcodeStatuses={transcodeStatuses}
+                    transcodingPath={bgTranscodeStatus.current}
+                    onQueueEpisodeTranscode={handleQueueEpisodeTranscode}
                   />
                 </motion.div>
               ))}

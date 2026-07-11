@@ -7,7 +7,7 @@
 
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from "react";
 import { Folder } from "@/types/folder";
 import { tauriService } from "@/services/tauri";
 import { getFolders as getDBFolders, addFolder as addDBFolder, removeFolder as removeDBFolder } from "@/services/databaseService";
@@ -30,6 +30,14 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [onNeedRedirect, setOnNeedRedirect] = useState<(() => void) | null>(null);
 
+  // Mirrors selectedFolder without the staleness a useCallback([]) closure would have —
+  // loadFolders() reads this instead of the state directly so it always sees the latest
+  // in-memory selection, not whatever it was when the callback was created.
+  const selectedFolderRef = useRef<Folder | null>(null);
+  useEffect(() => {
+    selectedFolderRef.current = selectedFolder;
+  }, [selectedFolder]);
+
   // Load folders from Rust backend on mount
   useEffect(() => {
     loadFolders();
@@ -51,20 +59,34 @@ export function FoldersProvider({ children }: { children: ReactNode }) {
       console.log("📁 Folders loaded from database:", savedFolders);
       setFolders(savedFolders);
 
-      // Load last selected folder from Rust backend (UI preference)
-      if (savedFolders.length > 0) {
-        const lastFolderId = await tauriService.getLastSelectedFolder();
-        console.log("🔍 Last selected folder ID:", lastFolderId);
-        const lastFolder = lastFolderId ? savedFolders.find((f) => f.id === lastFolderId) : null;
-
-        // Select last folder or first folder
-        const folderToSelect = lastFolder || savedFolders[0];
-        console.log("✅ Selecting folder:", folderToSelect);
-        setSelectedFolder(folderToSelect);
-      } else {
+      if (savedFolders.length === 0) {
         console.log("⚠️ No folders found in storage");
         setSelectedFolder(null);
+        return;
       }
+
+      // Preserve whatever folder is already selected in memory, if it still exists.
+      // Re-deriving the selection from Rust's persisted last-selected-folder on every
+      // call (not just on first mount) is racy: saveLastSelectedFolder() below is
+      // fire-and-forget, so calling refreshFolders() shortly after switching folders
+      // (e.g. right after marking something watched) could read the *previous*
+      // persisted value and silently snap the UI back to the wrong folder.
+      const current = selectedFolderRef.current;
+      const currentStillExists = current ? savedFolders.find((f) => f.id === current.id) : null;
+      if (currentStillExists) {
+        setSelectedFolder(currentStillExists);
+        return;
+      }
+
+      // No active selection yet (first load) or it disappeared (folder removed) —
+      // fall back to Rust's persisted last-selected-folder, or the first folder.
+      const lastFolderId = await tauriService.getLastSelectedFolder();
+      console.log("🔍 Last selected folder ID:", lastFolderId);
+      const lastFolder = lastFolderId ? savedFolders.find((f) => f.id === lastFolderId) : null;
+
+      const folderToSelect = lastFolder || savedFolders[0];
+      console.log("✅ Selecting folder:", folderToSelect);
+      setSelectedFolder(folderToSelect);
     } catch (error) {
       console.error("❌ Failed to load folders:", error);
     } finally {

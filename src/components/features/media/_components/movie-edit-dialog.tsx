@@ -9,9 +9,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { X, Save, Info } from "lucide-react";
+import { X, Save, Info, FolderOpen } from "lucide-react";
 import { Movie } from "@/types/movie";
 import { motion, AnimatePresence } from "framer-motion";
+import { tauriService } from "@/services/tauri";
 
 interface MovieEditDialogProps {
   movie: Movie;
@@ -25,6 +26,18 @@ export function MovieEditDialog({ movie, isOpen, onClose, onSave }: MovieEditDia
   const [editedMovie, setEditedMovie] = useState<Movie>(movie);
 
   if (!isOpen) return null;
+
+  const handleSelectFile = async () => {
+    try {
+      const selected = await tauriService.selectMediaFile();
+      if (selected) {
+        setEditedMovie({ ...editedMovie, filePath: selected });
+      }
+    } catch (error) {
+      console.error("Failed to open file picker:", error);
+      alert("Não foi possível abrir o seletor de arquivo no momento.");
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -204,15 +217,29 @@ export function MovieEditDialog({ movie, isOpen, onClose, onSave }: MovieEditDia
                 </Badge>
               </div>
 
-              {/* File Path (readonly) */}
+              {/* File Path */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Caminho do Arquivo</label>
-                <Input
-                  value={editedMovie.filePath}
-                  readOnly
-                  className="bg-slate-800 border-slate-700 text-slate-400"
-                  title={editedMovie.filePath}
-                />
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Caminho do Arquivo
+                  <span className="ml-2 text-xs text-slate-500">Onde o arquivo está armazenado</span>
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    value={editedMovie.filePath}
+                    onChange={(e) => setEditedMovie({ ...editedMovie, filePath: e.target.value })}
+                    className="bg-slate-800 border-slate-700 text-white flex-1"
+                    title={editedMovie.filePath}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSelectFile}
+                    className="border-slate-700 text-slate-300 hover:bg-slate-800 whitespace-nowrap"
+                  >
+                    <FolderOpen className="w-4 h-4 mr-1" />
+                    Selecionar
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

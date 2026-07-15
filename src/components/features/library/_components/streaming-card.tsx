@@ -563,7 +563,7 @@ export function StreamingCard({
           <AnimatePresence>
             {isHovered && (
               <motion.div
-                className="absolute inset-0 flex items-center justify-center gap-3 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 p-2 bg-black/60 backdrop-blur-sm"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}

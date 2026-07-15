@@ -274,13 +274,13 @@ export function ManualMediaEntryDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="min-w-2xl max-h-[95vh]">
+      <DialogContent className="min-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Adicionar Mídia Manualmente</DialogTitle>
           <DialogDescription>Busque por um filme ou série e associe a um arquivo local</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto">
           {!isOnline && (
             <p className="text-sm text-amber-500">
               Modo offline ativo. Busca e enriquecimento de metadados estao temporariamente bloqueados.
@@ -308,7 +308,7 @@ export function ManualMediaEntryDialog({
           {searchResults.length > 0 && (
             <div className="space-y-2">
               <Label>Resultados da Busca</Label>
-              <ScrollArea className="h-[600px] border rounded-lg p-2">
+              <ScrollArea className="max-h-[40vh] border rounded-lg p-2">
                 <div className="space-y-2">
                   {searchResults.map((result) => (
                     <button

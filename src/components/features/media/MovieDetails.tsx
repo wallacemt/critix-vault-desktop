@@ -331,24 +331,6 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-slate-950/60 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-transparent to-transparent" />
 
-        {/* Back Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBack}
-          className="fixed z-10 top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-xl hover:bg-slate-900"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-
-        {/* Watched Badge */}
-        {currentMovie.isWatched && (
-          <Badge className="absolute top-6 right-6 bg-green-600 text-white border-green-500">
-            <Check className="w-4 h-4 mr-1" />
-            Assistido
-          </Badge>
-        )}
-
         {/* Content */}
         <div className="absolute bottom-0 left-0 right-0 p-8">
           <div className="max-w-7xl mx-auto flex gap-8">
@@ -545,6 +527,26 @@ export function MovieDetails({ demoMode, torrentMode = false }: MovieDetailsProp
           </div>
         </div>
       </motion.div>
+
+      {/* Back Button — kept outside the backdrop's animated wrapper so its `fixed`
+          positioning anchors to the real viewport, not the transformed/overflow-hidden
+          backdrop box (which otherwise clips it and lets the poster overlap it). */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onBack}
+        className="fixed z-20 top-6 left-6 w-10 h-10 rounded-full bg-slate-900/80 backdrop-blur-xl hover:bg-slate-900"
+      >
+        <ArrowLeft className="w-5 h-5" />
+      </Button>
+
+      {/* Watched Badge */}
+      {currentMovie.isWatched && (
+        <Badge className="fixed z-20 top-6 right-6 bg-green-600 text-white border-green-500">
+          <Check className="w-4 h-4 mr-1" />
+          Assistido
+        </Badge>
+      )}
 
       {/* Edit Dialog */}
       <MovieEditDialog

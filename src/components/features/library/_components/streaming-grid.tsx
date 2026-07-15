@@ -63,7 +63,7 @@ export function StreamingGrid({
   return (
     <>
       <div
-        className={viewMode === "grid" ? "grid grid-cols-2 lg:grid-cols-4 gap-8 px-4" : "flex flex-col gap-3"}
+        className={viewMode === "grid" ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 px-4" : "flex flex-col gap-3"}
         onMouseDown={handleMouseDown}
       >
         {media.map((item, index) => (

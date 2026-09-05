@@ -18,7 +18,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const mediaId = searchParams.get("mediaId");
     const episodeId = searchParams.get("episodeId");
-    const limit = parseInt(searchParams.get("limit") || "100");
+    // Only cap the result when a caller explicitly asks for a "recent activity"
+    // window (e.g. a future continue-watching widget). Library watched-state
+    // calculations must always see the full relevant history — capping here
+    // by default silently drops old records, making already-watched media
+    // reappear as pending once enough newer records exist anywhere in the app.
+    const limitParam = searchParams.get("limit");
+    const limit = limitParam ? parseInt(limitParam) : undefined;
 
     const db = await prisma();
 

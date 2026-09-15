@@ -110,7 +110,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Accept a client-provided sessionId so the client can poll progress before the
   // long-running transcode completes. Fall back to server-generated UUID if not provided.
-  const sessionId = request.nextUrl.searchParams.get("sessionId") || randomUUID();
+  const requestedSessionId = request.nextUrl.searchParams.get("sessionId");
+  if (requestedSessionId && !/^[A-Za-z0-9_-]{1,64}$/.test(requestedSessionId)) {
+    return NextResponse.json({ error: "Invalid sessionId" }, { status: 400 });
+  }
+  const sessionId = requestedSessionId || randomUUID();
 
   // DEF-002: Unique temp path per session — prevents two concurrent sessions (that somehow
   // bypass the in-flight guard) from writing to and corrupting the same temp file.

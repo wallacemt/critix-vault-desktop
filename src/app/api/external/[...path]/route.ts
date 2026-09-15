@@ -32,7 +32,7 @@ const methodAllowsBody = (method: string) => {
 };
 
 const forward = async (request: NextRequest, pathSegments: string[]) => {
-  const incomingPath = `/${pathSegments.join("/")}`;
+  const incomingPath = new URL(`http://localhost/${pathSegments.join("/")}`).pathname;
 
   if (!isAllowedPath(incomingPath)) {
     return errorResponse(403, "BAD_REQUEST", "External API path is not allowed", { incomingPath });

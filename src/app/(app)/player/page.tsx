@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -54,10 +54,11 @@ export default function PlayerPage() {
   // (e.g. opening an external player and redirecting to /watching instead).
   const suppressAutoRedirectRef = useRef(false);
 
-  if (!open || queue.length === 0) {
-    if (!suppressAutoRedirectRef.current) router.replace("/library");
-    return null;
-  }
+  useEffect(() => {
+    if ((!open || queue.length === 0) && !suppressAutoRedirectRef.current) router.replace("/library");
+  }, [open, queue.length, router]);
+
+  if (!open || queue.length === 0) return null;
 
   const current = queue[index];
   const hasNext = index + 1 < queue.length;

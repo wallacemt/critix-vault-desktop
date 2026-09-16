@@ -15,6 +15,23 @@ export function proxy(request: NextRequest): NextResponse {
       return new NextResponse(null, { status: 421 }); // 421 Misdirected Request
     }
   }
+
+  if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const fetchSite = request.headers.get("sec-fetch-site");
+    if (fetchSite === "cross-site" || fetchSite === "same-site") {
+      return new NextResponse(null, { status: 403 });
+    }
+    const origin = request.headers.get("origin");
+    if (origin) {
+      try {
+        const originUrl = new URL(origin);
+        const host = request.headers.get("host") ?? "";
+        if (originUrl.host !== host) return new NextResponse(null, { status: 403 });
+      } catch {
+        return new NextResponse(null, { status: 403 });
+      }
+    }
+  }
   return NextResponse.next();
 }
 

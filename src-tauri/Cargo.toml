@@ -1,6 +1,6 @@
 [package]
 name = "critix-vault"
-version = "2.0.0"
+version = "2.0.4"
 description = "Seu gerenciador de pastas com medias favorito"
 authors = ["Wallace"]
 edition = "2021"
@@ -41,4 +41,3 @@ lto = true
 strip = true
 codegen-units = 1
 panic = "abort"
-

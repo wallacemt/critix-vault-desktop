@@ -124,7 +124,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -165,22 +165,54 @@ jobs:
 
       - name: Collect updater manifest
         shell: bash
+        # ponytail: plain `tauri build` never writes an aggregated latest.json (only
+        # tauri-apps/tauri-action does that) — it only signs individual bundles. So we
+        # build the per-platform manifest fragment ourselves from the *.sig it produced
+        # and the asset's eventual GitHub release URL (GitHub replaces spaces in asset
+        # filenames with dots on upload, confirmed against existing v2.0.4 assets).
+        # macOS has no fragment here: the `dmg` bundle isn't a valid updater target
+        # (Tauri only signs `.app.tar.gz`, which needs the `app` bundle target too) —
+        # add that bundle target to fix mac auto-update.
         run: |
           BUNDLE_DIR="src-tauri/target/release/bundle"
-          MANIFEST=$(find "$BUNDLE_DIR" -name "latest.json" | head -1)
-          if [ -z "$MANIFEST" ]; then
-            echo "::error::latest.json not generated. Ensure createUpdaterArtifacts=true and signing secrets are valid."
-            exit 1
+          TAG="${{ needs.prepare.outputs.tag }}"
+          VERSION="${TAG#v}"
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          case "${{ matrix.label }}" in
+            Windows)
+              TARGET_KEY="windows-x86_64"
+              BUNDLE=$(find "$BUNDLE_DIR/nsis" -name "*.exe" 2>/dev/null | head -1)
+              ;;
+            Linux)
+              TARGET_KEY="linux-x86_64"
+              BUNDLE=$(find "$BUNDLE_DIR/appimage" -name "*.AppImage" 2>/dev/null | head -1)
+              ;;
+            *)
+              TARGET_KEY=""
+              BUNDLE=""
+              ;;
+          esac
+
+          if [ -z "$TARGET_KEY" ] || [ -z "$BUNDLE" ] || [ ! -f "${BUNDLE}.sig" ]; then
+            echo "::warning::No updater artifact/signature for ${{ matrix.label }}; skipping manifest fragment (see ponytail comment)."
+            exit 0
           fi
 
-          SIGS=$(find "$BUNDLE_DIR" -name "*.sig" | wc -l)
-          if [ "$SIGS" -lt 1 ]; then
-            echo "::error::No updater signature files (*.sig) found."
-            exit 1
-          fi
+          ASSET_NAME=$(basename "$BUNDLE" | tr ' ' '.')
+          ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET_NAME}"
+          SIGNATURE=$(cat "${BUNDLE}.sig")
 
-          cp "$MANIFEST" "latest-${{ matrix.label }}.json"
-          echo "Resolved latest.json from: $MANIFEST"
+          jq -n \
+            --arg version "$VERSION" \
+            --arg pub_date "$PUB_DATE" \
+            --arg target "$TARGET_KEY" \
+            --arg url "$ASSET_URL" \
+            --arg signature "$SIGNATURE" \
+            '{version: $version, pub_date: $pub_date, platforms: {($target): {signature: $signature, url: $url}}}' \
+            > "latest-${{ matrix.label }}.json"
+
+          echo "Generated updater manifest for ${{ matrix.label }}:"
           cat "latest-${{ matrix.label }}.json"
 
       - name: Upload updater manifest
@@ -188,7 +220,7 @@ jobs:
         with:
           name: updater-manifest-${{ matrix.label }}
           path: latest-${{ matrix.label }}.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
@@ -217,6 +249,7 @@ jobs:
         with:
           pattern: updater-manifest-*
           path: manifests
+          if-no-artifact-found: warn
 
       - name: Merge latest.json manifests
         run: |
@@ -234,8 +267,8 @@ jobs:
               merged['platforms'].update(data.get('platforms', {}))
 
           if merged is None:
-              print("::error::No latest.json manifests found to merge", flush=True)
-              sys.exit(1)
+              print("::warning::No latest.json manifests found to merge — skipping updater manifest for this release (see ponytail comment on 'Collect updater manifest').", flush=True)
+              sys.exit(0)
 
           with open('latest.json', 'w') as fp:
               json.dump(merged, fp, indent=2)

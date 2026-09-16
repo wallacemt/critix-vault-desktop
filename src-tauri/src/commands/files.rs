@@ -17,8 +17,8 @@ pub fn open_external_url(url: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
-            .args(["/C", "start", "", sanitized])
+        Command::new("explorer.exe")
+            .arg(sanitized)
             .spawn()
             .map_err(|e| format!("Failed to open URL: {e}"))?;
     }
@@ -264,8 +264,8 @@ pub fn open_media(file_path: String, player: Option<String>) -> Result<(), Strin
         _ => {
             #[cfg(target_os = "windows")]
             {
-                Command::new("cmd")
-                    .args(["/C", "start", "", &file_path])
+                Command::new("explorer.exe")
+                    .arg(&file_path)
                     .spawn()
                     .map_err(|e| format!("Failed to open file: {e}"))?;
             }

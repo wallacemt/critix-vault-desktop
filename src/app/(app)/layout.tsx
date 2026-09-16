@@ -36,7 +36,9 @@ import { useFolderWatcher } from "@/hooks/useFolderWatcher";
 import { useChangelog } from "@/hooks/useChangelog";
 import { useWhatsNew } from "@/hooks/useWhatsNew";
 import { useBgTranscodeStatus } from "@/hooks/useBgTranscode";
+import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { AutoscanNotification } from "@/components/features/autoscan/AutoscanNotification";
+import { UpdateAvailableNotification } from "@/components/features/update/UpdateAvailableNotification";
 import { PlayerChoiceGate } from "@/components/features/player/PlayerChoiceGate";
 import { TorrentStatusStrip } from "@/components/features/torrent/TorrentStatusStrip";
 import { BgTranscodePanel } from "@/components/features/library/BgTranscodePanel";
@@ -53,6 +55,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const folderWatcher = useFolderWatcher();
   const [torrentProxyEnabled, setTorrentProxyEnabled] = useState(false);
   const bgTranscodeStatus = useBgTranscodeStatus();
+  const updateCheck = useUpdateCheck();
 
   // Changelog data — fetched lazily after mount (does not block startup).
   const changelog = useChangelog();
@@ -104,6 +107,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <TorrentStatusStrip enabled={torrentProxyEnabled} />
       <BgTranscodePanel status={bgTranscodeStatus} />
       <WhatsNewModal entry={whatsNew.currentEntry} open={whatsNewOpen} onClose={handleWhatsNewClose} />
+      <UpdateAvailableNotification
+        visible={updateCheck.status === "available" && !updateCheck.dismissed}
+        update={updateCheck.update}
+        installing={updateCheck.installing}
+        installProgress={updateCheck.installProgress}
+        onInstall={updateCheck.install}
+        onDismiss={updateCheck.dismiss}
+      />
     </ChangelogProvider>
   );
 }

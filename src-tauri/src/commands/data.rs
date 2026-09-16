@@ -1,6 +1,7 @@
 use crate::models::CacheInfo;
 use crate::storage::get_storage;
 use std::fs;
+use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
 pub fn clear_all_data() -> Result<(), String> {
@@ -54,12 +55,27 @@ pub fn import_data(json_data: String) -> Result<(), String> {
     Ok(())
 }
 
+// The save path always comes from the native dialog this command opens itself —
+// unlike a `write_text_file(path, content)` command, the renderer never gets to
+// name an arbitrary filesystem path, so there's nothing to validate/sandbox here.
 #[tauri::command]
-pub fn write_text_file(path: String, content: String) -> Result<(), String> {
-    let file = std::path::Path::new(&path);
-    let name = file.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if !name.starts_with("critix-vault-backup-") || file.extension().and_then(|e| e.to_str()) != Some("json") {
-        return Err("Only Critix Vault JSON backups can be written".to_string());
-    }
-    fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
+pub fn export_backup_file(
+    app: tauri::AppHandle,
+    content: String,
+    default_file_name: String,
+) -> Result<bool, String> {
+    let file_path = app
+        .dialog()
+        .file()
+        .set_file_name(&default_file_name)
+        .add_filter("JSON", &["json"])
+        .blocking_save_file();
+
+    let Some(file_path) = file_path else {
+        return Ok(false);
+    };
+
+    let path = file_path.into_path().map_err(|e| e.to_string())?;
+    fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(true)
 }

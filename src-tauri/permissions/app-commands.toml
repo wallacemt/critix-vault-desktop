@@ -8,6 +8,7 @@ description = "Allows all custom application commands registered via invoke_hand
 commands.allow = [
   "cache_image",
   "clear_all_data",
+  "export_backup_file",
   "export_data",
   "get_cache_info",
   "get_cached_image_path",
@@ -35,5 +36,4 @@ commands.allow = [
   "select_media_files_dialog",
   "set_torrent_credentials",
   "watch_library_folders",
-  "write_text_file",
 ]

@@ -305,16 +305,15 @@ export default function SettingsPage() {
 
       let saved = false;
       try {
-        // Tauri environment: use native save dialog + custom write command
-        const { save } = await import("@tauri-apps/plugin-dialog");
+        // Tauri environment: the save dialog and the write both happen inside one Rust
+        // command, so the renderer never supplies a filesystem path directly (see
+        // export_backup_file in src-tauri/src/commands/data.rs).
         const { invoke } = await import("@tauri-apps/api/core");
-        const filePath = await save({
-          defaultPath: fileName,
-          filters: [{ name: "JSON", extensions: ["json"] }],
+        saved = await invoke<boolean>("export_backup_file", {
+          content: jsonString,
+          defaultFileName: fileName,
         });
-        if (filePath) {
-          await invoke("write_text_file", { path: filePath, content: jsonString });
-          saved = true;
+        if (saved) {
           showStatus("success", "Backup exportado com sucesso!");
         }
       } catch {

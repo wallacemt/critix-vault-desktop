@@ -114,6 +114,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (requestedSessionId && !/^[A-Za-z0-9_-]{1,64}$/.test(requestedSessionId)) {
     return NextResponse.json({ error: "Invalid sessionId" }, { status: 400 });
   }
+  // A caller-chosen ID already registered would let setSession() below overwrite the
+  // existing session, so polling/stopping the original then targets the wrong process.
+  if (requestedSessionId && getSession(requestedSessionId)) {
+    return NextResponse.json({ error: "Session ID already in use" }, { status: 409 });
+  }
   const sessionId = requestedSessionId || randomUUID();
 
   // DEF-002: Unique temp path per session — prevents two concurrent sessions (that somehow

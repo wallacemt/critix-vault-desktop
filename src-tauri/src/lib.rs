@@ -146,7 +146,7 @@ pub fn run() {
             commands::data::get_data_directory,
             commands::data::export_data,
             commands::data::import_data,
-            commands::data::write_text_file,
+            commands::data::export_backup_file,
             // File operations (system access)
             commands::files::select_media_file_dialog,
             commands::files::select_media_files_dialog,
